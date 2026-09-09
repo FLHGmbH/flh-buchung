@@ -1,8 +1,6 @@
 import { existsSync, mkdirSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { PGlite } from "@electric-sql/pglite";
-import { drizzle as drizzlePglite } from "drizzle-orm/pglite";
 import { drizzle as drizzlePg } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
 import * as schema from "./schema.ts";
@@ -23,21 +21,32 @@ function loadEnv() {
 loadEnv();
 
 const here = dirname(fileURLToPath(import.meta.url));
-const url = process.env.DATABASE_URL ?? "";
+const url = (process.env.DATABASE_URL ?? "").trim();
 const isPg = url.startsWith("postgres");
-const dataDir = join(here, "../data/pg");
-if (!isPg) mkdirSync(dataDir, { recursive: true });
 
-const pgSql = isPg ? postgres(url, { max: 4 }) : null;
-const lite = isPg ? null : await PGlite.create({ dataDir });
-if (!isPg) console.log("DB: PGlite unter data/pg");
-
-export const db = isPg ? drizzlePg(pgSql!, { schema }) : drizzlePglite(lite!, { schema });
-
-async function execSql(q: string) {
-  if (pgSql) await pgSql.unsafe(q);
-  else await lite!.exec(q);
+if (process.env.NODE_ENV === "production" && !isPg) {
+  throw new Error("DATABASE_URL muss auf Render die interne Postgres-URL sein.");
 }
+
+type Exec = (q: string) => Promise<unknown>;
+let execSql: Exec;
+let dbExport: ReturnType<typeof drizzlePg>;
+
+if (isPg) {
+  const pgSql = postgres(url, { max: 4 });
+  execSql = (q) => pgSql.unsafe(q);
+  dbExport = drizzlePg(pgSql, { schema });
+} else {
+  mkdirSync(join(here, "../data/pg"), { recursive: true });
+  const { PGlite } = await import("@electric-sql/pglite");
+  const { drizzle: drizzlePglite } = await import("drizzle-orm/pglite");
+  const lite = await PGlite.create({ dataDir: join(here, "../data/pg") });
+  execSql = (q) => lite.exec(q);
+  dbExport = drizzlePglite(lite, { schema }) as unknown as ReturnType<typeof drizzlePg>;
+  console.log("DB: PGlite unter data/pg");
+}
+
+export const db = dbExport;
 
 export async function migrate() {
   const file = isPg ? "schema.sql" : "schema.lite.sql";
