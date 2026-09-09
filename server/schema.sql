@@ -84,13 +84,3 @@ CREATE TABLE IF NOT EXISTS bookings (
 
 CREATE INDEX IF NOT EXISTS bookings_staff_time ON bookings (staff_id, starts_at);
 CREATE INDEX IF NOT EXISTS bookings_tenant_time ON bookings (tenant_id, starts_at);
-
-DO $$ BEGIN
-  ALTER TABLE bookings ADD CONSTRAINT bookings_no_overlap
-    EXCLUDE USING gist (
-      staff_id WITH =,
-      tstzrange(starts_at, ends_at) WITH &&
-    ) WHERE (status = 'confirmed');
-EXCEPTION
-  WHEN duplicate_object THEN NULL;
-END $$;
