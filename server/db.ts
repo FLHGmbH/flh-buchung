@@ -58,4 +58,18 @@ export async function migrate() {
       expires_at timestamptz NOT NULL
     );
   `);
+  if (isPg) {
+    try {
+      await execSql(`
+        ALTER TABLE bookings ADD CONSTRAINT bookings_no_overlap
+        EXCLUDE USING gist (
+          staff_id WITH =,
+          tstzrange(starts_at, ends_at) WITH &&
+        ) WHERE (status = 'confirmed')
+      `);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      if (!/already exists/i.test(msg)) throw e;
+    }
+  }
 }
