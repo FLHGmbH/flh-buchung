@@ -34,6 +34,36 @@ function overlapError(e: unknown) {
   return typeof e === "object" && e && "code" in e && (e as { code: string }).code === "23P01";
 }
 
+async function ensureTenantDefaults(tenantId: string) {
+  let staffRows = await db.select().from(staff).where(eq(staff.tenantId, tenantId));
+  if (!staffRows.length) {
+    const [row] = await db.insert(staff).values({ tenantId, name: "Team", sort: 0 }).returning();
+    staffRows = [row];
+  }
+  const serviceRows = await db.select().from(services).where(eq(services.tenantId, tenantId));
+  if (!serviceRows.length) {
+    const [svc] = await db
+      .insert(services)
+      .values({ tenantId, name: "Termin", durationMin: 45, bufferMin: 0 })
+      .returning();
+    await db.insert(serviceStaff).values(staffRows.map((s) => ({ serviceId: svc.id, staffId: s.id })));
+  } else {
+    for (const svc of serviceRows) {
+      const links = await db.select().from(serviceStaff).where(eq(serviceStaff.serviceId, svc.id));
+      if (!links.length) {
+        await db.insert(serviceStaff).values(staffRows.map((s) => ({ serviceId: svc.id, staffId: s.id })));
+      }
+    }
+  }
+  const hours = await db.select().from(openingHours).where(eq(openingHours.tenantId, tenantId));
+  if (!hours.length) {
+    await db.insert(openingHours).values([
+      ...[1, 2, 3, 4, 5].map((weekday) => ({ tenantId, weekday, startHm: "09:00", endHm: "18:00" })),
+      { tenantId, weekday: 6, startHm: "09:00", endHm: "14:00" },
+    ]);
+  }
+}
+
 async function busyFor(tenantId: string, staffIds: string[], bufferByService: Map<string, number>) {
   const off = await db.select().from(timeOff).where(eq(timeOff.tenantId, tenantId));
   const books = await db
@@ -146,6 +176,7 @@ api.post("/admin/tenants", async (c) => {
   }));
   hours.push({ tenantId: tenant.id, weekday: 6, startHm: "09:00", endHm: "14:00" });
   await db.insert(openingHours).values(hours);
+  await ensureTenantDefaults(tenant.id);
   const origin = process.env.PUBLIC_ORIGIN || new URL(c.req.url).origin;
   return c.json({ tenant, bookUrl: `${origin}/b/${slug}` }, 201);
 });
@@ -407,6 +438,7 @@ api.post("/app/bookings/:id/cancel", async (c) => {
 api.get("/public/:slug", async (c) => {
   const [tenant] = await db.select().from(tenants).where(eq(tenants.slug, c.req.param("slug"))).limit(1);
   if (!tenant || !tenant.active) return c.json({ error: "Unbekannt." }, 404);
+  await ensureTenantDefaults(tenant.id);
   const staffRows = await db
     .select()
     .from(staff)

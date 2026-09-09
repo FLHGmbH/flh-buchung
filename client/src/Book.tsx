@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useParams } from "react-router-dom";
 import { api, type Pub } from "./api";
-import { Mark } from "./Mark";
 
 function berlinDay(iso: string) {
   return new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Berlin", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date(iso));
@@ -71,11 +70,15 @@ export function BookPage() {
         ))}
       </div>
 
-      {step === 0 && pub.services.map((s) => (
-        <button key={s.id} className={"choice" + (serviceId === s.id ? " on" : "")} type="button" onClick={() => { setServiceId(s.id); setStaffId(""); setSlot(null); setStep(1); }}>
-          {s.name} · {s.durationMin} Min.
-        </button>
-      ))}
+      {step === 0 && (
+        pub.services.length ? pub.services.map((s) => (
+          <button key={s.id} className={"choice" + (serviceId === s.id ? " on" : "")} type="button" onClick={() => { setServiceId(s.id); setStaffId(""); setSlot(null); setStep(1); }}>
+            {s.name} · {s.durationMin} Min.
+          </button>
+        )) : (
+          <p className="err">Noch keine Leistung angelegt. Im Mandanten-Konto unter Leistungen eine anlegen.</p>
+        )
+      )}
 
       {step === 1 && (
         <>
@@ -159,10 +162,7 @@ export function BookPage() {
         </div>
       )}
 
-      <footer className="book-foot">
-        <Mark word />
-        Buchung von FLH DIGITAL
-      </footer>
+      <footer className="book-foot">Buchung von FLH DIGITAL</footer>
     </div>
   );
 }
