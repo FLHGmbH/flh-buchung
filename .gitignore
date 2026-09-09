@@ -1,0 +1,10 @@
+node_modules
+dist
+client/dist
+data
+.env
+.playwright-cli
+.cursor
+.DS_Store
+*.log
+.impeccable/config.local.json
