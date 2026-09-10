@@ -89,16 +89,16 @@ export function CalendarPage() {
                     >
                       {h === START && nowTop != null ? <div className="now-line" style={{ top: nowTop }} /> : null}
                       {data.bookings
-                        .filter((b) => b.staffId === s.id && b.status === "confirmed" && hourOf(b.startsAt, data.timezone) === h)
+                        .filter((b) => b.staffId === s.id && b.status !== "cancelled" && hourOf(b.startsAt, data.timezone) === h)
                         .map((b) => (
                           <button
                             key={b.id}
-                            className="block"
+                            className={"block" + (b.status === "pending" ? " hold" : "")}
                             style={{ top: topOf(b.startsAt, data.timezone) % ROW, height: heightOf(b.startsAt, b.endsAt) }}
                             type="button"
                             onClick={(e) => { e.stopPropagation(); setPick(b); }}
                           >
-                            {b.guestName}
+                            {b.guestName}{b.status === "pending" ? " (PIN)" : ""}
                             <br />
                             {fmt(b.startsAt, data.timezone)}–{fmt(b.endsAt, data.timezone)}
                           </button>
@@ -128,11 +128,14 @@ export function CalendarPage() {
                 <p>{data.services.find((s) => s.id === pick.serviceId)?.name}</p>
                 <p>{pick.guestEmail} {pick.guestPhone}</p>
                 {pick.note ? <p>{pick.note}</p> : null}
-                {pick.status === "confirmed" ? (
+                {pick.status === "pending" ? <p>Wartet auf PIN</p> : null}
+                {pick.status === "cancelled" ? (
+                  <p>Storniert</p>
+                ) : (
                   <button className="btn danger" type="button" onClick={() => api.cancelBooking(pick.id).then(() => { setPick(null); load(); })}>
                     Stornieren
                   </button>
-                ) : <p>Storniert</p>}
+                )}
               </>
             ) : pick === "new" ? (
               <form

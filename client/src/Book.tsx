@@ -6,7 +6,7 @@ function berlinDay(iso: string) {
   return new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Berlin", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date(iso));
 }
 
-const STEPS = ["Leistung", "Person", "Tag", "Uhrzeit", "Angaben", "Fertig"];
+const STEPS = ["Leistung", "Person", "Tag", "Uhrzeit", "Angaben", "Code", "Fertig"];
 
 export function BookPage() {
   const { slug = "" } = useParams();
@@ -20,6 +20,8 @@ export function BookPage() {
   const [slot, setSlot] = useState<{ start: string; end: string; staffId: string } | null>(null);
   const [guest, setGuest] = useState({ guestName: "", guestEmail: "", guestPhone: "", note: "" });
   const [done, setDone] = useState<{ id: string; startsAt: string } | null>(null);
+  const [hold, setHold] = useState<{ id: string; startsAt: string } | null>(null);
+  const [pin, setPin] = useState("");
   const [pending, setPending] = useState(false);
 
   useEffect(() => {
@@ -54,8 +56,7 @@ export function BookPage() {
 
   const daySlots = slots.filter((s) => berlinDay(s.start) === day).sort((a, b) => a.start.localeCompare(b.start));
 
-  if (err) return <div className="book"><p className="err">{err}</p></div>;
-  if (!pub) return <div className="book">Kalender wird geladen…</div>;
+  if (!pub) return <div className="book">{err ? <p className="err">{err}</p> : "Kalender wird geladen…"}</div>;
 
   const service = pub.services.find((s) => s.id === serviceId);
   const staffForService = pub.staff.filter((s) => !service || service.staffIds.includes(s.id));
@@ -64,6 +65,7 @@ export function BookPage() {
     <div className="book">
       <h1>{pub.tenant.name}</h1>
       <p className="lead">Termin buchen</p>
+      {err ? <p className="err">{err}</p> : null}
       <div className="steps">
         {STEPS.map((s, i) => (
           <span key={s} className={i === step ? "on" : ""}>{s}</span>
@@ -137,7 +139,8 @@ export function BookPage() {
               ...guest,
             })
               .then((r) => {
-                setDone((r as { booking: { id: string; startsAt: string } }).booking);
+                setErr("");
+                setHold((r as { booking: { id: string; startsAt: string } }).booking);
                 setStep(5);
               })
               .catch((ex) => setErr(ex.message))
@@ -146,15 +149,47 @@ export function BookPage() {
         >
           <p>{new Date(slot.start).toLocaleString("de-DE")} · {service?.name}</p>
           <label className="field"><span>Name</span><input required value={guest.guestName} onChange={(e) => setGuest({ ...guest, guestName: e.target.value })} /></label>
-          <label className="field"><span>E-Mail</span><input type="email" value={guest.guestEmail} onChange={(e) => setGuest({ ...guest, guestEmail: e.target.value })} /></label>
+          <label className="field"><span>E-Mail</span><input type="email" required value={guest.guestEmail} onChange={(e) => setGuest({ ...guest, guestEmail: e.target.value })} /></label>
           <label className="field"><span>Telefon</span><input value={guest.guestPhone} onChange={(e) => setGuest({ ...guest, guestPhone: e.target.value })} /></label>
           <label className="field"><span>Notiz</span><textarea value={guest.note} onChange={(e) => setGuest({ ...guest, note: e.target.value })} /></label>
-          <button className="btn" disabled={pending} type="submit">{pending ? "Bucht…" : "Verbindlich buchen"}</button>
+          <button className="btn" disabled={pending} type="submit">{pending ? "Sendet Code…" : "Code per Mail"}</button>
           <button className="btn quiet" type="button" onClick={() => setStep(3)}>Zurück</button>
         </form>
       )}
 
-      {step === 5 && done && (
+      {step === 5 && hold && (
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            setPending(true);
+            setErr("");
+            api.confirm(slug, hold.id, pin)
+              .then((r) => {
+                setDone(r.booking);
+                setStep(6);
+              })
+              .catch((ex) => setErr(ex.message))
+              .finally(() => setPending(false));
+          }}
+        >
+          <p>Code ist unterwegs (15 Minuten gültig).</p>
+          <label className="field">
+            <span>6-stelliger Code</span>
+            <input
+              required
+              inputMode="numeric"
+              autoComplete="one-time-code"
+              pattern="\d{6}"
+              maxLength={6}
+              value={pin}
+              onChange={(e) => setPin(e.target.value.replace(/\D/g, "").slice(0, 6))}
+            />
+          </label>
+          <button className="btn" disabled={pending || pin.length !== 6} type="submit">{pending ? "Prüft…" : "Bestätigen"}</button>
+        </form>
+      )}
+
+      {step === 6 && done && (
         <div className="panel">
           <h1 style={{ fontSize: "1.25rem" }}>Gebucht</h1>
           <p>Nummer {done.id.slice(0, 8).toUpperCase()}</p>

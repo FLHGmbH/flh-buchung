@@ -47,6 +47,11 @@ export const api = {
       `/api/public/${slug}/slots?serviceId=${serviceId}${staffId ? `&staffId=${staffId}` : ""}`,
     ),
   book: (slug: string, body: object) => req(`/api/public/${slug}/book`, { method: "POST", body: JSON.stringify(body) }),
+  confirm: (slug: string, id: string, pin: string) =>
+    req<{ booking: { id: string; startsAt: string } }>(`/api/public/${slug}/bookings/${id}/confirm`, {
+      method: "POST",
+      body: JSON.stringify({ pin }),
+    }),
 };
 
 export type TenantRow = {

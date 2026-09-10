@@ -190,6 +190,10 @@ a { color: var(--petrol); }
   border: 0;
   width: calc(100% - 8px);
 }
+.block.hold {
+  background: var(--amber);
+  color: var(--graphite);
+}
 .block.off {
   background: repeating-linear-gradient(-45deg, var(--graphite-25), var(--graphite-25) 6px, var(--graphite-50) 6px, var(--graphite-50) 12px);
   color: var(--graphite);

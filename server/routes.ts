@@ -1,8 +1,9 @@
-import { and, desc, eq, gte, lte } from "drizzle-orm";
+import { and, desc, eq, gte, lt, lte, or } from "drizzle-orm";
 import { Hono } from "hono";
 import { DateTime } from "luxon";
 import { actorFrom, actorFromUserId, createSession, destroySession, hashPassword, verifyPassword, type Actor } from "./auth.ts";
 import { db } from "./db.ts";
+import { newPin, PIN_MS, sendPinMail } from "./mail.ts";
 import {
   bookings,
   memberships,
@@ -64,12 +65,22 @@ async function ensureTenantDefaults(tenantId: string) {
   }
 }
 
+async function expireHolds(tenantId: string) {
+  await db
+    .update(bookings)
+    .set({ status: "cancelled" })
+    .where(and(eq(bookings.tenantId, tenantId), eq(bookings.status, "pending"), lt(bookings.pinExpiresAt, new Date())));
+}
+
 async function busyFor(tenantId: string, staffIds: string[], bufferByService: Map<string, number>) {
+  await expireHolds(tenantId);
   const off = await db.select().from(timeOff).where(eq(timeOff.tenantId, tenantId));
   const books = await db
     .select()
     .from(bookings)
-    .where(and(eq(bookings.tenantId, tenantId), eq(bookings.status, "confirmed")));
+    .where(
+      and(eq(bookings.tenantId, tenantId), or(eq(bookings.status, "confirmed"), eq(bookings.status, "pending"))),
+    );
   const busy = [
     ...off
       .filter((o) => staffIds.includes(o.staffId))
@@ -518,8 +529,9 @@ api.post("/public/:slug/book", async (c) => {
     .from(services)
     .where(and(eq(services.id, body.serviceId ?? ""), eq(services.tenantId, tenant.id)))
     .limit(1);
-  if (!service || !body.staffId || !body.start || !body.guestName?.trim()) {
-    return c.json({ error: "Bitte alle Pflichtfelder ausfüllen." }, 400);
+  const guestEmail = body.guestEmail?.trim().toLowerCase() ?? "";
+  if (!service || !body.staffId || !body.start || !body.guestName?.trim() || !guestEmail.includes("@")) {
+    return c.json({ error: "Bitte alle Pflichtfelder ausfüllen (inkl. E-Mail)." }, 400);
   }
   const start = new Date(body.start);
   const end = new Date(start.getTime() + service.durationMin * 60_000);
@@ -538,6 +550,7 @@ api.post("/public/:slug/book", async (c) => {
     minNoticeMin: tenant.minNoticeMin,
   }).some((s) => s.start.getTime() === start.getTime());
   if (!ok) return c.json({ error: "Dieser Termin ist nicht mehr frei." }, 409);
+  const pin = newPin();
   try {
     const [row] = await db
       .insert(bookings)
@@ -548,21 +561,62 @@ api.post("/public/:slug/book", async (c) => {
         startsAt: start,
         endsAt: end,
         guestName: body.guestName.trim(),
-        guestEmail: body.guestEmail?.trim() ?? "",
+        guestEmail,
         guestPhone: body.guestPhone?.trim() ?? "",
         note: body.note?.trim() ?? "",
+        status: "pending",
+        pinHash: await hashPassword(pin),
+        pinExpiresAt: new Date(Date.now() + PIN_MS),
       })
       .returning();
+    try {
+      await sendPinMail({
+        to: guestEmail,
+        pin,
+        tenantName: tenant.name,
+        when: DateTime.fromJSDate(start).setZone(tenant.timezone).toFormat("dd.MM.yyyy HH:mm"),
+      });
+    } catch {
+      await db.update(bookings).set({ status: "cancelled" }).where(eq(bookings.id, row.id));
+      return c.json({ error: "Code konnte nicht gesendet werden. Bitte später erneut buchen." }, 502);
+    }
     return c.json({
       booking: {
         id: row.id,
         startsAt: row.startsAt,
         endsAt: row.endsAt,
         guestName: row.guestName,
+        status: "pending",
       },
     }, 201);
   } catch (e) {
     if (overlapError(e)) return c.json({ error: "Dieser Slot ist gerade vergeben. Bitte neu wählen." }, 409);
     throw e;
   }
+});
+
+api.post("/public/:slug/bookings/:id/confirm", async (c) => {
+  const [tenant] = await db.select().from(tenants).where(eq(tenants.slug, c.req.param("slug"))).limit(1);
+  if (!tenant || !tenant.active) return c.json({ error: "Unbekannt." }, 404);
+  await expireHolds(tenant.id);
+  const body = await c.req.json<{ pin?: string }>();
+  const pin = (body.pin ?? "").replace(/\s/g, "");
+  const [row] = await db
+    .select()
+    .from(bookings)
+    .where(and(eq(bookings.id, c.req.param("id")), eq(bookings.tenantId, tenant.id)))
+    .limit(1);
+  if (!row || row.status === "cancelled") return c.json({ error: "Buchung unbekannt oder abgelaufen." }, 404);
+  if (row.status === "confirmed") {
+    return c.json({ booking: { id: row.id, startsAt: row.startsAt, endsAt: row.endsAt, guestName: row.guestName } });
+  }
+  if (row.status !== "pending" || !row.pinHash) return c.json({ error: "Buchung unbekannt oder abgelaufen." }, 404);
+  if (!(await verifyPassword(pin, row.pinHash))) return c.json({ error: "Code stimmt nicht." }, 400);
+  const [ok] = await db
+    .update(bookings)
+    .set({ status: "confirmed", pinHash: "", pinExpiresAt: null })
+    .where(and(eq(bookings.id, row.id), eq(bookings.status, "pending")))
+    .returning();
+  if (!ok) return c.json({ error: "Buchung unbekannt oder abgelaufen." }, 404);
+  return c.json({ booking: { id: ok.id, startsAt: ok.startsAt, endsAt: ok.endsAt, guestName: ok.guestName } });
 });

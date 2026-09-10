@@ -80,6 +80,8 @@ export const bookings = pgTable("bookings", {
   guestPhone: text("guest_phone").notNull().default(""),
   note: text("note").notNull().default(""),
   status: text("status").notNull().default("confirmed"),
+  pinHash: text("pin_hash").notNull().default(""),
+  pinExpiresAt: timestamp("pin_expires_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 

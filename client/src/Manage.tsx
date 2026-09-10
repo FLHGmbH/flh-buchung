@@ -197,9 +197,9 @@ export function BookingsPage() {
               <td>{b.guestName}<br />{b.guestEmail} {b.guestPhone}</td>
               <td>{boot.services.find((s) => s.id === b.serviceId)?.name}</td>
               <td>{boot.staff.find((s) => s.id === b.staffId)?.name}</td>
-              <td>{b.status === "confirmed" ? "Bestätigt" : "Storniert"}</td>
+              <td>{b.status === "confirmed" ? "Bestätigt" : b.status === "pending" ? "PIN offen" : "Storniert"}</td>
               <td>
-                {b.status === "confirmed" ? (
+                {b.status !== "cancelled" ? (
                   <button className="btn quiet" type="button" onClick={() => api.cancelBooking(b.id).then(reload)}>Stornieren</button>
                 ) : null}
               </td>

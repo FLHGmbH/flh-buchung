@@ -48,6 +48,11 @@ if (isPg) {
 
 export const db = dbExport;
 
+function ignoreExists(e: unknown) {
+  const msg = e instanceof Error ? e.message : String(e);
+  if (!/already exists|duplicate/i.test(msg)) throw e;
+}
+
 export async function migrate() {
   const file = isPg ? "schema.sql" : "schema.lite.sql";
   await execSql(readFileSync(join(here, file), "utf8"));
@@ -58,14 +63,17 @@ export async function migrate() {
       expires_at timestamptz NOT NULL
     );
   `);
+  await execSql(`ALTER TABLE bookings ADD COLUMN IF NOT EXISTS pin_hash text NOT NULL DEFAULT ''`).catch(ignoreExists);
+  await execSql(`ALTER TABLE bookings ADD COLUMN IF NOT EXISTS pin_expires_at timestamptz`).catch(ignoreExists);
   if (isPg) {
     try {
+      await execSql(`ALTER TABLE bookings DROP CONSTRAINT IF EXISTS bookings_no_overlap`);
       await execSql(`
         ALTER TABLE bookings ADD CONSTRAINT bookings_no_overlap
         EXCLUDE USING gist (
           staff_id WITH =,
           tstzrange(starts_at, ends_at) WITH &&
-        ) WHERE (status = 'confirmed')
+        ) WHERE (status IN ('confirmed', 'pending'))
       `);
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);

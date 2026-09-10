@@ -76,5 +76,7 @@ CREATE TABLE IF NOT EXISTS bookings (
   guest_phone text NOT NULL DEFAULT '',
   note text NOT NULL DEFAULT '',
   status text NOT NULL DEFAULT 'confirmed',
+  pin_hash text NOT NULL DEFAULT '',
+  pin_expires_at timestamptz,
   created_at timestamptz NOT NULL DEFAULT now()
 );
