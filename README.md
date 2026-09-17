@@ -23,3 +23,4 @@ npm run dev
 Blueprint `render.yaml`: Web Service Free + Postgres Free (Frankfurt). `PUBLIC_ORIGIN` auf die `onrender.com`-URL setzen, damit die iframe-Snippets stimmen. Free-Postgres läuft 30 Tage — nur zum Testen.
 
 Nach dem ersten Start ist der Seed automatisch da, wenn die User-Tabelle leer ist.
+# FLH-Kalender
