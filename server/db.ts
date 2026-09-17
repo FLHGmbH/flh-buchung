@@ -23,22 +23,17 @@ loadEnv();
 const here = dirname(fileURLToPath(import.meta.url));
 const url = (process.env.DATABASE_URL ?? "").trim();
 const isPg = url.startsWith("postgres");
-
-if (process.env.VERCEL && !isPg) {
-  throw new Error("DATABASE_URL muss die Supabase-Postgres-URL sein.");
-}
-if (process.env.NODE_ENV === "production" && !isPg) {
-  throw new Error("DATABASE_URL muss die Postgres-URL sein (Supabase).");
-}
+const onVercel = !!process.env.VERCEL;
 
 type Exec = (q: string) => Promise<unknown>;
 let execSql: Exec;
 let dbExport: ReturnType<typeof drizzlePg>;
 
-if (isPg) {
+if (onVercel || isPg) {
+  if (!isPg) throw new Error("DATABASE_URL muss die Supabase-Postgres-URL sein (Pooler, Port 6543).");
   const pooler = /pooler\.supabase\.com|:6543\b/.test(url);
   const pgSql = postgres(url, {
-    max: process.env.VERCEL ? 1 : 4,
+    max: onVercel ? 1 : 4,
     idle_timeout: 20,
     connect_timeout: 10,
     prepare: !pooler,
@@ -60,34 +55,39 @@ export const db = dbExport;
 
 function ignoreExists(e: unknown) {
   const msg = e instanceof Error ? e.message : String(e);
-  if (!/already exists|duplicate/i.test(msg)) throw e;
+  if (!/already exists|duplicate|permission denied|must be owner|not allowed|insufficient/i.test(msg)) throw e;
+}
+
+function schemaFile(name: string) {
+  for (const p of [join(here, name), join(process.cwd(), "server", name)]) {
+    if (existsSync(p)) return p;
+  }
+  throw new Error(`Schema fehlt: ${name}`);
 }
 
 export async function migrate() {
   const file = isPg ? "schema.sql" : "schema.lite.sql";
-  await execSql(readFileSync(join(here, file), "utf8"));
+  const sql = readFileSync(schemaFile(file), "utf8");
+  for (const stmt of sql.split(";").map((s) => s.trim()).filter(Boolean)) {
+    await execSql(stmt).catch(ignoreExists);
+  }
   await execSql(`
     CREATE TABLE IF NOT EXISTS sessions (
       token text PRIMARY KEY,
       user_id uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
       expires_at timestamptz NOT NULL
     );
-  `);
+  `).catch(ignoreExists);
   await execSql(`ALTER TABLE bookings ADD COLUMN IF NOT EXISTS pin_hash text NOT NULL DEFAULT ''`).catch(ignoreExists);
   await execSql(`ALTER TABLE bookings ADD COLUMN IF NOT EXISTS pin_expires_at timestamptz`).catch(ignoreExists);
   if (isPg) {
-    try {
-      await execSql(`ALTER TABLE bookings DROP CONSTRAINT IF EXISTS bookings_no_overlap`);
-      await execSql(`
-        ALTER TABLE bookings ADD CONSTRAINT bookings_no_overlap
-        EXCLUDE USING gist (
-          staff_id WITH =,
-          tstzrange(starts_at, ends_at) WITH &&
-        ) WHERE (status IN ('confirmed', 'pending'))
-      `);
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : String(e);
-      if (!/already exists/i.test(msg)) throw e;
-    }
+    await execSql(`ALTER TABLE bookings DROP CONSTRAINT IF EXISTS bookings_no_overlap`).catch(ignoreExists);
+    await execSql(`
+      ALTER TABLE bookings ADD CONSTRAINT bookings_no_overlap
+      EXCLUDE USING gist (
+        staff_id WITH =,
+        tstzrange(starts_at, ends_at) WITH &&
+      ) WHERE (status IN ('confirmed', 'pending'))
+    `).catch(ignoreExists);
   }
 }

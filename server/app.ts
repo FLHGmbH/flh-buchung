@@ -11,11 +11,19 @@ function ready() {
   return boot;
 }
 
-app.use("*", async (_c, next) => {
-  await ready();
+app.get("/health", (c) => c.json({ ok: true }));
+app.get("/api/health", (c) => c.json({ ok: true }));
+
+app.use("*", async (c, next) => {
+  try {
+    await ready();
+  } catch (e) {
+    console.error(e);
+    const msg = e instanceof Error ? e.message : "Datenbank nicht erreichbar.";
+    return c.json({ error: msg }, 503);
+  }
   await next();
 });
 
-app.get("/health", (c) => c.json({ ok: true }));
-app.get("/api/health", (c) => c.json({ ok: true }));
 app.route("/api", api);
+app.route("/", api);

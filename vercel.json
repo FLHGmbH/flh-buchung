@@ -5,12 +5,18 @@
   "outputDirectory": "dist",
   "installCommand": "npm ci",
   "functions": {
-    "api/[[...route]].ts": {
-      "includeFiles": "server/**"
+    "api/index.ts": {
+      "includeFiles": "server/**",
+      "maxDuration": 30
+    },
+    "api/[...route].ts": {
+      "includeFiles": "server/**",
+      "maxDuration": 30
     }
   },
   "rewrites": [
     { "source": "/health", "destination": "/api/health" },
-    { "source": "/((?!api/).*)", "destination": "/index.html" }
+    { "source": "/api/(.*)", "destination": "/api" },
+    { "source": "/((?!api(?:/|$)).*)", "destination": "/index.html" }
   ]
 }
