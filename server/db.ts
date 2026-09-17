@@ -24,8 +24,11 @@ const here = dirname(fileURLToPath(import.meta.url));
 const url = (process.env.DATABASE_URL ?? "").trim();
 const isPg = url.startsWith("postgres");
 
+if (process.env.VERCEL && !isPg) {
+  throw new Error("DATABASE_URL muss die Supabase-Postgres-URL sein.");
+}
 if (process.env.NODE_ENV === "production" && !isPg) {
-  throw new Error("DATABASE_URL muss auf Render die interne Postgres-URL sein.");
+  throw new Error("DATABASE_URL muss die Postgres-URL sein (Supabase).");
 }
 
 type Exec = (q: string) => Promise<unknown>;
@@ -33,7 +36,14 @@ let execSql: Exec;
 let dbExport: ReturnType<typeof drizzlePg>;
 
 if (isPg) {
-  const pgSql = postgres(url, { max: 4 });
+  const pooler = /pooler\.supabase\.com|:6543\b/.test(url);
+  const pgSql = postgres(url, {
+    max: process.env.VERCEL ? 1 : 4,
+    idle_timeout: 20,
+    connect_timeout: 10,
+    prepare: !pooler,
+    ssl: /supabase\.co|supabase\.com/.test(url) ? true : undefined,
+  });
   execSql = (q) => pgSql.unsafe(q);
   dbExport = drizzlePg(pgSql, { schema });
 } else {

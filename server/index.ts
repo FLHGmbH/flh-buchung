@@ -2,18 +2,10 @@ import { readFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { serve } from "@hono/node-server";
-import { Hono } from "hono";
-import { migrate } from "./db.ts";
-import { api } from "./routes.ts";
-import { seedIfEmpty } from "./seed.ts";
-
-const app = new Hono();
-
-app.get("/health", (c) => c.json({ ok: true }));
-app.route("/api", api);
+import { app } from "./app.ts";
 
 const here = dirname(fileURLToPath(import.meta.url));
-const clientDir = join(here, "../client/dist");
+const clientDir = join(here, "../dist");
 
 app.get("*", async (c) => {
   if (c.req.path.startsWith("/api") || c.req.path === "/health") return c.notFound();
@@ -43,8 +35,6 @@ app.get("*", async (c) => {
 });
 
 const port = Number(process.env.PORT) || 3000;
-await migrate();
-await seedIfEmpty();
 serve({ fetch: app.fetch, port, hostname: "0.0.0.0" }, () => {
   console.log(`flh-buchung http://0.0.0.0:${port}`);
 });
