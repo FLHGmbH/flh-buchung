@@ -37,7 +37,8 @@ if (onVercel || isPg) {
     idle_timeout: 20,
     connect_timeout: 10,
     prepare: !pooler,
-    ssl: /supabase\.co|supabase\.com/.test(url) ? true : undefined,
+    // ponytail: Node 22 rejects the pooler chain; verify-full + Supabase CA if MITM matters
+    ssl: /supabase\.co|supabase\.com/.test(url) ? { rejectUnauthorized: false } : undefined,
   });
   execSql = (q) => pgSql.unsafe(q);
   dbExport = drizzlePg(pgSql, { schema });
