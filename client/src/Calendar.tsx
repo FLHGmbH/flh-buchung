@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { api, type Booking, type DayPayload } from "./api";
+import { api, load, peek, type Booking, type DayPayload } from "./api";
 
 const START = 8;
 const END = 20;
@@ -29,15 +29,22 @@ function ymd(d: Date) {
 
 export function CalendarPage() {
   const [date, setDate] = useState(() => ymd(new Date()));
-  const [data, setData] = useState<DayPayload | null>(null);
+  const [data, setData] = useState<DayPayload | null>(() => peek<DayPayload>(`/api/app/day?date=${ymd(new Date())}`));
   const [err, setErr] = useState("");
   const [pick, setPick] = useState<Booking | "new" | null>(null);
   const [draft, setDraft] = useState({ staffId: "", serviceId: "", startsAt: "", guestName: "" });
 
-  function load(d = date) {
-    api.day(d).then(setData).catch((e) => setErr(e.message));
-  }
-  useEffect(() => { load(); }, [date]);
+  useEffect(() => {
+    let on = true;
+    load<DayPayload>(`/api/app/day?date=${date}`, (d) => {
+      if (on) setData(d);
+    }).catch((e) => {
+      if (on && !peek<DayPayload>(`/api/app/day?date=${date}`)) setErr(e instanceof Error ? e.message : String(e));
+    });
+    return () => {
+      on = false;
+    };
+  }, [date]);
 
   const cols = data?.staff.length ?? 0;
   const nowTop = useMemo(() => {
@@ -46,7 +53,7 @@ export function CalendarPage() {
   }, [data]);
 
   if (err) return <div className="page"><p className="err">{err}</p></div>;
-  if (!data) return <div className="page">Laden…</div>;
+  if (!data) return <div className="page" />;
 
   const emptyStaff = data.staff.length === 0;
 
@@ -132,7 +139,7 @@ export function CalendarPage() {
                 {pick.status === "cancelled" ? (
                   <p>Storniert</p>
                 ) : (
-                  <button className="btn danger" type="button" onClick={() => api.cancelBooking(pick.id).then(() => { setPick(null); load(); })}>
+                  <button className="btn danger" type="button" onClick={() => api.cancelBooking(pick.id).then(() => { setPick(null); api.day(date).then(setData); })}>
                     Stornieren
                   </button>
                 )}
@@ -141,7 +148,7 @@ export function CalendarPage() {
               <form
                 onSubmit={(e) => {
                   e.preventDefault();
-                  api.addBooking({ ...draft, startsAt: new Date(draft.startsAt).toISOString() }).then(() => { setPick(null); load(); }).catch((ex) => setErr(ex.message));
+                  api.addBooking({ ...draft, startsAt: new Date(draft.startsAt).toISOString() }).then(() => { setPick(null); api.day(date).then(setData); }).catch((ex) => setErr(ex.message));
                 }}
               >
                 <h1 style={{ fontSize: "1.15rem" }}>Termin anlegen</h1>

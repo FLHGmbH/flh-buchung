@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Navigate, Route, Routes, useLocation } from "react-router-dom";
-import { api, type Actor } from "./api";
+import { api, peek, type Actor } from "./api";
 import { AdminDetail, AdminList, AdminNew } from "./Admin";
 import { BookPage } from "./Book";
 import { CalendarPage } from "./Calendar";
@@ -10,18 +10,22 @@ import { Shell } from "./Shell";
 
 export function App() {
   const loc = useLocation();
-  const [actor, setActor] = useState<Actor | null | undefined>(undefined);
+  const [actor, setActor] = useState<Actor | null | undefined>(() => peek<{ actor: Actor | null }>("/api/me")?.actor);
 
   useEffect(() => {
     api.me().then((r) => setActor(r.actor)).catch(() => setActor(null));
   }, []);
+  useEffect(() => {
+    if (!actor) return;
+    api.prefetch(actor.role === "tenant_admin" ? "/app" : "/admin");
+  }, [actor]);
 
   const publicBook = loc.pathname.startsWith("/b/");
   if (actor === undefined && !publicBook) return <div className="page">Laden…</div>;
 
   return (
     <Routes>
-      <Route path="/login" element={actor ? <Home actor={actor} /> : <LoginPage onLogin={setActor} />} />
+      <Route path="/login" element={actor ? <Home actor={actor} /> : <LoginPage onLogin={(a) => { setActor(a); api.prefetch(a.role === "tenant_admin" ? "/app" : "/admin"); }} />} />
       <Route path="/b/:slug" element={<BookPage />} />
       <Route
         element={

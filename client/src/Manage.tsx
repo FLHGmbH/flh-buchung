@@ -1,11 +1,14 @@
 import { useEffect, useState, type FormEvent } from "react";
-import { api, type Bootstrap, type Booking, type TimeOff } from "./api";
+import { api, useApi, type Bootstrap, type Booking, type TimeOff } from "./api";
+
+function useBoot() {
+  return useApi<Bootstrap>("/api/app/bootstrap");
+}
 
 export function StaffPage() {
-  const [boot, setBoot] = useState<Bootstrap | null>(null);
+  const boot = useBoot();
   const [name, setName] = useState("");
-  useEffect(() => { api.bootstrap().then(setBoot); }, []);
-  if (!boot) return <div className="page">Laden…</div>;
+  if (!boot) return <div className="page" />;
   return (
     <div className="page">
       <h1>Mitarbeiter</h1>
@@ -14,7 +17,7 @@ export function StaffPage() {
         className="toolbar"
         onSubmit={(e) => {
           e.preventDefault();
-          api.addStaff(name).then(() => { setName(""); api.bootstrap().then(setBoot); });
+          api.addStaff(name).then(() => setName(""));
         }}
       >
         <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Name" required />
@@ -27,7 +30,7 @@ export function StaffPage() {
             <tr key={s.id}>
               <td>{s.name}</td>
               <td>
-                <button className="btn quiet" type="button" onClick={() => api.patchStaff(s.id, { active: !s.active }).then(() => api.bootstrap().then(setBoot))}>
+                <button className="btn quiet" type="button" onClick={() => api.patchStaff(s.id, { active: !s.active })}>
                   {s.active ? "Aktiv" : "Inaktiv"}
                 </button>
               </td>
@@ -40,10 +43,9 @@ export function StaffPage() {
 }
 
 export function ServicesPage() {
-  const [boot, setBoot] = useState<Bootstrap | null>(null);
+  const boot = useBoot();
   const [form, setForm] = useState({ name: "", durationMin: 45, bufferMin: 0, staffIds: [] as string[] });
-  useEffect(() => { api.bootstrap().then(setBoot); }, []);
-  if (!boot) return <div className="page">Laden…</div>;
+  if (!boot) return <div className="page" />;
   function toggle(id: string) {
     setForm((f) => ({ ...f, staffIds: f.staffIds.includes(id) ? f.staffIds.filter((x) => x !== id) : [...f.staffIds, id] }));
   }
@@ -56,7 +58,7 @@ export function ServicesPage() {
         style={{ marginBottom: 24, maxWidth: 480 }}
         onSubmit={(e) => {
           e.preventDefault();
-          api.addService(form).then(() => { setForm({ name: "", durationMin: 45, bufferMin: 0, staffIds: [] }); api.bootstrap().then(setBoot); });
+          api.addService(form).then(() => setForm({ name: "", durationMin: 45, bufferMin: 0, staffIds: [] }));
         }}
       >
         <label className="field"><span>Name</span><input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required /></label>
@@ -93,18 +95,16 @@ export function ServicesPage() {
 const DAYS = ["", "Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag", "Samstag", "Sonntag"];
 
 export function HoursPage() {
-  const [boot, setBoot] = useState<Bootstrap | null>(null);
+  const boot = useBoot();
   const [rows, setRows] = useState<{ weekday: number; startHm: string; endHm: string; open: boolean }[]>([]);
   useEffect(() => {
-    api.bootstrap().then((b) => {
-      setBoot(b);
-      setRows([1, 2, 3, 4, 5, 6, 7].map((weekday) => {
-        const h = b.hours.find((x) => x.weekday === weekday);
-        return { weekday, startHm: h?.startHm ?? "09:00", endHm: h?.endHm ?? "18:00", open: Boolean(h) };
-      }));
-    });
-  }, []);
-  if (!boot) return <div className="page">Laden…</div>;
+    if (!boot || rows.length) return;
+    setRows([1, 2, 3, 4, 5, 6, 7].map((weekday) => {
+      const h = boot.hours.find((x) => x.weekday === weekday);
+      return { weekday, startHm: h?.startHm ?? "09:00", endHm: h?.endHm ?? "18:00", open: Boolean(h) };
+    }));
+  }, [boot, rows.length]);
+  if (!boot) return <div className="page" />;
   return (
     <div className="page">
       <h1>Öffnungszeiten</h1>
@@ -125,22 +125,18 @@ export function HoursPage() {
 }
 
 export function TimeOffPage() {
-  const [boot, setBoot] = useState<Bootstrap | null>(null);
-  const [rows, setRows] = useState<TimeOff[]>([]);
+  const boot = useBoot();
+  const off = useApi<{ timeOff: TimeOff[] }>("/api/app/time-off");
+  const rows = off?.timeOff ?? [];
   const [form, setForm] = useState({ staffId: "", startsAt: "", endsAt: "", reason: "Urlaub" });
-  function reload() {
-    api.bootstrap().then(setBoot);
-    api.timeOff().then((r) => setRows(r.timeOff));
-  }
-  useEffect(() => { reload(); }, []);
-  if (!boot) return <div className="page">Laden…</div>;
+  if (!boot) return <div className="page" />;
   function submit(e: FormEvent) {
     e.preventDefault();
     api.addTimeOff({
       ...form,
       startsAt: new Date(form.startsAt).toISOString(),
       endsAt: new Date(form.endsAt).toISOString(),
-    }).then(reload);
+    }).then(() => {});
   }
   return (
     <div className="page">
@@ -167,7 +163,7 @@ export function TimeOffPage() {
               <td>{boot.staff.find((s) => s.id === r.staffId)?.name}</td>
               <td>{new Date(r.startsAt).toLocaleString("de-DE")} – {new Date(r.endsAt).toLocaleString("de-DE")}</td>
               <td>{r.reason}</td>
-              <td><button className="btn quiet" type="button" onClick={() => api.delTimeOff(r.id).then(reload)}>Löschen</button></td>
+              <td><button className="btn quiet" type="button" onClick={() => api.delTimeOff(r.id)}>Löschen</button></td>
             </tr>
           ))}
         </tbody>
@@ -177,14 +173,10 @@ export function TimeOffPage() {
 }
 
 export function BookingsPage() {
-  const [boot, setBoot] = useState<Bootstrap | null>(null);
-  const [rows, setRows] = useState<Booking[]>([]);
-  function reload() {
-    api.bootstrap().then(setBoot);
-    api.bookings().then((r) => setRows(r.bookings));
-  }
-  useEffect(() => { reload(); }, []);
-  if (!boot) return <div className="page">Laden…</div>;
+  const boot = useBoot();
+  const list = useApi<{ bookings: Booking[] }>("/api/app/bookings");
+  const rows = list?.bookings ?? [];
+  if (!boot) return <div className="page" />;
   return (
     <div className="page">
       <h1>Termine</h1>
@@ -200,7 +192,7 @@ export function BookingsPage() {
               <td>{b.status === "confirmed" ? "Bestätigt" : b.status === "pending" ? "PIN offen" : "Storniert"}</td>
               <td>
                 {b.status !== "cancelled" ? (
-                  <button className="btn quiet" type="button" onClick={() => api.cancelBooking(b.id).then(reload)}>Stornieren</button>
+                  <button className="btn quiet" type="button" onClick={() => api.cancelBooking(b.id)}>Stornieren</button>
                 ) : null}
               </td>
             </tr>

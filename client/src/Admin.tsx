@@ -1,28 +1,23 @@
-import { useEffect, useState, type FormEvent } from "react";
+import { useState, type FormEvent } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { api, type TenantRow } from "./api";
+import { api, useApi, type TenantRow } from "./api";
 
 export function AdminList() {
-  const [rows, setRows] = useState<TenantRow[] | null>(null);
-  const [err, setErr] = useState("");
-  useEffect(() => {
-    api.tenants().then((r) => setRows(r.tenants)).catch((e) => setErr(e.message));
-  }, []);
-  if (err) return <div className="page"><p className="err">{err}</p></div>;
-  if (!rows) return <div className="page">Laden…</div>;
+  const rows = useApi<{ tenants: TenantRow[] }>("/api/admin/tenants");
+  if (!rows) return <div className="page" />;
   return (
     <div className="page">
       <div className="toolbar">
         <h1>Mandanten</h1>
         <Link className="btn" to="/admin/neu">Neuer Mandant</Link>
       </div>
-      {rows.length === 0 ? (
+      {rows.tenants.length === 0 ? (
         <div className="empty">Noch kein Mandant. Leg den ersten an, dann kopierst du das iframe in die Homepage.</div>
       ) : (
         <table className="table">
           <thead><tr><th>Name</th><th>Slug</th><th>Status</th><th /></tr></thead>
           <tbody>
-            {rows.map((t) => (
+            {rows.tenants.map((t) => (
               <tr key={t.id}>
                 <td><Link to={`/admin/${t.id}`}>{t.name}</Link></td>
                 <td>{t.slug}</td>
@@ -65,17 +60,16 @@ export function AdminNew() {
 
 export function AdminDetail() {
   const { id } = useParams();
-  const [data, setData] = useState<Awaited<ReturnType<typeof api.tenant>> | null>(null);
+  const data = useApi<{ tenant: TenantRow; admins: { id: string; email: string; name: string }[]; bookUrl: string; iframe: string }>(id ? `/api/admin/tenants/${id}` : null);
   const [copied, setCopied] = useState(false);
-  useEffect(() => { if (id) api.tenant(id).then(setData); }, [id]);
-  if (!data) return <div className="page">Laden…</div>;
+  if (!data) return <div className="page" />;
   return (
     <div className="page">
       <h1>{data.tenant.name}</h1>
       <p className="lead">/{data.tenant.slug} · {data.tenant.active ? "aktiv" : "gesperrt"}</p>
       <p>Admin: {data.admins.map((a) => `${a.name} (${a.email})`).join(", ") || "—"}</p>
       <p>
-        <button className="btn quiet" type="button" onClick={() => api.patchTenant(data.tenant.id, { active: !data.tenant.active }).then(() => id && api.tenant(id).then(setData))}>
+        <button className="btn quiet" type="button" onClick={() => api.patchTenant(data.tenant.id, { active: !data.tenant.active })}>
           {data.tenant.active ? "Sperren" : "Aktivieren"}
         </button>
       </p>

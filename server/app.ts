@@ -7,6 +7,10 @@ export const app = new Hono();
 
 let boot: Promise<void> | null = null;
 function ready() {
+  if (process.env.VERCEL) {
+    boot ??= seedIfEmpty();
+    return boot;
+  }
   boot ??= migrate().then(() => seedIfEmpty());
   return boot;
 }

@@ -1,9 +1,19 @@
+import { useEffect } from "react";
 import { NavLink, Outlet } from "react-router-dom";
-import type { Actor } from "./api";
+import { api, type Actor } from "./api";
 import { Mark } from "./Mark";
+
+function link(to: string, label: string) {
+  return (
+    <NavLink to={to} end={to === "/app" || to === "/admin"} onMouseEnter={() => api.prefetch(to)} onFocus={() => api.prefetch(to)}>
+      {label}
+    </NavLink>
+  );
+}
 
 export function Shell({ actor, onLogout }: { actor: Actor; onLogout: () => void }) {
   const kd = actor.role === "tenant_admin";
+  useEffect(() => { api.prefetch(kd ? "/app" : "/admin"); }, [kd]);
   return (
     <div className="app">
       <aside className="sidebar">
@@ -11,17 +21,17 @@ export function Shell({ actor, onLogout }: { actor: Actor; onLogout: () => void 
         <nav>
           {kd ? (
             <>
-              <NavLink to="/app" end>Kalender</NavLink>
-              <NavLink to="/app/termine">Termine</NavLink>
-              <NavLink to="/app/mitarbeiter">Mitarbeiter</NavLink>
-              <NavLink to="/app/sperren">Sperren</NavLink>
-              <NavLink to="/app/leistungen">Leistungen</NavLink>
-              <NavLink to="/app/zeiten">Öffnungszeiten</NavLink>
+              {link("/app", "Kalender")}
+              {link("/app/termine", "Termine")}
+              {link("/app/mitarbeiter", "Mitarbeiter")}
+              {link("/app/sperren", "Sperren")}
+              {link("/app/leistungen", "Leistungen")}
+              {link("/app/zeiten", "Öffnungszeiten")}
             </>
           ) : (
             <>
-              <NavLink to="/admin" end>Mandanten</NavLink>
-              <NavLink to="/admin/neu">Neuer Mandant</NavLink>
+              {link("/admin", "Mandanten")}
+              {link("/admin/neu", "Neuer Mandant")}
             </>
           )}
         </nav>

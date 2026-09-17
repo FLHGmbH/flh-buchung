@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useParams } from "react-router-dom";
-import { api, type Pub } from "./api";
+import { api, useApi, type Pub } from "./api";
 
 function berlinDay(iso: string) {
   return new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Berlin", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date(iso));
@@ -10,7 +10,7 @@ const STEPS = ["Leistung", "Person", "Tag", "Uhrzeit", "Angaben", "Code", "Ferti
 
 export function BookPage() {
   const { slug = "" } = useParams();
-  const [pub, setPub] = useState<Pub | null>(null);
+  const pub = useApi<Pub>(slug ? `/api/public/${slug}` : null);
   const [err, setErr] = useState("");
   const [step, setStep] = useState(0);
   const [serviceId, setServiceId] = useState("");
@@ -25,16 +25,14 @@ export function BookPage() {
   const [pending, setPending] = useState(false);
 
   useEffect(() => {
-    api.pub(slug).then(setPub).catch((e) => setErr(e.message));
-  }, [slug]);
-
-  useEffect(() => {
     if (!serviceId || !pub) return;
+    let on = true;
     setPending(true);
     api.slots(slug, serviceId, staffId || undefined)
-      .then((r) => setSlots(r.slots))
-      .catch((e) => setErr(e.message))
-      .finally(() => setPending(false));
+      .then((r) => { if (on) setSlots(r.slots); })
+      .catch((e) => { if (on) setErr(e.message); })
+      .finally(() => { if (on) setPending(false); });
+    return () => { on = false; };
   }, [slug, serviceId, staffId, pub]);
 
   const days = useMemo(() => {
@@ -56,7 +54,7 @@ export function BookPage() {
 
   const daySlots = slots.filter((s) => berlinDay(s.start) === day).sort((a, b) => a.start.localeCompare(b.start));
 
-  if (!pub) return <div className="book">{err ? <p className="err">{err}</p> : "Kalender wird geladen…"}</div>;
+  if (!pub) return <div className="book">{err ? <p className="err">{err}</p> : null}</div>;
 
   const service = pub.services.find((s) => s.id === serviceId);
   const staffForService = pub.staff.filter((s) => !service || service.staffIds.includes(s.id));
@@ -96,7 +94,7 @@ export function BookPage() {
 
       {step === 2 && (
         <>
-          {pending ? <p>Termine werden geladen…</p> : null}
+          {pending && !slots.length ? <p>Termine werden geladen…</p> : null}
           <div className="days">
             {days.map((d) => (
               <button key={d.key} type="button" disabled={!d.open} className={day === d.key ? "on" : ""} onClick={() => { setDay(d.key); setStep(3); }}>
@@ -104,7 +102,7 @@ export function BookPage() {
               </button>
             ))}
           </div>
-          {!pending && days.every((d) => !d.open) ? <p>In den nächsten 14 Tagen kein freier Slot.</p> : null}
+          {!pending && !slots.length && days.every((d) => !d.open) ? <p>In den nächsten 14 Tagen kein freier Slot.</p> : null}
           <button className="btn quiet" type="button" onClick={() => setStep(1)}>Zurück</button>
         </>
       )}
