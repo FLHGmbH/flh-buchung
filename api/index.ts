@@ -1,6 +1,10 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
+import { handle } from "@hono/node-server/vercel";
+import { app } from "../server/app.ts";
 
-export const config = { runtime: "nodejs", maxDuration: 30 };
+export const config = { runtime: "nodejs", maxDuration: 30, api: { bodyParser: false } };
+
+const run = handle(app);
 
 function restoreUrl(req: IncomingMessage) {
   const raw = req.url ?? "/";
@@ -18,17 +22,7 @@ function restoreUrl(req: IncomingMessage) {
   req.url = `/api${path.startsWith("/") ? path : `/${path}`}${q}`;
 }
 
-export default async function handler(req: IncomingMessage, res: ServerResponse) {
-  try {
-    restoreUrl(req);
-    const { handle } = await import("@hono/node-server/vercel");
-    const { app } = await import("../server/app.ts");
-    return await handle(app)(req, res);
-  } catch (e) {
-    console.error(e);
-    if (res.headersSent) return;
-    res.statusCode = 500;
-    res.setHeader("content-type", "application/json");
-    res.end(JSON.stringify({ error: e instanceof Error ? e.message : "Serverfehler" }));
-  }
+export default function handler(req: IncomingMessage, res: ServerResponse) {
+  restoreUrl(req);
+  return run(req, res);
 }
