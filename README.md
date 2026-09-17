@@ -22,4 +22,4 @@ npm run dev
 
 ## Vercel
 
-`PUBLIC_ORIGIN` auf die Vercel-URL setzen (iframe-Snippets). `DATABASE_URL` = Supabase Transaction-Pooler (IPv4, Port 6543), User `flh_app.<PROJECT_REF>`. `MAIL_FROM` muss eine eigene Domain sein, nicht `resend.dev`.
+`PUBLIC_ORIGIN` auf die Vercel-URL setzen (iframe-Snippets). `DATABASE_URL` = Supabase Transaction-Pooler (IPv4, Port 6543). PIN-Mails: Mittwald SMTP (`SMTP_HOST`/`SMTP_PORT`/`SMTP_USER`/`SMTP_PASS`, `MAIL_FROM` = Postfachadresse).

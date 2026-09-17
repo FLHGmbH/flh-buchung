@@ -53,8 +53,8 @@ assert(passwordOk("Test1234!") && !passwordOk("short") && !passwordOk("x".repeat
 assert(seedAllowed({ NODE_ENV: "development" }), "seed local");
 assert(!seedAllowed({ NODE_ENV: "production" }), "no seed prod");
 assert(!seedAllowed({ NODE_ENV: "development", DATABASE_URL: "postgres://x.pooler.supabase.com/db" }), "no seed supabase");
-assert(mailFromAddr("onboarding@resend.dev", { NODE_ENV: "development" }) === "onboarding@resend.dev", "mail local test");
-assert(mailFromAddr("onboarding@resend.dev", { NODE_ENV: "production" }) === null, "mail prod blocks resend.dev");
-assert(mailFromAddr("Buchung <mail@flh.digital>", { NODE_ENV: "production" }) === "Buchung <mail@flh.digital>", "mail prod domain");
+assert(mailFromAddr("onboarding@resend.dev") === null, "no resend");
+assert(mailFromAddr("") === null, "empty from");
+assert(mailFromAddr("Buchung <mail@flh.digital>") === "Buchung <mail@flh.digital>", "mail from header");
 
 console.log("guard.check ok");

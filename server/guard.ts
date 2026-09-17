@@ -93,9 +93,8 @@ export function seedAllowed(env: NodeJS.ProcessEnv = process.env) {
   return !/supabase\.co|supabase\.com/.test(env.DATABASE_URL ?? "");
 }
 
-export function mailFromAddr(from: string | undefined, env: NodeJS.ProcessEnv = process.env) {
+export function mailFromAddr(from: string | undefined) {
   const v = from?.trim() || "";
-  const test = !v || /@resend\.dev$/i.test(v);
-  if (test && (env.VERCEL || env.NODE_ENV === "production")) return null;
-  return v || "onboarding@resend.dev";
+  if (!v || /@resend\.dev$/i.test(v)) return null;
+  return v;
 }
