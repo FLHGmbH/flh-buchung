@@ -22,7 +22,24 @@ function restoreUrl(req: IncomingMessage) {
   req.url = `/api${path.startsWith("/") ? path : `/${path}`}${q}`;
 }
 
-export default function handler(req: IncomingMessage, res: ServerResponse) {
+async function withRawBody(req: IncomingMessage & { rawBody?: Buffer; body?: unknown }) {
+  if (req.rawBody instanceof Buffer) return;
+  if (Buffer.isBuffer(req.body)) {
+    req.rawBody = req.body;
+    return;
+  }
+  if (typeof req.body === "string") {
+    req.rawBody = Buffer.from(req.body);
+    return;
+  }
+  if (req.method === "GET" || req.method === "HEAD") return;
+  const chunks: Buffer[] = [];
+  for await (const c of req) chunks.push(Buffer.isBuffer(c) ? c : Buffer.from(c));
+  req.rawBody = Buffer.concat(chunks);
+}
+
+export default async function handler(req: IncomingMessage, res: ServerResponse) {
   restoreUrl(req);
+  await withRawBody(req);
   return run(req, res);
 }
