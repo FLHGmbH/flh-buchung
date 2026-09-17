@@ -31,10 +31,17 @@ assert(securityHeaders("/b/salon")["Content-Security-Policy"] === "frame-ancesto
 
 const prevOrigin = process.env.PUBLIC_ORIGIN;
 const prevEnv = process.env.NODE_ENV;
+const prevVercelUrl = process.env.VERCEL_URL;
 delete process.env.PUBLIC_ORIGIN;
+delete process.env.VERCEL_URL;
 process.env.NODE_ENV = "production";
 assert(siteOrigin("https://evil.example/") === null, "prod origin required");
+process.env.VERCEL_URL = "flh-kalender.vercel.app";
+assert(siteOrigin("https://evil.example/") === "https://flh-kalender.vercel.app", "vercel url fallback");
+delete process.env.VERCEL_URL;
 process.env.NODE_ENV = prevEnv || "development";
+if (prevVercelUrl) process.env.VERCEL_URL = prevVercelUrl;
+else delete process.env.VERCEL_URL;
 if (prevOrigin) process.env.PUBLIC_ORIGIN = prevOrigin;
 else delete process.env.PUBLIC_ORIGIN;
 process.env.PUBLIC_ORIGIN = "https://book.example";

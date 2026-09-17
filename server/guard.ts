@@ -67,6 +67,8 @@ export async function readJson<T>(c: { req: { json: () => Promise<unknown> } }) 
 export function siteOrigin(reqUrl: string) {
   const o = process.env.PUBLIC_ORIGIN?.trim().replace(/\/$/, "");
   if (o) return o;
+  const vercel = process.env.VERCEL_URL?.trim().replace(/\/$/, "");
+  if (vercel) return `https://${vercel}`;
   if (process.env.VERCEL || process.env.NODE_ENV === "production") return null;
   return new URL(reqUrl).origin;
 }

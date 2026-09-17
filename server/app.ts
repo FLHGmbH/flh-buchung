@@ -31,6 +31,12 @@ app.use("*", async (c, next) => {
   applySecurity(c);
 });
 
+app.onError((err, c) => {
+  console.error(err);
+  applySecurity(c);
+  return c.json({ error: "Datenbank nicht erreichbar." }, 503);
+});
+
 app.get("/health", (c) => c.json({ ok: true }));
 app.get("/api/health", (c) => c.json({ ok: true }));
 
