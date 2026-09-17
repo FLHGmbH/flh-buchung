@@ -7,7 +7,22 @@ const here = dirname(fileURLToPath(import.meta.url));
 
 export default defineConfig({
   root: "client",
-  plugins: [react()],
+  plugins: [
+    react(),
+    {
+      name: "sec-headers",
+      configureServer(server) {
+        server.middlewares.use((req, res, next) => {
+          const path = req.url?.split("?")[0] ?? "";
+          const book = path === "/b" || path.startsWith("/b/");
+          res.setHeader("X-Content-Type-Options", "nosniff");
+          res.setHeader("Referrer-Policy", "strict-origin-when-cross-origin");
+          res.setHeader("Content-Security-Policy", book ? "frame-ancestors *" : "frame-ancestors 'self'");
+          next();
+        });
+      },
+    },
+  ],
   build: {
     outDir: resolve(here, "dist"),
     emptyOutDir: true,

@@ -4,6 +4,7 @@ import { eq } from "drizzle-orm";
 import type { Context } from "hono";
 import { deleteCookie, getCookie, setCookie } from "hono/cookie";
 import { db } from "./db.ts";
+import { hashToken } from "./guard.ts";
 import { memberships, sessions, tenants, users } from "./schema.ts";
 
 const scryptAsync = promisify(scrypt);
@@ -24,12 +25,18 @@ export async function verifyPassword(pw: string, stored: string) {
   return a.length === buf.length && timingSafeEqual(a, buf);
 }
 
+let padHash: Promise<string> | null = null;
+export async function verifyLogin(pw: string, stored: string | null | undefined) {
+  padHash ??= hashPassword("timing-pad");
+  return verifyPassword(pw, stored || (await padHash));
+}
+
 function cookieOpts() {
   return {
     httpOnly: true,
     path: "/",
     sameSite: "Lax" as const,
-    secure: process.env.NODE_ENV === "production",
+    secure: process.env.NODE_ENV === "production" || !!process.env.VERCEL,
     maxAge: WEEK,
   };
 }
@@ -37,7 +44,7 @@ function cookieOpts() {
 export async function createSession(c: Context, userId: string) {
   const token = randomBytes(32).toString("hex");
   await db.insert(sessions).values({
-    token,
+    token: hashToken(token),
     userId,
     expiresAt: new Date(Date.now() + WEEK * 1000),
   });
@@ -46,7 +53,7 @@ export async function createSession(c: Context, userId: string) {
 
 export async function destroySession(c: Context) {
   const token = getCookie(c, COOKIE);
-  if (token) await db.delete(sessions).where(eq(sessions.token, token));
+  if (token) await db.delete(sessions).where(eq(sessions.token, hashToken(token)));
   deleteCookie(c, COOKIE, { path: "/" });
 }
 
@@ -90,9 +97,9 @@ export async function actorFromUserId(userId: string): Promise<Actor | null> {
 export async function actorFrom(c: Context): Promise<Actor | null> {
   const token = getCookie(c, COOKIE);
   if (!token) return null;
-  const [row] = await db.select().from(sessions).where(eq(sessions.token, token)).limit(1);
+  const [row] = await db.select().from(sessions).where(eq(sessions.token, hashToken(token))).limit(1);
   if (!row || row.expiresAt < new Date()) {
-    if (row) await db.delete(sessions).where(eq(sessions.token, token));
+    if (row) await db.delete(sessions).where(eq(sessions.token, row.token));
     return null;
   }
   return actorFromUserId(row.userId);

@@ -80,3 +80,7 @@ CREATE TABLE IF NOT EXISTS bookings (
   pin_expires_at timestamptz,
   created_at timestamptz NOT NULL DEFAULT now()
 );
+
+ALTER TABLE staff ADD CONSTRAINT staff_id_tenant UNIQUE (id, tenant_id);
+ALTER TABLE bookings ADD CONSTRAINT bookings_staff_tenant FOREIGN KEY (staff_id, tenant_id) REFERENCES staff(id, tenant_id);
+ALTER TABLE time_off ADD CONSTRAINT time_off_staff_tenant FOREIGN KEY (staff_id, tenant_id) REFERENCES staff(id, tenant_id);

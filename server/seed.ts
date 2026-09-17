@@ -2,9 +2,11 @@ import { eq } from "drizzle-orm";
 import { DateTime } from "luxon";
 import { hashPassword } from "./auth.ts";
 import { db } from "./db.ts";
+import { seedAllowed } from "./guard.ts";
 import { bookings, memberships, openingHours, serviceStaff, services, staff, tenants, users } from "./schema.ts";
 
 export async function seedIfEmpty() {
+  if (!seedAllowed()) return;
   const existing = await db.select({ id: users.id }).from(users).limit(1);
   if (existing.length) return;
   await seed();
@@ -71,6 +73,10 @@ export async function seed() {
 }
 
 if (process.argv[1]?.endsWith("seed.ts")) {
+  if (!seedAllowed()) {
+    console.error("Seed nur lokal ohne Supabase-URL.");
+    process.exit(1);
+  }
   const { migrate } = await import("./db.ts");
   await migrate();
   const [u] = await db.select().from(users).where(eq(users.email, "admin@flh.digital")).limit(1);

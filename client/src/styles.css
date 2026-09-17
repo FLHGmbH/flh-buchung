@@ -69,6 +69,11 @@ a { color: var(--petrol); }
   border-radius: 4px;
 }
 .sidebar .ghost:hover { background: color-mix(in srgb, var(--white) 12%, transparent); }
+.sidebar .pw { padding: 0.35rem 0.75rem 0.75rem; }
+.sidebar .pw summary { cursor: pointer; font-size: 0.85rem; margin-bottom: 0.5rem; }
+.sidebar .pw .field { margin-bottom: 0.45rem; }
+.sidebar .pw .field span { color: var(--white); font-size: 0.75rem; }
+.sidebar .pw .ok { font-size: 0.8rem; margin: 0 0 0.4rem; }
 
 .main { background: var(--paper); min-width: 0; }
 .page { padding: 1.75rem 2rem 3rem; max-width: 1200px; }

@@ -18,5 +18,23 @@
     { "source": "/health", "destination": "/api/health" },
     { "source": "/api/(.*)", "destination": "/api" },
     { "source": "/((?!api(?:/|$)).*)", "destination": "/index.html" }
+  ],
+  "headers": [
+    {
+      "source": "/(.*)",
+      "headers": [
+        { "key": "X-Content-Type-Options", "value": "nosniff" },
+        { "key": "Referrer-Policy", "value": "strict-origin-when-cross-origin" },
+        { "key": "Strict-Transport-Security", "value": "max-age=15552000; includeSubDomains" }
+      ]
+    },
+    {
+      "source": "/b/(.*)",
+      "headers": [{ "key": "Content-Security-Policy", "value": "frame-ancestors *" }]
+    },
+    {
+      "source": "/((?!b/).*)",
+      "headers": [{ "key": "Content-Security-Policy", "value": "frame-ancestors 'self'" }]
+    }
   ]
 }

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Navigate, Route, Routes, useLocation } from "react-router-dom";
+import { Navigate, Outlet, Route, Routes, useLocation } from "react-router-dom";
 import { api, rememberedActor, type Actor } from "./api";
 import { AdminDetail, AdminList, AdminNew } from "./Admin";
 import { BookPage } from "./Book";
@@ -29,6 +29,9 @@ export function App() {
     );
   }
 
+  const kd = actor?.role === "tenant_admin";
+  const flh = actor?.role === "platform_admin";
+
   return (
     <Routes>
       <Route path="/login" element={actor ? <Home actor={actor} /> : <LoginPage onLogin={(a) => { setActor(a); api.prefetch(a.role === "tenant_admin" ? "/app" : "/admin"); }} />} />
@@ -41,15 +44,19 @@ export function App() {
           )
         }
       >
-        <Route path="/app" element={actor?.role === "tenant_admin" ? <CalendarPage /> : <Navigate to="/admin" replace />} />
-        <Route path="/app/termine" element={<BookingsPage />} />
-        <Route path="/app/mitarbeiter" element={<StaffPage />} />
-        <Route path="/app/sperren" element={<TimeOffPage />} />
-        <Route path="/app/leistungen" element={<ServicesPage />} />
-        <Route path="/app/zeiten" element={<HoursPage />} />
-        <Route path="/admin" element={actor?.role === "platform_admin" ? <AdminList /> : <Navigate to="/app" replace />} />
-        <Route path="/admin/neu" element={<AdminNew />} />
-        <Route path="/admin/:id" element={<AdminDetail />} />
+        <Route element={kd ? <Outlet /> : <Navigate to="/admin" replace />}>
+          <Route path="/app" element={<CalendarPage />} />
+          <Route path="/app/termine" element={<BookingsPage />} />
+          <Route path="/app/mitarbeiter" element={<StaffPage />} />
+          <Route path="/app/sperren" element={<TimeOffPage />} />
+          <Route path="/app/leistungen" element={<ServicesPage />} />
+          <Route path="/app/zeiten" element={<HoursPage />} />
+        </Route>
+        <Route element={flh ? <Outlet /> : <Navigate to="/app" replace />}>
+          <Route path="/admin" element={<AdminList />} />
+          <Route path="/admin/neu" element={<AdminNew />} />
+          <Route path="/admin/:id" element={<AdminDetail />} />
+        </Route>
       </Route>
       <Route path="*" element={<Home actor={actor} />} />
     </Routes>

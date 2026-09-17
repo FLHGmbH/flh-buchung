@@ -16,10 +16,10 @@ npm run dev
 ```
 
 - App: http://localhost:5173
-- FLH: `admin@flh.digital` / `Test1234!`
+- FLH: `admin@flh.digital` / `Test1234!` (nur PGlite lokal, Seed nie gegen Supabase)
 - KD: `salon@demo.test` / `Test1234!`
 - iframe-Demo: http://localhost:5173/b/salon-demo
 
 ## Vercel
 
-`PUBLIC_ORIGIN` auf die Vercel-URL setzen (iframe-Snippets). `DATABASE_URL` = Supabase Transaction-Pooler (IPv4, Port 6543), User `flh_app.<PROJECT_REF>`.
+`PUBLIC_ORIGIN` auf die Vercel-URL setzen (iframe-Snippets). `DATABASE_URL` = Supabase Transaction-Pooler (IPv4, Port 6543), User `flh_app.<PROJECT_REF>`. `MAIL_FROM` muss eine eigene Domain sein, nicht `resend.dev`.

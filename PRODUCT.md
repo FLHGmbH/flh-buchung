@@ -39,9 +39,9 @@ FLH erstellt React/Vite-Homepages für Kunden und setzt dort ein iframe auf die 
 - Gast im iframe: Leistung, optional Mitarbeiter, nur freie Tage/Slots, Kontaktdaten, Bestätigung.
 - Eine gemeinsame Login-Seite, rollenbasiert weiter.
 
-**Nicht im MVP:** Mitarbeiter-Login, Endkunden-Accounts, Zahlung, Kalender-Sync, Erinnerungsmails, mehrere Standorte, Custom Domain pro Mandant.
+**Nicht im MVP:** Mitarbeiter-Login, Endkunden-Accounts, Zahlung, Kalender-Sync, Erinnerungsmails, Gast-Storno, mehrere Standorte, Custom Domain pro Mandant.
 
-**Offen:** Storno nur durch KD-Admin, nicht durch den Gast.
+**Storno:** nur durch den KD-Admin. Der Gast bestätigt per PIN und hat danach keinen Storno-Weg.
 
 **Begriffe:** Mandant = FLH-Kunde/Betrieb. Staff = Mitarbeiter-Ressource. Gast = Endkunde ohne Login. Slot = freies Buchungsraster.
 

@@ -3,6 +3,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { serve } from "@hono/node-server";
 import { app } from "./app.ts";
+import { securityHeaders } from "./guard.ts";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const clientDir = join(here, "../dist");
@@ -23,11 +24,13 @@ app.get("*", async (c) => {
       png: "image/png",
       ico: "image/x-icon",
     };
-    return new Response(body, { headers: { "content-type": types[ext ?? ""] ?? "application/octet-stream" } });
+    return new Response(body, {
+      headers: { "content-type": types[ext ?? ""] ?? "application/octet-stream", ...securityHeaders(c.req.path) },
+    });
   } catch {
     try {
       const html = await readFile(join(clientDir, "index.html"));
-      return new Response(html, { headers: { "content-type": "text/html; charset=utf-8" } });
+      return new Response(html, { headers: { "content-type": "text/html; charset=utf-8", ...securityHeaders(c.req.path) } });
     } catch {
       return c.text("API läuft. UI mit npm run dev auf Port 5173 starten.", 200);
     }

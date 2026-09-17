@@ -24,6 +24,7 @@ export function freeSlots(opts: {
   now: Date;
   minNoticeMin: number;
 }): Slot[] {
+  if (!Number.isFinite(opts.durationMin) || opts.durationMin <= 0) return [];
   const zone = opts.zone;
   const duration = { minutes: opts.durationMin };
   const earliest = DateTime.fromJSDate(opts.now, { zone }).plus({ minutes: opts.minNoticeMin });

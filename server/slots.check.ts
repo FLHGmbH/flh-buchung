@@ -51,6 +51,9 @@ assert(
   `booking hole ${booked.map((s) => DateTime.fromJSDate(s.start, { zone }).toFormat("HH:mm"))}`,
 );
 
+assert(freeSlots({ ...window, durationMin: 0 }).length === 0, "zero duration must not loop");
+assert(freeSlots({ ...window, durationMin: -45 }).length === 0, "neg duration must not loop");
+
 const otherStaff = freeSlots({
   ...window,
   busy: [

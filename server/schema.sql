@@ -86,3 +86,12 @@ CREATE TABLE IF NOT EXISTS bookings (
 
 CREATE INDEX IF NOT EXISTS bookings_staff_time ON bookings (staff_id, starts_at);
 CREATE INDEX IF NOT EXISTS bookings_tenant_time ON bookings (tenant_id, starts_at);
+
+ALTER TABLE staff ADD CONSTRAINT staff_id_tenant UNIQUE (id, tenant_id);
+ALTER TABLE bookings ADD CONSTRAINT bookings_staff_tenant FOREIGN KEY (staff_id, tenant_id) REFERENCES staff(id, tenant_id);
+ALTER TABLE time_off ADD CONSTRAINT time_off_staff_tenant FOREIGN KEY (staff_id, tenant_id) REFERENCES staff(id, tenant_id);
+ALTER TABLE bookings ADD CONSTRAINT bookings_no_overlap
+  EXCLUDE USING gist (
+    staff_id WITH =,
+    tstzrange(starts_at, ends_at) WITH &&
+  ) WHERE (status IN ('confirmed', 'pending'));

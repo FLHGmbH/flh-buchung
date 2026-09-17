@@ -1,5 +1,6 @@
 import { Hono } from "hono";
 import { migrate } from "./db.ts";
+import { securityHeaders } from "./guard.ts";
 import { api } from "./routes.ts";
 import { seedIfEmpty } from "./seed.ts";
 
@@ -12,19 +13,26 @@ function ready() {
   return boot;
 }
 
-app.get("/health", (c) => c.json({ ok: true }));
-app.get("/api/health", (c) => c.json({ ok: true }));
+function applySecurity(c: { req: { path: string; url: string }; header: (k: string, v: string) => void }) {
+  const https = c.req.url.startsWith("https:") || !!process.env.VERCEL;
+  for (const [k, v] of Object.entries(securityHeaders(c.req.path, https))) c.header(k, v);
+}
 
 app.use("*", async (c, next) => {
   try {
     await ready();
   } catch (e) {
     console.error(e);
+    applySecurity(c);
     const msg = e instanceof Error ? e.message : "Datenbank nicht erreichbar.";
     return c.json({ error: msg }, 503);
   }
   await next();
+  applySecurity(c);
 });
+
+app.get("/health", (c) => c.json({ ok: true }));
+app.get("/api/health", (c) => c.json({ ok: true }));
 
 app.route("/api", api);
 app.route("/", api);

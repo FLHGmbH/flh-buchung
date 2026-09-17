@@ -20,6 +20,14 @@ function loadEnv() {
 }
 loadEnv();
 
+function dbSsl(dbUrl: string) {
+  if (/sslmode=disable/i.test(dbUrl)) return false;
+  if (process.env.DATABASE_SSL === "insecure") return { rejectUnauthorized: false };
+  if (/localhost|127\.0\.0\.1/.test(dbUrl) && !/supabase\.co|supabase\.com/.test(dbUrl)) return undefined;
+  if (/^postgres/.test(dbUrl)) return { rejectUnauthorized: true };
+  return undefined;
+}
+
 const here = dirname(fileURLToPath(import.meta.url));
 const url = (process.env.DATABASE_URL ?? "").trim();
 const isPg = url.startsWith("postgres");
@@ -37,8 +45,7 @@ if (onVercel || isPg) {
     idle_timeout: 20,
     connect_timeout: 10,
     prepare: !pooler,
-    // ponytail: Node 22 rejects the pooler chain; verify-full + Supabase CA if MITM matters
-    ssl: /supabase\.co|supabase\.com/.test(url) ? { rejectUnauthorized: false } : undefined,
+    ssl: dbSsl(url),
   });
   execSql = (q) => pgSql.unsafe(q);
   dbExport = drizzlePg(pgSql, { schema });
@@ -82,13 +89,23 @@ export async function migrate() {
   await execSql(`ALTER TABLE bookings ADD COLUMN IF NOT EXISTS pin_hash text NOT NULL DEFAULT ''`).catch(ignoreExists);
   await execSql(`ALTER TABLE bookings ADD COLUMN IF NOT EXISTS pin_expires_at timestamptz`).catch(ignoreExists);
   if (isPg) {
-    await execSql(`ALTER TABLE bookings DROP CONSTRAINT IF EXISTS bookings_no_overlap`).catch(ignoreExists);
-    await execSql(`
+    await requirePg(`ALTER TABLE staff ADD CONSTRAINT staff_id_tenant UNIQUE (id, tenant_id)`);
+    await requirePg(`ALTER TABLE bookings ADD CONSTRAINT bookings_staff_tenant FOREIGN KEY (staff_id, tenant_id) REFERENCES staff(id, tenant_id)`);
+    await requirePg(`ALTER TABLE time_off ADD CONSTRAINT time_off_staff_tenant FOREIGN KEY (staff_id, tenant_id) REFERENCES staff(id, tenant_id)`);
+    await requirePg(`
       ALTER TABLE bookings ADD CONSTRAINT bookings_no_overlap
       EXCLUDE USING gist (
         staff_id WITH =,
         tstzrange(starts_at, ends_at) WITH &&
       ) WHERE (status IN ('confirmed', 'pending'))
-    `).catch(ignoreExists);
+    `);
   }
+}
+
+function requirePg(sql: string) {
+  return execSql(sql).catch((e: unknown) => {
+    const msg = e instanceof Error ? e.message : String(e);
+    if (/already exists|duplicate/i.test(msg)) return;
+    throw e;
+  });
 }
