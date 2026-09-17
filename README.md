@@ -2,9 +2,11 @@
 
 Terminbuchung für FLH-Kunden-Homepages. Eine App, eine Login-Seite, iframe unter `/b/{slug}`.
 
+Hosting: **Vercel**. Datenbank: **Supabase Postgres**.
+
 ## Lokal
 
-Ohne Docker: PGlite-Datei in `data/pg` (automatisch).
+Ohne `DATABASE_URL`: PGlite-Datei in `data/pg`. Mit URL: dieselbe Supabase-DB wie live.
 
 ```
 copy .env.example .env
@@ -18,9 +20,6 @@ npm run dev
 - KD: `salon@demo.test` / `Test1234!`
 - iframe-Demo: http://localhost:5173/b/salon-demo
 
-## Render
+## Vercel
 
-Blueprint `render.yaml`: Web Service Free + Postgres Free (Frankfurt). `PUBLIC_ORIGIN` auf die `onrender.com`-URL setzen, damit die iframe-Snippets stimmen. Free-Postgres läuft 30 Tage — nur zum Testen.
-
-Nach dem ersten Start ist der Seed automatisch da, wenn die User-Tabelle leer ist.
-# FLH-Kalender
+`PUBLIC_ORIGIN` auf die Vercel-URL setzen (iframe-Snippets). `DATABASE_URL` = Supabase Transaction-Pooler (IPv4, Port 6543), User `flh_app.<PROJECT_REF>`.

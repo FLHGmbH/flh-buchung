@@ -8,7 +8,7 @@ web
 
 ## Stack
 
-React + Vite + TypeScript. Hosting-Ziel: Render.com Free (Web Service + Static Site). Öffentliche Buchung wird als iframe in FLH-Kunden-Homepages eingebettet.
+React + Vite + TypeScript. Hosting: Vercel. Datenbank: Supabase Postgres. Öffentliche Buchung wird als iframe in FLH-Kunden-Homepages eingebettet.
 
 ## Users
 
@@ -28,7 +28,7 @@ Kein generischer Kalender und kein öffentliches Buchungs-SaaS. Das Produkt sitz
 
 ## Operating Context
 
-FLH erstellt React/Vite-Homepages für Kunden und setzt dort ein iframe auf die öffentliche Buchungsseite (`/b/{tenant-slug}`). KD und FLH teilen eine Login-Seite; die Rolle entscheidet, ob das KD-Dashboard oder das FLH-Admin-Panel erscheint. Betrieb läuft im Browser, Zielregion Render Frankfurt. MVP bewusst kostenlos auf Render Free: Web Service schläft nach 15 Minuten, Free-Postgres läuft nur 30 Tage — für Entwicklung und Demo, nicht als dauerhafte Produktions-DB ohne Upgrade oder externe Free-DB.
+FLH erstellt React/Vite-Homepages für Kunden und setzt dort ein iframe auf die öffentliche Buchungsseite (`/b/{tenant-slug}`). KD und FLH teilen eine Login-Seite; die Rolle entscheidet, ob das KD-Dashboard oder das FLH-Admin-Panel erscheint. Betrieb läuft im Browser, Hosting Vercel (Frankfurt), Datenbank Supabase.
 
 ## Capabilities and Constraints
 
@@ -41,7 +41,7 @@ FLH erstellt React/Vite-Homepages für Kunden und setzt dort ein iframe auf die 
 
 **Nicht im MVP:** Mitarbeiter-Login, Endkunden-Accounts, Zahlung, Kalender-Sync, Erinnerungsmails, mehrere Standorte, Custom Domain pro Mandant.
 
-**Offen:** Produktions-DB nach den 30 Render-Free-Tagen (Render Basic vs. externe Free-Postgres). Storno nur durch KD-Admin, nicht durch den Gast.
+**Offen:** Storno nur durch KD-Admin, nicht durch den Gast.
 
 **Begriffe:** Mandant = FLH-Kunde/Betrieb. Staff = Mitarbeiter-Ressource. Gast = Endkunde ohne Login. Slot = freies Buchungsraster.
 
@@ -59,7 +59,7 @@ Name und Identität: **FLH DIGITAL**. Verbindliches CI aus dem Markenleitfaden (
 1. Ein Produkt, drei Rollen, eine Login-Tür — nicht drei Apps.
 2. Gäste sehen nur, was buchbar ist; der Mandant sieht die volle Belegung.
 3. FLH onboardet Mandanten und baut das iframe in die HP; der KD betreibt den Kalender.
-4. Render-Free-Grenzen (Sleep, 30-Tage-DB) sind Produktwahrheit, kein nachträglicher Ops-Hinweis.
+4. Die App läuft auf Vercel, die Daten liegen in Supabase — nicht auf Render.
 5. CI von FLH DIGITAL ist die Identität, nicht ein Theme-Schalter.
 
 ## Accessibility & Inclusion
