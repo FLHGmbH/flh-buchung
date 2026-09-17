@@ -12,9 +12,33 @@ export type Actor = {
 const mem = new Map<string, unknown>();
 const wait = new Map<string, Promise<unknown>>();
 const subs = new Set<() => void>();
+const ACTOR_KEY = "flh-actor";
 
 function bump() {
   for (const fn of subs) fn();
+}
+
+function persistActor(actor: Actor | null) {
+  mem.set("/api/me", { actor });
+  try {
+    sessionStorage.setItem(ACTOR_KEY, JSON.stringify(actor));
+  } catch {
+    /* private mode */
+  }
+}
+
+export function rememberedActor(): Actor | null {
+  const hit = peek<{ actor: Actor | null }>("/api/me");
+  if (hit) return hit.actor;
+  try {
+    const raw = sessionStorage.getItem(ACTOR_KEY);
+    if (raw == null) return null;
+    const actor = JSON.parse(raw) as Actor | null;
+    persistActor(actor);
+    return actor;
+  } catch {
+    return null;
+  }
 }
 
 export function peek<T>(path: string): T | null {
@@ -24,10 +48,12 @@ export function peek<T>(path: string): T | null {
 function inflight<T>(path: string): Promise<T> {
   const w = wait.get(path);
   if (w) return w as Promise<T>;
-  const p = req<T>(path).then(
+  const early = path === "/api/me" ? (window as unknown as { __FLH_ME?: Promise<T> }).__FLH_ME : undefined;
+  const p = (early ?? req<T>(path)).then(
     (d) => {
       mem.set(path, d);
       wait.delete(path);
+      if (path === "/api/me") persistActor((d as { actor: Actor | null }).actor);
       return d;
     },
     (e) => {
@@ -35,6 +61,7 @@ function inflight<T>(path: string): Promise<T> {
       throw e;
     },
   );
+  if (early) (window as unknown as { __FLH_ME?: Promise<T> }).__FLH_ME = undefined;
   wait.set(path, p);
   return p;
 }
@@ -96,12 +123,18 @@ export const api = {
   login: async (email: string, password: string) => {
     const r = await req<{ actor: Actor }>("/api/auth/login", { method: "POST", body: JSON.stringify({ email, password }) });
     mem.set("/api/me", { actor: r.actor });
+    persistActor(r.actor);
     return r;
   },
   logout: async () => {
     await req("/api/auth/logout", { method: "POST" });
     mem.clear();
     wait.clear();
+    try {
+      sessionStorage.removeItem(ACTOR_KEY);
+    } catch {
+      /* */
+    }
     bump();
   },
   tenants: () => inflight<{ tenants: TenantRow[] }>("/api/admin/tenants"),
