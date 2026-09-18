@@ -315,20 +315,32 @@ api.get("/admin/tenants/:id", async (c) => {
   const origin = siteOrigin(c.req.url);
   if (!origin) return c.json({ error: "PUBLIC_ORIGIN fehlt." }, 500);
   const id = c.req.param("id");
-  const [tenant] = await db.select().from(tenants).where(eq(tenants.id, id)).limit(1);
-  if (!tenant) return c.json({ error: "Nicht gefunden." }, 404);
-  const mems = await db.select().from(memberships).where(eq(memberships.tenantId, id));
-  const admins = [];
-  for (const m of mems) {
-    const [u] = await db.select().from(users).where(eq(users.id, m.userId)).limit(1);
-    if (u) admins.push({ id: u.id, email: u.email, name: u.name });
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) {
+    return c.json({ error: "Nicht gefunden." }, 404);
   }
-  return c.json({
-    tenant,
-    admins,
-    bookUrl: `${origin}/b/${tenant.slug}`,
-    iframe: `<iframe src="${origin}/b/${tenant.slug}" title="Termin buchen" style="width:100%;min-height:720px;border:0"></iframe>`,
-  });
+  try {
+    const [tenant] = await db
+      .select({ id: tenants.id, name: tenants.name, slug: tenants.slug, active: tenants.active })
+      .from(tenants)
+      .where(eq(tenants.id, id))
+      .limit(1);
+    if (!tenant) return c.json({ error: "Nicht gefunden." }, 404);
+    const mems = await db.select().from(memberships).where(eq(memberships.tenantId, id));
+    const admins = [];
+    for (const m of mems) {
+      const [u] = await db.select({ id: users.id, email: users.email, name: users.name }).from(users).where(eq(users.id, m.userId)).limit(1);
+      if (u) admins.push(u);
+    }
+    return c.json({
+      tenant,
+      admins,
+      bookUrl: `${origin}/b/${tenant.slug}`,
+      iframe: `<iframe src="${origin}/b/${tenant.slug}" title="Termin buchen" style="width:100%;min-height:720px;border:0"></iframe>`,
+    });
+  } catch (e) {
+    console.error(e);
+    return c.json({ error: "Mandant konnte nicht geladen werden." }, 500);
+  }
 });
 
 api.patch("/admin/tenants/:id", async (c) => {

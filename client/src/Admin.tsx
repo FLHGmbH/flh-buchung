@@ -1,7 +1,14 @@
-import { useMemo, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { api, useApi, type TenantRow } from "./api";
 import { Avatar, PageHead } from "./ui";
+
+type TenantDetail = {
+  tenant: TenantRow;
+  admins: { id: string; email: string; name: string }[];
+  bookUrl: string;
+  iframe: string;
+};
 
 export function AdminList() {
   const rows = useApi<{ tenants: TenantRow[] }>("/api/admin/tenants");
@@ -13,7 +20,7 @@ export function AdminList() {
     if (!s) return tenants;
     return tenants.filter((t) => `${t.name} ${t.slug}`.toLowerCase().includes(s));
   }, [tenants, q]);
-  if (!rows) return <div className="page" />;
+  if (!rows) return <div className="page"><p className="lead">Laden…</p></div>;
   const active = tenants.filter((t) => t.active).length;
   return (
     <div className="page">
@@ -122,35 +129,36 @@ export function AdminNew() {
         }
       />
       {err ? <p className="err" role="alert">{err}</p> : null}
-      <form className="hours-card" onSubmit={submit}>
+      <form className="hours-card" onSubmit={submit} autoComplete="off">
         <div className="card-head">Betrieb</div>
         <div className="card-body">
           <div className="fields-2">
             <label className="field">
               <span>Betriebsname</span>
-              <input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required />
+              <input name="tenant-name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required autoComplete="organization" />
             </label>
             <label className="field">
               <span>Slug (URL)</span>
-              <input value={form.slug} onChange={(e) => setForm({ ...form, slug: e.target.value })} placeholder="salon-mueller" />
+              <input name="tenant-slug" value={form.slug} onChange={(e) => setForm({ ...form, slug: e.target.value })} autoComplete="off" spellCheck={false} inputMode="url" />
             </label>
           </div>
-          <p className="hint-line">Slug leer lassen, dann wird er aus dem Namen gebaut.</p>
+          <p className="hint-line">Slug leer lassen, dann wird er aus dem Namen gebaut — z. B. salon-mueller.</p>
         </div>
         <div className="card-head">KD-Login</div>
         <div className="card-body">
           <label className="field">
             <span>Name</span>
-            <input value={form.adminName} onChange={(e) => setForm({ ...form, adminName: e.target.value })} placeholder="Wie der Betrieb, wenn leer" />
+            <input name="admin-name" value={form.adminName} onChange={(e) => setForm({ ...form, adminName: e.target.value })} autoComplete="name" />
           </label>
+          <p className="hint-line">Leer lassen, dann gilt der Betriebsname.</p>
           <div className="fields-2">
             <label className="field">
               <span>E-Mail</span>
-              <input type="email" value={form.adminEmail} onChange={(e) => setForm({ ...form, adminEmail: e.target.value })} required />
+              <input type="email" name="admin-email" value={form.adminEmail} onChange={(e) => setForm({ ...form, adminEmail: e.target.value })} required autoComplete="off" />
             </label>
             <label className="field">
               <span>Passwort</span>
-              <input type="password" autoComplete="new-password" value={form.adminPassword} onChange={(e) => setForm({ ...form, adminPassword: e.target.value })} minLength={8} required />
+              <input type="password" name="admin-password" autoComplete="new-password" value={form.adminPassword} onChange={(e) => setForm({ ...form, adminPassword: e.target.value })} minLength={8} required />
             </label>
           </div>
           <p className="hint-line">Mindestens 8 Zeichen. Der KD loggt sich damit ins Mandanten-Panel ein.</p>
@@ -165,12 +173,38 @@ export function AdminNew() {
 
 export function AdminDetail() {
   const { id } = useParams();
-  const data = useApi<{ tenant: TenantRow; admins: { id: string; email: string; name: string }[]; bookUrl: string; iframe: string }>(id ? `/api/admin/tenants/${id}` : null);
+  const [data, setData] = useState<TenantDetail | null>(null);
+  const [loadErr, setLoadErr] = useState("");
   const [copied, setCopied] = useState<"iframe" | "url" | null>(null);
+  const [frameOn, setFrameOn] = useState(false);
   const [pw, setPw] = useState({ userId: "", password: "", err: "", ok: false, pending: false });
-  if (!data) return <div className="page" />;
-  const adminId = pw.userId || data.admins[0]?.id || "";
-  const kd = data.admins[0];
+  useEffect(() => {
+    if (!id) return;
+    let on = true;
+    setData(null);
+    setLoadErr("");
+    setFrameOn(false);
+    api.tenant(id).then(
+      (d) => { if (on) setData(d); },
+      (e) => { if (on) setLoadErr(e instanceof Error ? e.message : "Mandant nicht geladen."); },
+    );
+    return () => { on = false; };
+  }, [id]);
+  if (loadErr) {
+    return (
+      <div className="page">
+        <PageHead
+          title="Mandant"
+          aside={<Link className="btn outline" to="/admin">Alle Mandanten</Link>}
+        />
+        <p className="err" role="alert">{loadErr}</p>
+      </div>
+    );
+  }
+  if (!data?.tenant) return <div className="page"><p className="lead">Laden…</p></div>;
+  const admins = data.admins ?? [];
+  const adminId = pw.userId || admins[0]?.id || "";
+  const kd = admins[0];
   function mark(kind: "iframe" | "url", text: string) {
     navigator.clipboard.writeText(text).then(() => setCopied(kind));
   }
@@ -187,7 +221,12 @@ export function AdminDetail() {
             <button
               className={data.tenant.active ? "btn outline" : "btn"}
               type="button"
-              onClick={() => api.patchTenant(data.tenant.id, { active: !data.tenant.active })}
+              onClick={() => {
+                const active = !data.tenant.active;
+                api.patchTenant(data.tenant.id, { active }).then(() => {
+                  setData((d) => (d ? { ...d, tenant: { ...d.tenant, active } } : d));
+                });
+              }}
             >
               {data.tenant.active ? "Sperren" : "Aktivieren"}
             </button>
@@ -234,7 +273,7 @@ export function AdminDetail() {
             ) : (
               <p className="hint-line">Kein KD hinterlegt.</p>
             )}
-            {data.admins.length ? (
+            {admins.length ? (
               <form
                 onSubmit={(e) => {
                   e.preventDefault();
@@ -247,11 +286,11 @@ export function AdminDetail() {
               >
                 {pw.err ? <p className="err" role="alert">{pw.err}</p> : null}
                 {pw.ok ? <p className="ok" role="status">Passwort in Auth gespeichert. KD kann sich anmelden.</p> : null}
-                {data.admins.length > 1 ? (
+                {admins.length > 1 ? (
                   <label className="field">
                     <span>Admin</span>
                     <select value={adminId} onChange={(e) => setPw((s) => ({ ...s, userId: e.target.value }))}>
-                      {data.admins.map((a) => (
+                      {admins.map((a) => (
                         <option key={a.id} value={a.id}>{a.name} ({a.email})</option>
                       ))}
                     </select>
@@ -281,7 +320,19 @@ export function AdminDetail() {
             </a>
           </div>
           <div className="embed-preview">
-            <iframe title="Buchungsvorschau" src={data.bookUrl} className="preview-frame" />
+            {!frameOn ? (
+              <div className="preview-empty" aria-busy="true">
+                <p>Vorschau wird geladen…</p>
+                <a className="btn outline" href={data.bookUrl} target="_blank" rel="noreferrer">Buchungsseite öffnen</a>
+              </div>
+            ) : null}
+            <iframe
+              title="Buchungsvorschau"
+              src={`/b/${encodeURIComponent(data.tenant.slug)}`}
+              className={"preview-frame" + (frameOn ? "" : " is-wait")}
+              loading="lazy"
+              onLoad={() => setFrameOn(true)}
+            />
           </div>
         </div>
       </article>

@@ -17,13 +17,14 @@ const SVC = [
 ];
 
 function hash(s: string, n: number) {
+  const t = s ?? "";
   let x = 0;
-  for (let i = 0; i < s.length; i++) x += s.charCodeAt(i);
+  for (let i = 0; i < t.length; i++) x += t.charCodeAt(i);
   return x % n;
 }
 
 export function initial(name: string) {
-  return (name.trim()[0] || "?").toUpperCase();
+  return ((name ?? "").trim()[0] || "?").toUpperCase();
 }
 
 export function Avatar({ name, size = 32 }: { name: string; size?: number }) {
@@ -61,7 +62,7 @@ export function Modal({ title, onClose, children }: { title: string; onClose: ()
 export function PageHead({ title, aside, lead }: { title: string; aside?: ReactNode; lead?: string }) {
   return (
     <header className="page-head">
-      <div>
+      <div className="page-head-copy">
         <h1>{title}</h1>
         {lead ? <p className="lead">{lead}</p> : null}
       </div>

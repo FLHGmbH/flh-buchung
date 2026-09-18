@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useParams } from "react-router-dom";
-import { api, useApi, type Pub } from "./api";
+import { api, type Pub } from "./api";
 
 function berlinDay(iso: string) {
   return new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Berlin", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date(iso));
@@ -10,8 +10,17 @@ const STEPS = ["Leistung", "Person", "Tag", "Uhrzeit", "Angaben", "Code", "Ferti
 
 export function BookPage() {
   const { slug = "" } = useParams();
-  const pub = useApi<Pub>(slug ? `/api/public/${slug}` : null);
+  const [pub, setPub] = useState<Pub | null>(null);
   const [err, setErr] = useState("");
+  useEffect(() => {
+    if (!slug) return;
+    let on = true;
+    api.pub(slug).then(
+      (d) => { if (on) setPub(d); },
+      (e) => { if (on) setErr(e instanceof Error ? e.message : "Buchung nicht geladen."); },
+    );
+    return () => { on = false; };
+  }, [slug]);
   const [step, setStep] = useState(0);
   const [serviceId, setServiceId] = useState("");
   const [staffId, setStaffId] = useState("");
@@ -54,7 +63,13 @@ export function BookPage() {
 
   const daySlots = slots.filter((s) => berlinDay(s.start) === day).sort((a, b) => a.start.localeCompare(b.start));
 
-  if (!pub) return <div className="book">{err ? <p className="err">{err}</p> : null}</div>;
+  if (!pub) {
+    return (
+      <div className="book">
+        {err ? <p className="err" role="alert">{err}</p> : <p className="lead">Laden…</p>}
+      </div>
+    );
+  }
 
   const service = pub.services.find((s) => s.id === serviceId);
   const staffForService = pub.staff.filter((s) => !service || service.staffIds.includes(s.id));
