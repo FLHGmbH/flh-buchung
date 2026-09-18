@@ -224,51 +224,71 @@ export function StaffPage() {
 
 export function ServicesPage() {
   const boot = useBoot();
-  const [open, setOpen] = useState(false);
-  const [form, setForm] = useState({ name: "", durationMin: 45, bufferMin: 0, staffIds: [] as string[] });
+  const blank = { name: "", durationMin: 45, bufferMin: 0, staffIds: [] as string[], active: true };
+  const [form, setForm] = useState<(typeof blank & { id?: string }) | null>(null);
+  const [err, setErr] = useState("");
+  const [pending, setPending] = useState(false);
   if (!boot) return <div className="page" />;
   function toggle(id: string) {
-    setForm((f) => ({ ...f, staffIds: f.staffIds.includes(id) ? f.staffIds.filter((x) => x !== id) : [...f.staffIds, id] }));
+    setForm((f) => f && ({ ...f, staffIds: f.staffIds.includes(id) ? f.staffIds.filter((x) => x !== id) : [...f.staffIds, id] }));
   }
   return (
     <div className="page">
       <PageHead
         title="Leistungen"
-        aside={<button className="btn" type="button" onClick={() => setOpen(true)}>+ Leistung</button>}
+        aside={<button className="btn" type="button" onClick={() => { setErr(""); setForm({ ...blank }); }}>+ Leistung</button>}
       />
       <div className="card-table">
-        <table className="table quiet">
+        <table className="table quiet click">
           <thead>
             <tr>
               <th>Leistung</th>
               <th>Dauer</th>
               <th>Puffer</th>
               <th>Wer</th>
+              <th>Status</th>
             </tr>
           </thead>
           <tbody>
             {boot.services.map((s) => (
-              <tr key={s.id}>
+              <tr
+                key={s.id}
+                onClick={() => {
+                  setErr("");
+                  setForm({ id: s.id, name: s.name, durationMin: s.durationMin, bufferMin: s.bufferMin, staffIds: [...s.staffIds], active: s.active });
+                }}
+              >
                 <td>{s.name}</td>
                 <td>{s.durationMin} min</td>
                 <td>{s.bufferMin} min</td>
-                <td>{s.staffIds.map((id) => boot.staff.find((x) => x.id === id)?.name).filter(Boolean).join(", ")}</td>
+                <td>{s.staffIds.map((id) => boot.staff.find((x) => x.id === id)?.name).filter(Boolean).join(", ") || "—"}</td>
+                <td>
+                  <span className={"status" + (s.active ? " is-ok" : " is-off")}>
+                    <i />
+                    {s.active ? "Aktiv" : "Inaktiv"}
+                  </span>
+                </td>
               </tr>
             ))}
           </tbody>
         </table>
       </div>
-      {open ? (
-        <Modal title="Neue Leistung" onClose={() => setOpen(false)}>
+      {form ? (
+        <Modal title={form.id ? "Leistung" : "Neue Leistung"} onClose={() => setForm(null)}>
           <form
             onSubmit={(e) => {
               e.preventDefault();
-              api.addService(form).then(() => {
-                setForm({ name: "", durationMin: 45, bufferMin: 0, staffIds: [] });
-                setOpen(false);
-              });
+              setErr("");
+              setPending(true);
+              const body = { name: form.name, durationMin: form.durationMin, bufferMin: form.bufferMin, staffIds: form.staffIds, active: form.active };
+              const done = form.id ? api.patchService(form.id, body) : api.addService(body);
+              done
+                .then(() => setForm(null))
+                .catch((ex) => setErr(ex instanceof Error ? ex.message : "Speichern fehlgeschlagen."))
+                .finally(() => setPending(false));
             }}
           >
+            {err ? <p className="err" role="alert">{err}</p> : null}
             <label className="field">
               <span>Name der Leistung</span>
               <input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required placeholder="z.B. Bartpflege / Herrenhaarschnitt" />
@@ -276,11 +296,11 @@ export function ServicesPage() {
             <div className="fields-2">
               <label className="field">
                 <span>Dauer</span>
-                <input type="number" min={5} value={form.durationMin} onChange={(e) => setForm({ ...form, durationMin: Number(e.target.value) })} />
+                <input type="number" min={5} max={480} value={form.durationMin} onChange={(e) => setForm({ ...form, durationMin: Number(e.target.value) })} />
               </label>
               <label className="field">
                 <span>Pufferzeit</span>
-                <input type="number" min={0} value={form.bufferMin} onChange={(e) => setForm({ ...form, bufferMin: Number(e.target.value) })} />
+                <input type="number" min={0} max={120} value={form.bufferMin} onChange={(e) => setForm({ ...form, bufferMin: Number(e.target.value) })} />
               </label>
             </div>
             <div className="field">
@@ -292,9 +312,15 @@ export function ServicesPage() {
                 </label>
               ))}
             </div>
+            {form.id ? (
+              <label className="check">
+                <input type="checkbox" checked={form.active} onChange={(e) => setForm({ ...form, active: e.target.checked })} />
+                Aktiv
+              </label>
+            ) : null}
             <div className="modal-foot">
-              <button type="button" className="btn outline" onClick={() => setOpen(false)}>Abbrechen</button>
-              <button className="btn" type="submit">Leistung erstellen</button>
+              <button type="button" className="btn outline" onClick={() => setForm(null)}>Abbrechen</button>
+              <button className="btn" type="submit" disabled={pending}>{pending ? "Speichern…" : form.id ? "Speichern" : "Leistung erstellen"}</button>
             </div>
           </form>
         </Modal>

@@ -1,32 +1,93 @@
-import { useState, type FormEvent } from "react";
+import { useMemo, useState, type FormEvent } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { api, useApi, type TenantRow } from "./api";
+import { Avatar, PageHead } from "./ui";
 
 export function AdminList() {
   const rows = useApi<{ tenants: TenantRow[] }>("/api/admin/tenants");
+  const nav = useNavigate();
+  const [q, setQ] = useState("");
+  const tenants = rows?.tenants ?? [];
+  const shown = useMemo(() => {
+    const s = q.trim().toLowerCase();
+    if (!s) return tenants;
+    return tenants.filter((t) => `${t.name} ${t.slug}`.toLowerCase().includes(s));
+  }, [tenants, q]);
   if (!rows) return <div className="page" />;
+  const active = tenants.filter((t) => t.active).length;
   return (
     <div className="page">
-      <div className="toolbar">
-        <h1>Mandanten</h1>
-        <Link className="btn" to="/admin/neu">Neuer Mandant</Link>
-      </div>
-      {rows.tenants.length === 0 ? (
-        <div className="empty">Noch kein Mandant. Leg den ersten an, dann kopierst du das iframe in die Homepage.</div>
+      <header className="page-head">
+        <div className="head-tools">
+          <h1>Mandanten</h1>
+          <label className="search">
+            <span aria-hidden="true">⌕</span>
+            <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Name oder Slug suchen" />
+          </label>
+        </div>
+        <Link className="btn" to="/admin/neu">+ Neuer Mandant</Link>
+      </header>
+      {tenants.length ? (
+        <div className="stat-row">
+          <div className="stat">
+            <strong>{tenants.length}</strong>
+            <span>Betriebe</span>
+          </div>
+          <div className="stat">
+            <strong>{active}</strong>
+            <span>Aktiv</span>
+          </div>
+          <div className="stat">
+            <strong>{tenants.length - active}</strong>
+            <span>Gesperrt</span>
+          </div>
+        </div>
+      ) : null}
+      {tenants.length === 0 ? (
+        <div className="empty">
+          <p>Noch kein Mandant. Leg den ersten an, dann kommt das Buchungs-iframe auf die Homepage.</p>
+          <Link className="btn" to="/admin/neu">+ Neuer Mandant</Link>
+        </div>
+      ) : shown.length === 0 ? (
+        <div className="empty">
+          <p>Kein Treffer für „{q.trim()}“.</p>
+        </div>
       ) : (
-        <table className="table">
-          <thead><tr><th>Name</th><th>Slug</th><th>Status</th><th /></tr></thead>
-          <tbody>
-            {rows.tenants.map((t) => (
-              <tr key={t.id}>
-                <td><Link to={`/admin/${t.id}`}>{t.name}</Link></td>
-                <td>{t.slug}</td>
-                <td>{t.active ? "Aktiv" : "Gesperrt"}</td>
-                <td><Link to={`/admin/${t.id}`}>iframe</Link></td>
+        <div className="card-table">
+          <table className="table quiet click">
+            <thead>
+              <tr>
+                <th>Betrieb</th>
+                <th>Buchung</th>
+                <th>Status</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {shown.map((t) => (
+                <tr key={t.id} onClick={() => nav(`/admin/${t.id}`)}>
+                  <td>
+                    <div className="who-cell">
+                      <Avatar name={t.name} size={32} />
+                      <div>
+                        <strong>{t.name}</strong>
+                        <small>/{t.slug}</small>
+                      </div>
+                    </div>
+                  </td>
+                  <td>
+                    <span className="mono-url">{t.bookUrl?.replace(/^https?:\/\//, "")}</span>
+                  </td>
+                  <td>
+                    <span className={"status" + (t.active ? " is-ok" : " is-off")}>
+                      <i />
+                      {t.active ? "Aktiv" : "Gesperrt"}
+                    </span>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       )}
     </div>
   );
@@ -36,23 +97,67 @@ export function AdminNew() {
   const nav = useNavigate();
   const [form, setForm] = useState({ name: "", slug: "", adminName: "", adminEmail: "", adminPassword: "" });
   const [err, setErr] = useState("");
+  const [pending, setPending] = useState(false);
   function submit(e: FormEvent) {
     e.preventDefault();
     setErr("");
-    api.createTenant(form).then((r) => nav(`/admin/${(r as { tenant: { id: string } }).tenant.id}`)).catch((ex) => setErr(ex.message));
+    setPending(true);
+    api
+      .createTenant(form)
+      .then((r) => nav(`/admin/${(r as { tenant: { id: string } }).tenant.id}`))
+      .catch((ex) => {
+        setErr(ex.message);
+        setPending(false);
+      });
   }
   return (
-    <div className="page">
-      <h1>Neuer Mandant</h1>
-      <p className="lead">Legt den Betrieb an und den KD-Login in Supabase Auth.</p>
-      {err ? <p className="err">{err}</p> : null}
-      <form className="panel" style={{ maxWidth: 480 }} onSubmit={submit}>
-        <label className="field"><span>Betriebsname</span><input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required /></label>
-        <label className="field"><span>Slug (URL)</span><input value={form.slug} onChange={(e) => setForm({ ...form, slug: e.target.value })} placeholder="salon-mueller" /></label>
-        <label className="field"><span>KD-Name</span><input value={form.adminName} onChange={(e) => setForm({ ...form, adminName: e.target.value })} /></label>
-        <label className="field"><span>KD-E-Mail</span><input type="email" value={form.adminEmail} onChange={(e) => setForm({ ...form, adminEmail: e.target.value })} required /></label>
-        <label className="field"><span>Passwort</span><input type="password" autoComplete="new-password" value={form.adminPassword} onChange={(e) => setForm({ ...form, adminPassword: e.target.value })} minLength={8} required /></label>
-        <button className="btn" type="submit">Anlegen</button>
+    <div className="page slim">
+      <PageHead
+        title="Neuer Mandant"
+        lead="Betrieb anlegen und KD-Login in Supabase Auth setzen."
+        aside={
+          <Link className="btn outline" to="/admin">
+            Zurück
+          </Link>
+        }
+      />
+      {err ? <p className="err" role="alert">{err}</p> : null}
+      <form className="hours-card" onSubmit={submit}>
+        <div className="card-head">Betrieb</div>
+        <div className="card-body">
+          <div className="fields-2">
+            <label className="field">
+              <span>Betriebsname</span>
+              <input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required />
+            </label>
+            <label className="field">
+              <span>Slug (URL)</span>
+              <input value={form.slug} onChange={(e) => setForm({ ...form, slug: e.target.value })} placeholder="salon-mueller" />
+            </label>
+          </div>
+          <p className="hint-line">Slug leer lassen, dann wird er aus dem Namen gebaut.</p>
+        </div>
+        <div className="card-head">KD-Login</div>
+        <div className="card-body">
+          <label className="field">
+            <span>Name</span>
+            <input value={form.adminName} onChange={(e) => setForm({ ...form, adminName: e.target.value })} placeholder="Wie der Betrieb, wenn leer" />
+          </label>
+          <div className="fields-2">
+            <label className="field">
+              <span>E-Mail</span>
+              <input type="email" value={form.adminEmail} onChange={(e) => setForm({ ...form, adminEmail: e.target.value })} required />
+            </label>
+            <label className="field">
+              <span>Passwort</span>
+              <input type="password" autoComplete="new-password" value={form.adminPassword} onChange={(e) => setForm({ ...form, adminPassword: e.target.value })} minLength={8} required />
+            </label>
+          </div>
+          <p className="hint-line">Mindestens 8 Zeichen. Der KD loggt sich damit ins Mandanten-Panel ein.</p>
+        </div>
+        <div className="hours-foot">
+          <button className="btn" type="submit" disabled={pending}>{pending ? "Anlegen…" : "Mandant anlegen"}</button>
+        </div>
       </form>
     </div>
   );
@@ -61,65 +166,125 @@ export function AdminNew() {
 export function AdminDetail() {
   const { id } = useParams();
   const data = useApi<{ tenant: TenantRow; admins: { id: string; email: string; name: string }[]; bookUrl: string; iframe: string }>(id ? `/api/admin/tenants/${id}` : null);
-  const [copied, setCopied] = useState(false);
-  const [pw, setPw] = useState({ userId: "", password: "", err: "", ok: false });
+  const [copied, setCopied] = useState<"iframe" | "url" | null>(null);
+  const [pw, setPw] = useState({ userId: "", password: "", err: "", ok: false, pending: false });
   if (!data) return <div className="page" />;
   const adminId = pw.userId || data.admins[0]?.id || "";
+  const kd = data.admins[0];
+  function mark(kind: "iframe" | "url", text: string) {
+    navigator.clipboard.writeText(text).then(() => setCopied(kind));
+  }
   return (
     <div className="page">
-      <h1>{data.tenant.name}</h1>
-      <p className="lead">/{data.tenant.slug} · {data.tenant.active ? "aktiv" : "gesperrt"}</p>
-      <p>KD: {data.admins.map((a) => `${a.name} (${a.email})`).join(", ") || "—"}</p>
-      <p>
-        <button className="btn quiet" type="button" onClick={() => api.patchTenant(data.tenant.id, { active: !data.tenant.active })}>
-          {data.tenant.active ? "Sperren" : "Aktivieren"}
-        </button>
-      </p>
-      {data.admins.length ? (
-        <form
-          className="panel"
-          style={{ maxWidth: 480, marginBottom: 24 }}
-          onSubmit={(e) => {
-            e.preventDefault();
-            setPw((s) => ({ ...s, err: "", ok: false }));
-            api.setTenantPassword(data.tenant.id, adminId, pw.password)
-              .then(() => setPw({ userId: adminId, password: "", err: "", ok: true }))
-              .catch((ex) => setPw((s) => ({ ...s, err: ex.message, ok: false })));
-          }}
-        >
-          <h1 style={{ fontSize: "1.15rem" }}>Login in Supabase Auth</h1>
-          <p className="lead">Legt den KD in Authentication an oder setzt das Passwort dort.</p>
-          {pw.err ? <p className="err">{pw.err}</p> : null}
-          {pw.ok ? <p>In Auth gesetzt. KD kann sich damit anmelden.</p> : null}
-          {data.admins.length > 1 ? (
-            <label className="field">
-              <span>Admin</span>
-              <select value={adminId} onChange={(e) => setPw((s) => ({ ...s, userId: e.target.value }))}>
-                {data.admins.map((a) => <option key={a.id} value={a.id}>{a.name} ({a.email})</option>)}
-              </select>
-            </label>
-          ) : null}
-          <label className="field">
-            <span>Passwort</span>
-            <input type="password" autoComplete="new-password" minLength={8} required value={pw.password} onChange={(e) => setPw((s) => ({ ...s, password: e.target.value, ok: false }))} />
-          </label>
-          <button className="btn" type="submit">In Auth speichern</button>
-        </form>
-      ) : null}
-      <div className="panel" style={{ maxWidth: 720 }}>
-        <h1 style={{ fontSize: "1.15rem" }}>iframe für die Homepage</h1>
-        <p>In die Kunden-HP einsetzen:</p>
-        <pre className="code">{data.iframe}</pre>
-        <button
-          className="btn amber"
-          type="button"
-          onClick={() => navigator.clipboard.writeText(data.iframe).then(() => setCopied(true))}
-        >
-          {copied ? "Kopiert" : "Snippet kopieren"}
-        </button>
-        <p style={{ marginTop: 16 }}>Vorschau:</p>
-        <iframe title="Vorschau" src={data.bookUrl} style={{ width: "100%", minHeight: 560, border: 0 }} />
+      <PageHead
+        title={data.tenant.name}
+        lead={`/${data.tenant.slug}`}
+        aside={
+          <div className="head-tools">
+            <Link className="btn outline" to="/admin">
+              Alle Mandanten
+            </Link>
+            <button
+              className={data.tenant.active ? "btn outline" : "btn"}
+              type="button"
+              onClick={() => api.patchTenant(data.tenant.id, { active: !data.tenant.active })}
+            >
+              {data.tenant.active ? "Sperren" : "Aktivieren"}
+            </button>
+          </div>
+        }
+      />
+      <div className="admin-grid">
+        <article className="hours-card">
+          <div className="card-head">Betrieb</div>
+          <div className="card-body">
+            <div className="who-cell pad">
+              <Avatar name={data.tenant.name} size={40} />
+              <div>
+                <strong>{data.tenant.name}</strong>
+                <small>/{data.tenant.slug}</small>
+              </div>
+            </div>
+            <span className={"status" + (data.tenant.active ? " is-ok" : " is-off")}>
+              <i />
+              {data.tenant.active ? "Aktiv" : "Gesperrt"}
+            </span>
+            <div className="field follow">
+              <span>Buchungs-URL</span>
+              <div className="copy-row">
+                <input readOnly aria-label="Buchungs-URL" value={data.bookUrl} />
+                <button className="btn outline" type="button" onClick={() => mark("url", data.bookUrl)}>
+                  {copied === "url" ? "Kopiert" : "Kopieren"}
+                </button>
+              </div>
+            </div>
+          </div>
+        </article>
+        <article className="hours-card">
+          <div className="card-head">KD-Login</div>
+          <div className="card-body">
+            {kd ? (
+              <div className="who-cell pad">
+                <Avatar name={kd.name || kd.email} size={40} />
+                <div>
+                  <strong>{kd.name || "KD"}</strong>
+                  <small>{kd.email}</small>
+                </div>
+              </div>
+            ) : (
+              <p className="hint-line">Kein KD hinterlegt.</p>
+            )}
+            {data.admins.length ? (
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  setPw((s) => ({ ...s, err: "", ok: false, pending: true }));
+                  api
+                    .setTenantPassword(data.tenant.id, adminId, pw.password)
+                    .then(() => setPw({ userId: adminId, password: "", err: "", ok: true, pending: false }))
+                    .catch((ex) => setPw((s) => ({ ...s, err: ex.message, ok: false, pending: false })));
+                }}
+              >
+                {pw.err ? <p className="err" role="alert">{pw.err}</p> : null}
+                {pw.ok ? <p className="ok" role="status">Passwort in Auth gespeichert. KD kann sich anmelden.</p> : null}
+                {data.admins.length > 1 ? (
+                  <label className="field">
+                    <span>Admin</span>
+                    <select value={adminId} onChange={(e) => setPw((s) => ({ ...s, userId: e.target.value }))}>
+                      {data.admins.map((a) => (
+                        <option key={a.id} value={a.id}>{a.name} ({a.email})</option>
+                      ))}
+                    </select>
+                  </label>
+                ) : null}
+                <label className="field">
+                  <span>Neues Passwort</span>
+                  <input type="password" autoComplete="new-password" minLength={8} required value={pw.password} onChange={(e) => setPw((s) => ({ ...s, password: e.target.value, ok: false }))} />
+                </label>
+                <button className="btn" type="submit" disabled={pw.pending}>{pw.pending ? "Speichern…" : "In Auth speichern"}</button>
+              </form>
+            ) : null}
+          </div>
+        </article>
       </div>
+      <article className="hours-card">
+        <div className="card-head">iframe für die Homepage</div>
+        <div className="card-body">
+          <p className="hint-line">Snippet in die Kunden-Website einsetzen.</p>
+          <pre className="code">{data.iframe}</pre>
+          <div className="head-tools card-actions">
+            <button className="btn" type="button" onClick={() => mark("iframe", data.iframe)}>
+              {copied === "iframe" ? "Kopiert" : "Snippet kopieren"}
+            </button>
+            <a className="btn outline" href={data.bookUrl} target="_blank" rel="noreferrer">
+              Buchungsseite öffnen
+            </a>
+          </div>
+          <div className="embed-preview">
+            <iframe title="Buchungsvorschau" src={data.bookUrl} className="preview-frame" />
+          </div>
+        </div>
+      </article>
     </div>
   );
 }
