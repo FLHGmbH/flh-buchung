@@ -1,7 +1,8 @@
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { api, type Actor } from "./api";
 import { Mark } from "./Mark";
+import { gsap, reduced, useGSAP } from "./motion";
 
 function recoveryAccessToken(hash: string) {
   const q = new URLSearchParams(hash.startsWith("#") ? hash.slice(1) : hash);
@@ -36,9 +37,15 @@ export function LoginPage({ onLogin }: { onLogin: (a: Actor) => void }) {
     }
   }
 
+  const box = useRef<HTMLFormElement>(null);
+  useGSAP(() => {
+    if (reduced() || !box.current) return;
+    gsap.fromTo(box.current, { opacity: 0, y: 16 }, { opacity: 1, y: 0, duration: 0.42, ease: "power3.out" });
+  }, { scope: box });
+
   return (
     <div className="login">
-      <form className="panel" onSubmit={submit}>
+      <form className="panel" ref={box} onSubmit={submit}>
         <Mark />
         <h1>{forgot ? "Passwort zurücksetzen" : "Anmelden"}</h1>
         <p>{forgot ? "Link kommt per Mail, gültig für die Live-App." : "Eine Tür für Mandanten und FLH. Login über Supabase Auth."}</p>

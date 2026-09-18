@@ -20,7 +20,7 @@ export function AdminList() {
     if (!s) return tenants;
     return tenants.filter((t) => `${t.name} ${t.slug}`.toLowerCase().includes(s));
   }, [tenants, q]);
-  if (!rows) return <div className="page"><p className="lead">Laden…</p></div>;
+  if (!rows) return <div className="page"><p className="lead wait">Laden…</p></div>;
   const active = tenants.filter((t) => t.active).length;
   return (
     <div className="page">
@@ -201,7 +201,7 @@ export function AdminDetail() {
       </div>
     );
   }
-  if (!data?.tenant) return <div className="page"><p className="lead">Laden…</p></div>;
+  if (!data?.tenant) return <div className="page"><p className="lead wait">Laden…</p></div>;
   const admins = data.admins ?? [];
   const adminId = pw.userId || admins[0]?.id || "";
   const kd = admins[0];

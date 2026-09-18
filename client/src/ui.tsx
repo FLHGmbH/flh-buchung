@@ -1,5 +1,6 @@
-import { useState, type FormEvent, type ReactNode } from "react";
+import { useRef, useState, type FormEvent, type ReactNode } from "react";
 import { api, type Booking, type Service, type ServiceCategory, type Staff } from "./api";
+import { gsap, reduced, useGSAP } from "./motion";
 
 const AV = ["#1b5561", "#348a8a", "#8359dd", "#b45309", "#0f766e", "#be185d"];
 const EVENT = [
@@ -66,12 +67,31 @@ export function serviceLine(s: { name: string; durationMin: number; priceCents?:
 }
 
 export function Modal({ title, onClose, children }: { title: string; onClose: () => void; children: ReactNode }) {
+  const root = useRef<HTMLDivElement>(null);
+  const { contextSafe } = useGSAP(() => {
+    const back = root.current;
+    const box = back?.querySelector(".modal");
+    if (!back || !box || reduced()) return;
+    gsap.fromTo(back, { opacity: 0 }, { opacity: 1, duration: 0.22, ease: "power2.out" });
+    gsap.fromTo(box, { y: 18, opacity: 0, scale: 0.96 }, { y: 0, opacity: 1, scale: 1, duration: 0.34, ease: "back.out(0.7)" });
+  }, { scope: root });
+  const close = contextSafe(() => {
+    const back = root.current;
+    const box = back?.querySelector(".modal");
+    if (!back || !box || reduced()) {
+      onClose();
+      return;
+    }
+    gsap.timeline({ onComplete: onClose })
+      .to(box, { y: 10, opacity: 0, scale: 0.98, duration: 0.18, ease: "power2.in" })
+      .to(back, { opacity: 0, duration: 0.16, ease: "power2.in" }, "<");
+  });
   return (
-    <div className="modal-back" onClick={onClose} role="presentation">
+    <div className="modal-back" ref={root} onClick={close} role="presentation">
       <div className="modal" role="dialog" aria-labelledby="modal-title" onClick={(e) => e.stopPropagation()}>
         <div className="modal-head">
           <h2 id="modal-title">{title}</h2>
-          <button type="button" className="modal-x" onClick={onClose} aria-label="Schließen">
+          <button type="button" className="modal-x" onClick={close} aria-label="Schließen">
             ×
           </button>
         </div>

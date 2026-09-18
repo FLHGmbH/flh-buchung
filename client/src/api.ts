@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { tickSaved } from "./motion";
 
 export type Actor = {
   id: string;
@@ -125,6 +126,7 @@ async function req<T>(path: string, init?: RequestInit): Promise<T> {
 async function mutate<T>(path: string, init: RequestInit, prefix = "/api/app"): Promise<T> {
   const r = await req<T>(path, init);
   bust(prefix);
+  tickSaved();
   return r;
 }
 

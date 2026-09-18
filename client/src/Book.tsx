@@ -1,6 +1,7 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useParams } from "react-router-dom";
 import { api, type Pub } from "./api";
+import { Fold, gsap, reduced, StepPane, useGSAP } from "./motion";
 import { serviceLine } from "./ui";
 
 function berlinDay(iso: string) {
@@ -68,7 +69,7 @@ export function BookPage() {
   if (!pub) {
     return (
       <div className="book">
-        {err ? <p className="err" role="alert">{err}</p> : <p className="lead">Laden…</p>}
+        {err ? <p className="err" role="alert">{err}</p> : <p className="lead wait">Laden…</p>}
       </div>
     );
   }
@@ -89,7 +90,7 @@ export function BookPage() {
   }
 
   return (
-    <div className="book">
+    <BookShell>
       {pub.tenant.logoUrl ? <img className="book-logo" src={pub.tenant.logoUrl} alt="" /> : null}
       <h1>{pub.tenant.name}</h1>
       <p className="lead">Termin buchen</p>
@@ -100,6 +101,7 @@ export function BookPage() {
         ))}
       </div>
 
+      <StepPane id={step}>
       {step === 0 && (
         pub.services.length ? (
           cats.length ? (
@@ -113,11 +115,13 @@ export function BookPage() {
                       <polyline points="6 9 12 15 18 9" />
                     </svg>
                   </button>
-                  {on ? b.rows.map((s) => (
-                    <button key={s.id} className={"choice" + (serviceId === s.id ? " on" : "")} type="button" onClick={() => pickService(s.id)}>
-                      {serviceLine(s)}
-                    </button>
-                  )) : null}
+                  <Fold open={on}>
+                    {b.rows.map((s) => (
+                      <button key={s.id} className={"choice" + (serviceId === s.id ? " on" : "")} type="button" onClick={() => pickService(s.id)}>
+                        {serviceLine(s)}
+                      </button>
+                    ))}
+                  </Fold>
                 </div>
               );
             })
@@ -145,7 +149,7 @@ export function BookPage() {
 
       {step === 2 && (
         <>
-          {pending && !slots.length ? <p>Termine werden geladen…</p> : null}
+          {pending && !slots.length ? <p className="lead wait">Termine werden geladen…</p> : null}
           <div className="days">
             {days.map((d) => (
               <button key={d.key} type="button" disabled={!d.open} className={day === d.key ? "on" : ""} onClick={() => { setDay(d.key); setStep(3); }}>
@@ -245,10 +249,20 @@ export function BookPage() {
           <p>{new Date(done.startsAt).toLocaleString("de-DE")}</p>
         </div>
       )}
+      </StepPane>
 
       <footer className="book-foot">Buchung von FLH DIGITAL</footer>
-    </div>
+    </BookShell>
   );
+}
+
+function BookShell({ children }: { children: ReactNode }) {
+  const ref = useRef<HTMLDivElement>(null);
+  useGSAP(() => {
+    if (reduced() || !ref.current) return;
+    gsap.fromTo(ref.current, { opacity: 0, y: 12 }, { opacity: 1, y: 0, duration: 0.4, ease: "power3.out" });
+  }, { scope: ref });
+  return <div className="book" ref={ref}>{children}</div>;
 }
 
 function uniqueStarts(slots: { start: string; end: string; staffId: string }[]) {

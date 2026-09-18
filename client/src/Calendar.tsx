@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { api, useApi, type Booking, type Bootstrap, type WeekPayload } from "./api";
+import { gsap, reduced, useGSAP } from "./motion";
 import { BookingModal, eventTone, PageHead } from "./ui";
 
 const START = 8;
@@ -85,14 +86,23 @@ export function CalendarPage() {
     return 48 + (h - START) * 48 + (m / 60) * 48;
   }, [dates, today, tz]);
 
-  if (!boot) return <div className="page" />;
+  const wrap = useRef<HTMLDivElement>(null);
+  const weekKey = useRef(mon);
+  useGSAP(() => {
+    if (reduced() || !wrap.current) return;
+    if (weekKey.current === mon) return;
+    weekKey.current = mon;
+    gsap.fromTo(wrap.current, { opacity: 0.7, y: 8 }, { opacity: 1, y: 0, duration: 0.32, ease: "power3.out" });
+  }, { dependencies: [mon, !!boot], scope: wrap });
+
+  if (!boot) return <div className="page"><p className="lead wait">Laden…</p></div>;
 
   const last = dates[6];
   const emptyStaff = boot.staff.length === 0;
   const books = week?.bookings ?? [];
 
   return (
-    <div className="page wide">
+    <div className="page wide" ref={wrap}>
       <PageHead
         title="Kalender"
         aside={

@@ -1,6 +1,7 @@
-import { useEffect, type ReactNode } from "react";
-import { NavLink, Outlet } from "react-router-dom";
+import { useEffect, useRef, type ReactNode } from "react";
+import { NavLink } from "react-router-dom";
 import { api, type Actor } from "./api";
+import { gsap, PageMotion, reduced, useGSAP } from "./motion";
 import { Avatar } from "./ui";
 import { Mark } from "./Mark";
 
@@ -83,10 +84,15 @@ function link(to: string, label: string) {
 
 export function Shell({ actor, onLogout }: { actor: Actor; onLogout: () => void }) {
   const kd = actor.role === "tenant_admin";
+  const side = useRef<HTMLAsideElement>(null);
   useEffect(() => { api.prefetch(kd ? "/app" : "/admin"); }, [kd]);
+  useGSAP(() => {
+    if (reduced() || !side.current) return;
+    gsap.from("a, .who, .ghost", { x: -10, opacity: 0, duration: 0.4, stagger: 0.045, ease: "power3.out" });
+  }, { scope: side });
   return (
     <div className="app">
-      <aside className="sidebar">
+      <aside className="sidebar" ref={side}>
         <div className="brand">
           <Mark invert word />
         </div>
@@ -125,7 +131,7 @@ export function Shell({ actor, onLogout }: { actor: Actor; onLogout: () => void 
         </button>
       </aside>
       <div className="main">
-        <Outlet />
+        <PageMotion />
       </div>
     </div>
   );

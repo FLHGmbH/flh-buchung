@@ -231,7 +231,7 @@ export function ServicesPage() {
   const [catForm, setCatForm] = useState<{ id?: string; name: string } | null>(null);
   const [err, setErr] = useState("");
   const [pending, setPending] = useState(false);
-  if (!boot) return <div className="page"><p className="lead">Laden…</p></div>;
+  if (!boot) return <div className="page"><p className="lead wait">Laden…</p></div>;
   const cats = boot.categories ?? [];
   function toggle(id: string) {
     setForm((f) => f && ({ ...f, staffIds: f.staffIds.includes(id) ? f.staffIds.filter((x) => x !== id) : [...f.staffIds, id] }));
