@@ -178,6 +178,7 @@ export function CalendarPage() {
         <BookingModal
           staff={boot.staff}
           services={boot.services}
+          categories={boot.categories}
           booking={pick}
           timezone={tz}
           onClose={() => setPick(null)}
@@ -187,6 +188,7 @@ export function CalendarPage() {
         <BookingModal
           staff={boot.staff}
           services={boot.services}
+          categories={boot.categories}
           timezone={tz}
           initial={draft}
           onClose={() => setDraft(null)}

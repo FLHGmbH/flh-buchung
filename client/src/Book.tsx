@@ -21,6 +21,7 @@ export function BookPage() {
     );
     return () => { on = false; };
   }, [slug]);
+  const [catId, setCatId] = useState("");
   const [step, setStep] = useState(0);
   const [serviceId, setServiceId] = useState("");
   const [staffId, setStaffId] = useState("");
@@ -73,6 +74,11 @@ export function BookPage() {
 
   const service = pub.services.find((s) => s.id === serviceId);
   const staffForService = pub.staff.filter((s) => !service || service.staffIds.includes(s.id));
+  const cats = (pub.categories ?? []).filter((c) => pub.services.some((s) => s.categoryId === c.id));
+  const loose = pub.services.filter((s) => !s.categoryId);
+  const shown = cats.length
+    ? pub.services.filter((s) => (catId === "_" ? !s.categoryId : s.categoryId === catId))
+    : pub.services;
 
   return (
     <div className="book">
@@ -86,11 +92,35 @@ export function BookPage() {
       </div>
 
       {step === 0 && (
-        pub.services.length ? pub.services.map((s) => (
-          <button key={s.id} className={"choice" + (serviceId === s.id ? " on" : "")} type="button" onClick={() => { setServiceId(s.id); setStaffId(""); setSlot(null); setStep(1); }}>
-            {s.name} · {s.durationMin} Min.
-          </button>
-        )) : (
+        pub.services.length ? (
+          <>
+            {cats.length ? (
+              <label className="field">
+                <span>Kategorie</span>
+                <select
+                  value={catId}
+                  aria-label="Kategorie"
+                  onChange={(e) => { setCatId(e.target.value); setServiceId(""); }}
+                >
+                  <option value="">Bitte wählen</option>
+                  {cats.map((c) => (
+                    <option key={c.id} value={c.id}>{c.name}</option>
+                  ))}
+                  {loose.length ? <option value="_">Weitere Leistungen</option> : null}
+                </select>
+              </label>
+            ) : null}
+            {cats.length && !catId ? (
+              <p className="lead">Erst die Kategorie wählen.</p>
+            ) : shown.length ? shown.map((s) => (
+              <button key={s.id} className={"choice" + (serviceId === s.id ? " on" : "")} type="button" onClick={() => { setServiceId(s.id); setStaffId(""); setSlot(null); setStep(1); }}>
+                {s.name} · {s.durationMin} Min.
+              </button>
+            )) : (
+              <p className="err">Keine Leistung in dieser Kategorie.</p>
+            )}
+          </>
+        ) : (
           <p className="err">Noch keine Leistung angelegt. Im Mandanten-Konto unter Leistungen eine anlegen.</p>
         )
       )}

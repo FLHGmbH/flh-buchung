@@ -33,9 +33,17 @@ export const staff = pgTable("staff", {
   sort: integer("sort").notNull().default(0),
 });
 
+export const serviceCategories = pgTable("service_categories", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+  name: text("name").notNull(),
+  sort: integer("sort").notNull().default(0),
+});
+
 export const services = pgTable("services", {
   id: uuid("id").primaryKey().defaultRandom(),
   tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+  categoryId: uuid("category_id").references(() => serviceCategories.id, { onDelete: "set null" }),
   name: text("name").notNull(),
   durationMin: integer("duration_min").notNull(),
   bufferMin: integer("buffer_min").notNull().default(0),

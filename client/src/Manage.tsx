@@ -118,6 +118,7 @@ export function BookingsPage() {
         <BookingModal
           staff={boot.staff}
           services={boot.services}
+          categories={boot.categories}
           booking={pick}
           timezone={boot.tenant.timezone}
           onClose={() => setPick(null)}
@@ -127,6 +128,7 @@ export function BookingsPage() {
         <BookingModal
           staff={boot.staff}
           services={boot.services}
+          categories={boot.categories}
           timezone={boot.tenant.timezone}
           initial={{ date: new Date().toISOString().slice(0, 10), time: "09:00", staffId: boot.staff[0]?.id, serviceId: boot.services[0]?.id }}
           onClose={() => setOpen(false)}
@@ -224,25 +226,52 @@ export function StaffPage() {
 
 export function ServicesPage() {
   const boot = useBoot();
-  const blank = { name: "", durationMin: 45, bufferMin: 0, staffIds: [] as string[], active: true };
+  const blank = { name: "", durationMin: 45, bufferMin: 0, staffIds: [] as string[], active: true, categoryId: "" };
   const [form, setForm] = useState<(typeof blank & { id?: string }) | null>(null);
+  const [catForm, setCatForm] = useState<{ id?: string; name: string } | null>(null);
   const [err, setErr] = useState("");
   const [pending, setPending] = useState(false);
-  if (!boot) return <div className="page" />;
+  if (!boot) return <div className="page"><p className="lead">Laden…</p></div>;
+  const cats = boot.categories ?? [];
   function toggle(id: string) {
     setForm((f) => f && ({ ...f, staffIds: f.staffIds.includes(id) ? f.staffIds.filter((x) => x !== id) : [...f.staffIds, id] }));
+  }
+  function catName(id: string | null | undefined) {
+    return cats.find((c) => c.id === id)?.name ?? "—";
   }
   return (
     <div className="page">
       <PageHead
         title="Leistungen"
-        aside={<button className="btn" type="button" onClick={() => { setErr(""); setForm({ ...blank }); }}>+ Leistung</button>}
+        aside={
+          <div className="head-tools">
+            <button className="btn outline" type="button" onClick={() => { setErr(""); setCatForm({ name: "" }); }}>+ Kategorie</button>
+            <button className="btn" type="button" onClick={() => { setErr(""); setForm({ ...blank }); }}>+ Leistung</button>
+          </div>
+        }
       />
+      <article className="hours-card cat-block">
+        <div className="card-head">Kategorien</div>
+        <div className="card-body">
+          {cats.length ? (
+            <ul className="cat-list">
+              {cats.map((c) => (
+                <li key={c.id}>
+                  <button className="cat-chip" type="button" onClick={() => { setErr(""); setCatForm({ id: c.id, name: c.name }); }}>{c.name}</button>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="hint-line">Noch keine Kategorie. z. B. Frauenhaarschnitt oder Männerhaarschnitt — dann an die Leistung hängen.</p>
+          )}
+        </div>
+      </article>
       <div className="card-table">
         <table className="table quiet click">
           <thead>
             <tr>
               <th>Leistung</th>
+              <th>Kategorie</th>
               <th>Dauer</th>
               <th>Puffer</th>
               <th>Wer</th>
@@ -255,10 +284,11 @@ export function ServicesPage() {
                 key={s.id}
                 onClick={() => {
                   setErr("");
-                  setForm({ id: s.id, name: s.name, durationMin: s.durationMin, bufferMin: s.bufferMin, staffIds: [...s.staffIds], active: s.active });
+                  setForm({ id: s.id, name: s.name, durationMin: s.durationMin, bufferMin: s.bufferMin, staffIds: [...s.staffIds], active: s.active, categoryId: s.categoryId ?? "" });
                 }}
               >
                 <td>{s.name}</td>
+                <td>{catName(s.categoryId)}</td>
                 <td>{s.durationMin} min</td>
                 <td>{s.bufferMin} min</td>
                 <td>{s.staffIds.map((id) => boot.staff.find((x) => x.id === id)?.name).filter(Boolean).join(", ") || "—"}</td>
@@ -273,6 +303,49 @@ export function ServicesPage() {
           </tbody>
         </table>
       </div>
+      {catForm ? (
+        <Modal title={catForm.id ? "Kategorie" : "Neue Kategorie"} onClose={() => setCatForm(null)}>
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              setErr("");
+              setPending(true);
+              const done = catForm.id ? api.patchCategory(catForm.id, { name: catForm.name }) : api.addCategory(catForm.name);
+              done
+                .then(() => setCatForm(null))
+                .catch((ex) => setErr(ex instanceof Error ? ex.message : "Speichern fehlgeschlagen."))
+                .finally(() => setPending(false));
+            }}
+          >
+            {err ? <p className="err" role="alert">{err}</p> : null}
+            <label className="field">
+              <span>Name</span>
+              <input value={catForm.name} onChange={(e) => setCatForm({ ...catForm, name: e.target.value })} required placeholder="z. B. Frauenhaarschnitt" />
+            </label>
+            <div className="modal-foot">
+              {catForm.id ? (
+                <button
+                  type="button"
+                  className="btn danger"
+                  disabled={pending}
+                  onClick={() => {
+                    setPending(true);
+                    api.delCategory(catForm.id as string)
+                      .then(() => setCatForm(null))
+                      .catch((ex) => setErr(ex instanceof Error ? ex.message : "Löschen fehlgeschlagen."))
+                      .finally(() => setPending(false));
+                  }}
+                >
+                  Löschen
+                </button>
+              ) : (
+                <button type="button" className="btn outline" onClick={() => setCatForm(null)}>Abbrechen</button>
+              )}
+              <button className="btn" type="submit" disabled={pending}>{pending ? "Speichern…" : "Speichern"}</button>
+            </div>
+          </form>
+        </Modal>
+      ) : null}
       {form ? (
         <Modal title={form.id ? "Leistung" : "Neue Leistung"} onClose={() => setForm(null)}>
           <form
@@ -280,7 +353,7 @@ export function ServicesPage() {
               e.preventDefault();
               setErr("");
               setPending(true);
-              const body = { name: form.name, durationMin: form.durationMin, bufferMin: form.bufferMin, staffIds: form.staffIds, active: form.active };
+              const body = { name: form.name, durationMin: form.durationMin, bufferMin: form.bufferMin, staffIds: form.staffIds, active: form.active, categoryId: form.categoryId || null };
               const done = form.id ? api.patchService(form.id, body) : api.addService(body);
               done
                 .then(() => setForm(null))
@@ -293,6 +366,16 @@ export function ServicesPage() {
               <span>Name der Leistung</span>
               <input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required placeholder="z.B. Bartpflege / Herrenhaarschnitt" />
             </label>
+            <label className="field">
+              <span>Kategorie</span>
+              <select value={form.categoryId} onChange={(e) => setForm({ ...form, categoryId: e.target.value })}>
+                <option value="">Keine</option>
+                {cats.map((c) => (
+                  <option key={c.id} value={c.id}>{c.name}</option>
+                ))}
+              </select>
+            </label>
+            <p className="hint-line">Kategorie oben anlegen, dann hier zuordnen. Im Buchungs-iframe erscheint sie als Dropdown.</p>
             <div className="fields-2">
               <label className="field">
                 <span>Dauer</span>

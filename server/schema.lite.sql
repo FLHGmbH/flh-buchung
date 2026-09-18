@@ -32,9 +32,17 @@ CREATE TABLE IF NOT EXISTS staff (
   sort integer NOT NULL DEFAULT 0
 );
 
+CREATE TABLE IF NOT EXISTS service_categories (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  tenant_id uuid NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+  name text NOT NULL,
+  sort integer NOT NULL DEFAULT 0
+);
+
 CREATE TABLE IF NOT EXISTS services (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   tenant_id uuid NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+  category_id uuid REFERENCES service_categories(id) ON DELETE SET NULL,
   name text NOT NULL,
   duration_min integer NOT NULL,
   buffer_min integer NOT NULL DEFAULT 0,

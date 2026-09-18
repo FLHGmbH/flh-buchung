@@ -1,5 +1,5 @@
 import { useState, type FormEvent, type ReactNode } from "react";
-import { api, type Booking, type Service, type Staff } from "./api";
+import { api, type Booking, type Service, type ServiceCategory, type Staff } from "./api";
 
 const AV = ["#1b5561", "#348a8a", "#8359dd", "#b45309", "#0f766e", "#be185d"];
 const EVENT = [
@@ -83,6 +83,7 @@ function clock(iso: string, tz: string) {
 export function BookingModal({
   staff,
   services,
+  categories = [],
   booking,
   timezone = "Europe/Berlin",
   initial,
@@ -91,6 +92,7 @@ export function BookingModal({
 }: {
   staff: Staff[];
   services: Service[];
+  categories?: ServiceCategory[];
   booking?: Booking;
   timezone?: string;
   initial?: { staffId?: string; serviceId?: string; date?: string; time?: string };
@@ -178,7 +180,28 @@ export function BookingModal({
             <label className="field">
               <span>Leistung</span>
               <select value={form.serviceId} onChange={(e) => setForm({ ...form, serviceId: e.target.value })} required>
-                {services.map((s) => (
+                {categories.length ? (
+                  <>
+                    {categories.map((c) => {
+                      const rows = services.filter((s) => s.categoryId === c.id);
+                      if (!rows.length) return null;
+                      return (
+                        <optgroup key={c.id} label={c.name}>
+                          {rows.map((s) => (
+                            <option key={s.id} value={s.id}>{s.name}</option>
+                          ))}
+                        </optgroup>
+                      );
+                    })}
+                    {services.some((s) => !s.categoryId) ? (
+                      <optgroup label="Weitere">
+                        {services.filter((s) => !s.categoryId).map((s) => (
+                          <option key={s.id} value={s.id}>{s.name}</option>
+                        ))}
+                      </optgroup>
+                    ) : null}
+                  </>
+                ) : services.map((s) => (
                   <option key={s.id} value={s.id}>{s.name}</option>
                 ))}
               </select>

@@ -150,6 +150,9 @@ export const api = {
   patchStaff: (id: string, body: object) => mutate(`/api/app/staff/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
   addService: (body: object) => mutate("/api/app/services", { method: "POST", body: JSON.stringify(body) }),
   patchService: (id: string, body: object) => mutate(`/api/app/services/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
+  addCategory: (name: string) => mutate("/api/app/categories", { method: "POST", body: JSON.stringify({ name }) }),
+  patchCategory: (id: string, body: object) => mutate(`/api/app/categories/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
+  delCategory: (id: string) => mutate(`/api/app/categories/${id}`, { method: "DELETE" }),
   putHours: (hours: object[]) => mutate("/api/app/hours", { method: "PUT", body: JSON.stringify({ hours }) }),
   timeOff: () => inflight<{ timeOff: TimeOff[] }>("/api/app/time-off"),
   addTimeOff: (body: object) => mutate("/api/app/time-off", { method: "POST", body: JSON.stringify(body) }),
@@ -204,7 +207,8 @@ export type TenantRow = {
 };
 
 export type Staff = { id: string; name: string; active: boolean };
-export type Service = { id: string; name: string; durationMin: number; bufferMin: number; active: boolean; staffIds: string[] };
+export type ServiceCategory = { id: string; name: string };
+export type Service = { id: string; name: string; durationMin: number; bufferMin: number; active: boolean; staffIds: string[]; categoryId?: string | null };
 export type Booking = {
   id: string;
   staffId: string;
@@ -221,6 +225,7 @@ export type TimeOff = { id: string; staffId: string; startsAt: string; endsAt: s
 export type Bootstrap = {
   tenant: { id: string; name: string; timezone: string };
   staff: Staff[];
+  categories: ServiceCategory[];
   services: Service[];
   hours: { weekday: number; startHm: string; endHm: string }[];
 };
@@ -233,5 +238,6 @@ export type WeekPayload = {
 export type Pub = {
   tenant: { name: string; slug: string; timezone: string };
   staff: { id: string; name: string }[];
-  services: { id: string; name: string; durationMin: number; staffIds: string[] }[];
+  categories: ServiceCategory[];
+  services: { id: string; name: string; durationMin: number; categoryId?: string | null; staffIds: string[] }[];
 };

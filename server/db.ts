@@ -90,6 +90,15 @@ export async function migrate() {
   `).catch(ignoreExists);
   await execSql(`ALTER TABLE bookings ADD COLUMN IF NOT EXISTS pin_hash text NOT NULL DEFAULT ''`).catch(ignoreExists);
   await execSql(`ALTER TABLE bookings ADD COLUMN IF NOT EXISTS pin_expires_at timestamptz`).catch(ignoreExists);
+  await execSql(`
+    CREATE TABLE IF NOT EXISTS service_categories (
+      id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+      tenant_id uuid NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+      name text NOT NULL,
+      sort integer NOT NULL DEFAULT 0
+    )
+  `).catch(ignoreExists);
+  await execSql(`ALTER TABLE services ADD COLUMN IF NOT EXISTS category_id uuid REFERENCES service_categories(id) ON DELETE SET NULL`).catch(ignoreExists);
   if (isPg) {
     await requirePg(`ALTER TABLE staff ADD CONSTRAINT staff_id_tenant UNIQUE (id, tenant_id)`);
     await requirePg(`ALTER TABLE bookings ADD CONSTRAINT bookings_staff_tenant FOREIGN KEY (staff_id, tenant_id) REFERENCES staff(id, tenant_id)`);

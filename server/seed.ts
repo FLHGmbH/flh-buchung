@@ -3,7 +3,7 @@ import { DateTime } from "luxon";
 import { hashPassword } from "./auth.ts";
 import { db } from "./db.ts";
 import { seedAllowed } from "./guard.ts";
-import { bookings, memberships, openingHours, serviceStaff, services, staff, tenants, users } from "./schema.ts";
+import { bookings, memberships, openingHours, serviceCategories, serviceStaff, services, staff, tenants, users } from "./schema.ts";
 
 export async function seedIfEmpty() {
   if (!seedAllowed()) return;
@@ -36,13 +36,16 @@ export async function seed() {
   const [anna] = await db.insert(staff).values({ tenantId: tenant.id, name: "Anna Berger", sort: 0 }).returning();
   const [ben] = await db.insert(staff).values({ tenantId: tenant.id, name: "Ben Krüger", sort: 1 }).returning();
 
+  const [women] = await db.insert(serviceCategories).values({ tenantId: tenant.id, name: "Frauenhaarschnitt", sort: 0 }).returning();
+  const [men] = await db.insert(serviceCategories).values({ tenantId: tenant.id, name: "Männerhaarschnitt", sort: 1 }).returning();
+
   const [cut] = await db
     .insert(services)
-    .values({ tenantId: tenant.id, name: "Haarschnitt", durationMin: 45, bufferMin: 0 })
+    .values({ tenantId: tenant.id, name: "Haarschnitt", durationMin: 45, bufferMin: 0, categoryId: men.id })
     .returning();
   const [color] = await db
     .insert(services)
-    .values({ tenantId: tenant.id, name: "Farbe", durationMin: 90, bufferMin: 15 })
+    .values({ tenantId: tenant.id, name: "Farbe", durationMin: 90, bufferMin: 15, categoryId: women.id })
     .returning();
   await db.insert(serviceStaff).values([
     { serviceId: cut.id, staffId: anna.id },

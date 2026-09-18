@@ -9,6 +9,7 @@ import {
   bookings,
   memberships,
   openingHours,
+  serviceCategories,
   serviceStaff,
   services,
   staff,
@@ -85,6 +86,16 @@ async function bookableStaffIds(tenantId: string, serviceId: string, staffId: st
 async function staffLinks(serviceIds: string[]) {
   if (!serviceIds.length) return [];
   return db.select().from(serviceStaff).where(inArray(serviceStaff.serviceId, serviceIds));
+}
+
+async function categoryInTenant(tid: string, id: string | null | undefined) {
+  if (!id) return true;
+  const [row] = await db
+    .select({ id: serviceCategories.id })
+    .from(serviceCategories)
+    .where(and(eq(serviceCategories.id, id), eq(serviceCategories.tenantId, tid)))
+    .limit(1);
+  return Boolean(row);
 }
 
 async function ensureTenantDefaults(tenantId: string) {
@@ -391,9 +402,11 @@ api.get("/app/bootstrap", async (c) => {
   const serviceRows = await db.select().from(services).where(eq(services.tenantId, tid));
   const links = await staffLinks(serviceRows.map((s) => s.id));
   const hours = await db.select().from(openingHours).where(eq(openingHours.tenantId, tid));
+  const categories = await db.select().from(serviceCategories).where(eq(serviceCategories.tenantId, tid)).orderBy(serviceCategories.sort);
   return c.json({
     tenant,
     staff: staffRows,
+    categories: categories.map((c) => ({ id: c.id, name: c.name })),
     services: serviceRows.map((s) => ({
       ...s,
       staffIds: links.filter((l) => l.serviceId === s.id).map((l) => l.staffId),
@@ -458,16 +471,18 @@ api.patch("/app/staff/:id", async (c) => {
 
 api.post("/app/services", async (c) => {
   const tid = tenantId(c);
-  const body = await readJson<{ name?: string; durationMin?: number; bufferMin?: number; staffIds?: string[] }>(c);
+  const body = await readJson<{ name?: string; durationMin?: number; bufferMin?: number; staffIds?: string[]; categoryId?: string | null }>(c);
   if (!body) return c.json({ error: "Ungültige Anfrage." }, 400);
   const name = clip(body.name ?? "", LEN.name);
   const mins = serviceMins(body.durationMin, body.bufferMin);
   if (!name || !mins) return c.json({ error: "Name und Dauer (5–480 Min.) nötig." }, 400);
   const ids = body.staffIds ?? [];
   if (!(await staffIdsInTenant(tid, ids))) return c.json({ error: "Mitarbeiter ungültig." }, 400);
+  const categoryId = body.categoryId || null;
+  if (!(await categoryInTenant(tid, categoryId))) return c.json({ error: "Kategorie ungültig." }, 400);
   const [row] = await db
     .insert(services)
-    .values({ tenantId: tid, name, durationMin: mins.durationMin, bufferMin: mins.bufferMin })
+    .values({ tenantId: tid, name, durationMin: mins.durationMin, bufferMin: mins.bufferMin, categoryId })
     .returning();
   if (ids.length) await db.insert(serviceStaff).values(ids.map((staffId) => ({ serviceId: row.id, staffId })));
   return c.json({ service: { ...row, staffIds: ids } }, 201);
@@ -482,6 +497,7 @@ api.patch("/app/services/:id", async (c) => {
     bufferMin?: number;
     active?: boolean;
     staffIds?: string[];
+    categoryId?: string | null;
   }>(c);
   if (!body) return c.json({ error: "Ungültige Anfrage." }, 400);
   if (body.durationMin !== undefined && !inIntRange(body.durationMin, 5, 480)) {
@@ -493,6 +509,9 @@ api.patch("/app/services/:id", async (c) => {
   if (body.staffIds && !(await staffIdsInTenant(tid, body.staffIds))) {
     return c.json({ error: "Mitarbeiter ungültig." }, 400);
   }
+  if ("categoryId" in body && !(await categoryInTenant(tid, body.categoryId))) {
+    return c.json({ error: "Kategorie ungültig." }, 400);
+  }
   const [row] = await db
     .update(services)
     .set({
@@ -500,6 +519,7 @@ api.patch("/app/services/:id", async (c) => {
       ...(typeof body.durationMin === "number" ? { durationMin: body.durationMin } : {}),
       ...(typeof body.bufferMin === "number" ? { bufferMin: body.bufferMin } : {}),
       ...(typeof body.active === "boolean" ? { active: body.active } : {}),
+      ...("categoryId" in body ? { categoryId: body.categoryId || null } : {}),
     })
     .where(and(eq(services.id, id), eq(services.tenantId, tid)))
     .returning();
@@ -511,6 +531,48 @@ api.patch("/app/services/:id", async (c) => {
     }
   }
   return c.json({ service: { ...row, staffIds: body.staffIds } });
+});
+
+api.post("/app/categories", async (c) => {
+  const tid = tenantId(c);
+  const body = await readJson<{ name?: string }>(c);
+  if (!body) return c.json({ error: "Ungültige Anfrage." }, 400);
+  const name = clip(body.name ?? "", LEN.name);
+  if (!name) return c.json({ error: "Name nötig." }, 400);
+  const existing = await db.select().from(serviceCategories).where(eq(serviceCategories.tenantId, tid));
+  if (existing.some((x) => x.name.toLowerCase() === name.toLowerCase())) {
+    return c.json({ error: "Kategorie gibt es schon." }, 409);
+  }
+  const [row] = await db
+    .insert(serviceCategories)
+    .values({ tenantId: tid, name, sort: existing.length })
+    .returning();
+  return c.json({ category: { id: row.id, name: row.name } }, 201);
+});
+
+api.patch("/app/categories/:id", async (c) => {
+  const tid = tenantId(c);
+  const body = await readJson<{ name?: string }>(c);
+  if (!body) return c.json({ error: "Ungültige Anfrage." }, 400);
+  const name = clip(body.name ?? "", LEN.name);
+  if (!name) return c.json({ error: "Name nötig." }, 400);
+  const [row] = await db
+    .update(serviceCategories)
+    .set({ name })
+    .where(and(eq(serviceCategories.id, c.req.param("id")), eq(serviceCategories.tenantId, tid)))
+    .returning();
+  if (!row) return c.json({ error: "Nicht gefunden." }, 404);
+  return c.json({ category: { id: row.id, name: row.name } });
+});
+
+api.delete("/app/categories/:id", async (c) => {
+  const tid = tenantId(c);
+  const [row] = await db
+    .delete(serviceCategories)
+    .where(and(eq(serviceCategories.id, c.req.param("id")), eq(serviceCategories.tenantId, tid)))
+    .returning();
+  if (!row) return c.json({ error: "Nicht gefunden." }, 404);
+  return c.json({ ok: true });
 });
 
 api.put("/app/hours", async (c) => {
@@ -668,13 +730,20 @@ api.get("/public/:slug", async (c) => {
     .from(services)
     .where(and(eq(services.tenantId, tenant.id), eq(services.active, true)));
   const links = await staffLinks(serviceRows.map((s) => s.id));
+  const categories = await db
+    .select({ id: serviceCategories.id, name: serviceCategories.name })
+    .from(serviceCategories)
+    .where(eq(serviceCategories.tenantId, tenant.id))
+    .orderBy(serviceCategories.sort);
   return c.json({
     tenant: { name: tenant.name, slug: tenant.slug, timezone: tenant.timezone },
     staff: staffRows.map((s) => ({ id: s.id, name: s.name })),
+    categories,
     services: serviceRows.map((s) => ({
       id: s.id,
       name: s.name,
       durationMin: s.durationMin,
+      categoryId: s.categoryId,
       staffIds: links.filter((l) => l.serviceId === s.id).map((l) => l.staffId),
     })),
   });
