@@ -46,6 +46,7 @@ export function peek<T>(path: string): T | null {
 }
 
 function inflight<T>(path: string): Promise<T> {
+  if (mem.has(path)) return Promise.resolve(mem.get(path) as T);
   const w = wait.get(path);
   if (w) return w as Promise<T>;
   const early = path === "/api/me" ? (window as unknown as { __FLH_ME?: Promise<T> }).__FLH_ME : undefined;
@@ -66,14 +67,7 @@ function inflight<T>(path: string): Promise<T> {
   return p;
 }
 
-export function load<T>(path: string, set: (d: T) => void) {
-  const hit = peek<T>(path);
-  if (hit) set(hit);
-  return inflight<T>(path).then(set);
-}
-
 export function useApi<T>(path: string | null) {
-  const [data, setData] = useState<T | null>(() => (path ? peek<T>(path) : null));
   const [tick, setTick] = useState(0);
   useEffect(() => {
     const fn = () => setTick((n) => n + 1);
@@ -83,16 +77,19 @@ export function useApi<T>(path: string | null) {
     };
   }, []);
   useEffect(() => {
-    if (!path) return;
+    if (!path || mem.has(path)) return;
     let on = true;
-    load<T>(path, (d) => {
-      if (on) setData(d);
-    });
+    inflight<T>(path).then(
+      () => {
+        if (on) setTick((n) => n + 1);
+      },
+      () => {},
+    );
     return () => {
       on = false;
     };
   }, [path, tick]);
-  return data;
+  return path ? peek<T>(path) : null;
 }
 
 function bust(prefix: string) {
@@ -148,7 +145,7 @@ export const api = {
   setTenantPassword: (tenantId: string, userId: string, password: string) =>
     req(`/api/admin/tenants/${tenantId}/password`, { method: "PATCH", body: JSON.stringify({ userId, password }) }),
   bootstrap: () => inflight<Bootstrap>("/api/app/bootstrap"),
-  day: (date: string) => inflight<DayPayload>(`/api/app/day?date=${date}`),
+  week: (from: string) => inflight<WeekPayload>(`/api/app/week?from=${from}`),
   addStaff: (name: string) => mutate("/api/app/staff", { method: "POST", body: JSON.stringify({ name }) }),
   patchStaff: (id: string, body: object) => mutate(`/api/app/staff/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
   addService: (body: object) => mutate("/api/app/services", { method: "POST", body: JSON.stringify(body) }),
@@ -159,6 +156,7 @@ export const api = {
   delTimeOff: (id: string) => mutate(`/api/app/time-off/${id}`, { method: "DELETE" }),
   bookings: () => inflight<{ bookings: Booking[] }>("/api/app/bookings"),
   addBooking: (body: object) => mutate("/api/app/bookings", { method: "POST", body: JSON.stringify(body) }),
+  patchBooking: (id: string, body: object) => mutate(`/api/app/bookings/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
   cancelBooking: (id: string) => mutate(`/api/app/bookings/${id}/cancel`, { method: "POST" }),
   pub: (slug: string) => inflight<Pub>(`/api/public/${slug}`),
   slots: (slug: string, serviceId: string, staffId?: string) =>
@@ -179,11 +177,11 @@ export const api = {
       const cur = z.toISOString().slice(0, 10);
       const mon = new Date(cur + "T12:00:00");
       mon.setDate(mon.getDate() - ((mon.getDay() + 6) % 7));
-      for (let i = 0; i < 7; i++) {
+      for (const delta of [-7, 0, 7]) {
         const x = new Date(mon);
-        x.setDate(mon.getDate() + i);
+        x.setDate(mon.getDate() + delta);
         const y = new Date(x.getTime() - x.getTimezoneOffset() * 60000);
-        inflight(`/api/app/day?date=${y.toISOString().slice(0, 10)}`);
+        inflight(`/api/app/week?from=${y.toISOString().slice(0, 10)}`);
       }
     } else if (to === "/app/termine") {
       inflight("/api/app/bootstrap");
@@ -226,11 +224,9 @@ export type Bootstrap = {
   services: Service[];
   hours: { weekday: number; startHm: string; endHm: string }[];
 };
-export type DayPayload = {
-  date: string;
+export type WeekPayload = {
+  from: string;
   timezone: string;
-  staff: Staff[];
-  services: Service[];
   bookings: Booking[];
   timeOff: TimeOff[];
 };

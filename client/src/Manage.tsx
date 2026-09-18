@@ -37,6 +37,7 @@ export function BookingsPage() {
   const rows = list?.bookings ?? [];
   const [q, setQ] = useState("");
   const [open, setOpen] = useState(false);
+  const [pick, setPick] = useState<Booking | null>(null);
   const shown = useMemo(() => {
     const s = q.trim().toLowerCase();
     if (!s) return rows;
@@ -56,7 +57,7 @@ export function BookingsPage() {
         <button className="btn" type="button" onClick={() => setOpen(true)}>+ Neuer Termin</button>
       </header>
       <div className="card-table">
-        <table className="table quiet">
+        <table className="table quiet click">
           <thead>
             <tr>
               <th>Wann</th>
@@ -64,7 +65,6 @@ export function BookingsPage() {
               <th>Leistung</th>
               <th>Wer</th>
               <th>Status</th>
-              <th />
             </tr>
           </thead>
           <tbody>
@@ -76,7 +76,7 @@ export function BookingsPage() {
               const ok = b.status === "confirmed";
               const gone = b.status === "cancelled";
               return (
-                <tr key={b.id}>
+                <tr key={b.id} onClick={() => setPick(b)}>
                   <td>
                     <div className="when-day">{w.day}</div>
                     <div className="when-time">{w.time}</div>
@@ -108,21 +108,26 @@ export function BookingsPage() {
                       {ok ? "Bestätigt" : gone ? "Storniert" : "PIN offen"}
                     </span>
                   </td>
-                  <td className="end">
-                    {gone ? null : (
-                      <button className="linkish" type="button" onClick={() => api.cancelBooking(b.id)}>Stornieren</button>
-                    )}
-                  </td>
                 </tr>
               );
             })}
           </tbody>
         </table>
       </div>
-      {open ? (
+      {pick ? (
         <BookingModal
           staff={boot.staff}
           services={boot.services}
+          booking={pick}
+          timezone={boot.tenant.timezone}
+          onClose={() => setPick(null)}
+          onSaved={() => setPick(null)}
+        />
+      ) : open ? (
+        <BookingModal
+          staff={boot.staff}
+          services={boot.services}
+          timezone={boot.tenant.timezone}
           initial={{ date: new Date().toISOString().slice(0, 10), time: "09:00", staffId: boot.staff[0]?.id, serviceId: boot.services[0]?.id }}
           onClose={() => setOpen(false)}
           onSaved={() => setOpen(false)}

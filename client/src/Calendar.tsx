@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { api, load, peek, type Booking, type DayPayload } from "./api";
+import { api, useApi, type Booking, type Bootstrap, type WeekPayload } from "./api";
 import { BookingModal, eventTone, PageHead } from "./ui";
 
 const START = 8;
@@ -41,13 +41,13 @@ function dm(date: string) {
   return `${d}.${m}.`;
 }
 
+function ymdTz(iso: string, tz: string) {
+  return new Intl.DateTimeFormat("en-CA", { timeZone: tz, year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date(iso));
+}
+
 function hourOf(iso: string, tz: string) {
   const parts = new Intl.DateTimeFormat("de-DE", { timeZone: tz, hour: "2-digit", hourCycle: "h23" }).formatToParts(new Date(iso));
   return Number(parts.find((p) => p.type === "hour")?.value);
-}
-
-function fmt(iso: string, tz: string) {
-  return new Intl.DateTimeFormat("de-DE", { timeZone: tz, hour: "2-digit", minute: "2-digit" }).format(new Date(iso));
 }
 
 function shortName(name: string) {
@@ -56,55 +56,40 @@ function shortName(name: string) {
   return `${p[0]} ${p[1][0]}.`;
 }
 
+function warm(mon: string) {
+  api.week(mon);
+  api.week(shift(mon, -7));
+  api.week(shift(mon, 7));
+}
+
 export function CalendarPage() {
   const [mon, setMon] = useState(() => mondayOf(ymd(new Date())));
   const dates = useMemo(() => weekDays(mon), [mon]);
-  const [days, setDays] = useState<(DayPayload | null)[]>(() => dates.map((d) => peek<DayPayload>(`/api/app/day?date=${d}`)));
-  const [err, setErr] = useState("");
+  const boot = useApi<Bootstrap>("/api/app/bootstrap");
+  const week = useApi<WeekPayload>(`/api/app/week?from=${mon}`);
   const [pick, setPick] = useState<Booking | null>(null);
   const [draft, setDraft] = useState<{ staffId?: string; serviceId?: string; date?: string; time?: string } | null>(null);
 
   useEffect(() => {
-    let on = true;
-    Promise.all(
-      dates.map((d) =>
-        load<DayPayload>(`/api/app/day?date=${d}`, () => {}).catch((e) => {
-          throw e;
-        }),
-      ),
-    )
-      .then(() => {
-        if (on) setDays(dates.map((d) => peek<DayPayload>(`/api/app/day?date=${d}`)));
-      })
-      .catch((e) => {
-        if (on) setErr(e instanceof Error ? e.message : String(e));
-      });
-    return () => {
-      on = false;
-    };
-  }, [dates]);
+    warm(mon);
+  }, [mon, week]);
 
-  const data = days.find(Boolean);
+  const tz = week?.timezone ?? boot?.tenant.timezone ?? "Europe/Berlin";
   const today = ymd(new Date());
   const nowTop = useMemo(() => {
-    if (!data || !dates.includes(today)) return null;
-    const parts = new Intl.DateTimeFormat("de-DE", { timeZone: data.timezone, hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).formatToParts(new Date());
+    if (!dates.includes(today)) return null;
+    const parts = new Intl.DateTimeFormat("de-DE", { timeZone: tz, hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).formatToParts(new Date());
     const h = Number(parts.find((p) => p.type === "hour")?.value);
     const m = Number(parts.find((p) => p.type === "minute")?.value);
     if (h < START || h >= END) return null;
     return 48 + (h - START) * 48 + (m / 60) * 48;
-  }, [data, dates, today]);
+  }, [dates, today, tz]);
 
-  function reload() {
-    setDraft(null);
-    Promise.all(dates.map((d) => api.day(d))).then(() => setDays(dates.map((d) => peek<DayPayload>(`/api/app/day?date=${d}`))));
-  }
-
-  if (err) return <div className="page"><p className="err">{err}</p></div>;
-  if (!data) return <div className="page" />;
+  if (!boot) return <div className="page" />;
 
   const last = dates[6];
-  const emptyStaff = data.staff.length === 0;
+  const emptyStaff = boot.staff.length === 0;
+  const books = week?.bookings ?? [];
 
   return (
     <div className="page wide">
@@ -121,7 +106,7 @@ export function CalendarPage() {
                 →
               </button>
             </div>
-            <button className="btn" type="button" onClick={() => setDraft({ date: today, time: "09:00", staffId: data.staff[0]?.id, serviceId: data.services[0]?.id })}>
+            <button className="btn" type="button" onClick={() => setDraft({ date: today, time: "09:00", staffId: boot.staff[0]?.id, serviceId: boot.services[0]?.id })}>
               + Neuer Termin
             </button>
           </div>
@@ -141,10 +126,9 @@ export function CalendarPage() {
               {hours.map((h) => (
                 <div className="week-row" key={h}>
                   <div className="week-time">{String(h).padStart(2, "0")}:00</div>
-                  {dates.map((d, di) => {
-                    const day = days[di];
-                    const cellBooks = (day?.bookings ?? []).filter(
-                      (b) => b.status !== "cancelled" && hourOf(b.startsAt, data.timezone) === h,
+                  {dates.map((d) => {
+                    const cellBooks = books.filter(
+                      (b) => b.status !== "cancelled" && ymdTz(b.startsAt, tz) === d && hourOf(b.startsAt, tz) === h,
                     );
                     return (
                       <div
@@ -154,14 +138,14 @@ export function CalendarPage() {
                           setDraft({
                             date: d,
                             time: `${String(h).padStart(2, "0")}:00`,
-                            staffId: data.staff[0]?.id,
-                            serviceId: data.services[0]?.id,
+                            staffId: boot.staff[0]?.id,
+                            serviceId: boot.services[0]?.id,
                           })
                         }
                       >
                         {cellBooks.map((b) => {
                           const t = eventTone(b.serviceId);
-                          const svc = data.services.find((s) => s.id === b.serviceId)?.name ?? "Termin";
+                          const svc = boot.services.find((s) => s.id === b.serviceId)?.name ?? "Termin";
                           return (
                             <button
                               key={b.id}
@@ -186,35 +170,27 @@ export function CalendarPage() {
             </div>
           </div>
           <aside className="hint">
-            {pick ? (
-              <>
-                <h2>{pick.guestName}</h2>
-                <p>{fmt(pick.startsAt, data.timezone)}–{fmt(pick.endsAt, data.timezone)}</p>
-                <p>{data.services.find((s) => s.id === pick.serviceId)?.name}</p>
-                <p>{pick.guestEmail} {pick.guestPhone}</p>
-                {pick.note ? <p>{pick.note}</p> : null}
-                {pick.status === "pending" ? <p>Wartet auf PIN</p> : null}
-                {pick.status !== "cancelled" ? (
-                  <button className="btn danger" type="button" onClick={() => api.cancelBooking(pick.id).then(() => { setPick(null); reload(); })}>
-                    Stornieren
-                  </button>
-                ) : (
-                  <p>Storniert</p>
-                )}
-              </>
-            ) : (
-              <p>Klick auf einen Termin oder eine leere Stunde.</p>
-            )}
+            <p>Klick auf einen Termin oder eine leere Stunde.</p>
           </aside>
         </div>
       )}
-      {draft ? (
+      {pick ? (
         <BookingModal
-          staff={data.staff}
-          services={data.services}
+          staff={boot.staff}
+          services={boot.services}
+          booking={pick}
+          timezone={tz}
+          onClose={() => setPick(null)}
+          onSaved={() => setPick(null)}
+        />
+      ) : draft ? (
+        <BookingModal
+          staff={boot.staff}
+          services={boot.services}
+          timezone={tz}
           initial={draft}
           onClose={() => setDraft(null)}
-          onSaved={reload}
+          onSaved={() => setDraft(null)}
         />
       ) : null}
     </div>

@@ -80,9 +80,18 @@ a { color: var(--petrol); }
   align-items: center;
   gap: 0.75rem;
   padding: 0 1.25rem 1.1rem;
+  min-width: 0;
 }
-.sidebar .who strong { display: block; color: #fff; font-size: 0.875rem; font-weight: 600; }
-.sidebar .who span { display: block; color: #94a3b8; font-size: 0.75rem; margin-top: 2px; }
+.sidebar .who > div { min-width: 0; }
+.sidebar .who strong,
+.sidebar .who strong + span {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.sidebar .who strong { color: #fff; font-size: 0.875rem; font-weight: 600; }
+.sidebar .who strong + span { color: #94a3b8; font-size: 0.75rem; margin-top: 2px; }
 .sidebar .ghost {
   background: transparent;
   border: 0;
@@ -176,9 +185,14 @@ a { color: var(--petrol); }
   border-radius: 8px;
   padding: 0.6rem 0.75rem;
   background: var(--white);
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
 }
 .field textarea { min-height: 5rem; resize: vertical; }
+.modal .field textarea { min-height: 3.5rem; }
 .fields-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; }
+.fields-2 > * { min-width: 0; }
 .err { color: var(--danger); margin: 0 0 0.75rem; }
 .ok { color: var(--petrol); margin: 0 0 0.75rem; }
 
@@ -205,6 +219,7 @@ a { color: var(--petrol); }
 .table.quiet tbody tr:nth-child(even) { background: transparent; }
 .table tbody tr:nth-child(even) { background: color-mix(in srgb, var(--petrol-25) 35%, white); }
 .table.quiet tbody tr:hover { background: #fafafa; }
+.table.click tbody tr { cursor: pointer; }
 .table td.end { text-align: right; }
 .when-day { font-weight: 500; color: #111827; }
 .when-time { color: #0d6e7f; font-size: 0.7rem; font-weight: 600; margin-top: 2px; }
@@ -253,6 +268,7 @@ a { color: var(--petrol); }
   font-weight: 600;
   flex-shrink: 0;
   line-height: 1;
+  overflow: hidden;
 }
 
 .panel {
@@ -274,12 +290,14 @@ a { color: var(--petrol); }
 }
 .modal {
   background: #fff;
-  width: min(440px, 100%);
+  width: min(480px, 100%);
+  max-height: min(92vh, 760px);
+  overflow: auto;
   border-radius: 16px;
   padding: 1.35rem 1.5rem 1.25rem;
   box-shadow: 0 24px 48px rgba(15, 23, 32, 0.18);
 }
-.modal-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 1.1rem; }
+.modal fieldset { border: 0; margin: 0; padding: 0; min-width: 0; }
 .modal-head h2 { margin: 0; font-size: 1.15rem; font-weight: 800; color: var(--ink); }
 .modal-x {
   width: 32px;

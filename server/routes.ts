@@ -390,29 +390,27 @@ api.get("/app/bootstrap", async (c) => {
   });
 });
 
-api.get("/app/day", async (c) => {
+api.get("/app/week", async (c) => {
   const tid = tenantId(c);
   const [tenant] = await db.select().from(tenants).where(eq(tenants.id, tid)).limit(1);
   if (!tenant) return c.json({ error: "Mandant fehlt." }, 404);
-  const date = c.req.query("date") || DateTime.now().setZone(tenant.timezone).toISODate();
-  const day = DateTime.fromISO(date, { zone: tenant.timezone });
-  const from = day.startOf("day").toJSDate();
-  const to = day.endOf("day").toJSDate();
-  const staffRows = await db.select().from(staff).where(eq(staff.tenantId, tid)).orderBy(staff.sort);
-  const serviceRows = await db.select().from(services).where(eq(services.tenantId, tid));
+  const raw = c.req.query("from") || "";
+  const day = DateTime.fromISO(raw, { zone: tenant.timezone });
+  if (!day.isValid) return c.json({ error: "Woche ungültig." }, 400);
+  const from = day.startOf("day");
+  const to = from.plus({ days: 6 }).endOf("day");
   const books = await db
     .select(bookingCols)
     .from(bookings)
-    .where(and(eq(bookings.tenantId, tid), gte(bookings.startsAt, from), lte(bookings.startsAt, to)));
+    .where(and(eq(bookings.tenantId, tid), gte(bookings.startsAt, from.toJSDate()), lte(bookings.startsAt, to.toJSDate())));
   const off = await db.select().from(timeOff).where(eq(timeOff.tenantId, tid));
-  const dayOff = off.filter((o) => o.startsAt < to && o.endsAt > from);
+  const start = from.toJSDate();
+  const end = to.toJSDate();
   return c.json({
-    date,
+    from: from.toISODate(),
     timezone: tenant.timezone,
-    staff: staffRows,
-    services: serviceRows,
     bookings: books,
-    timeOff: dayOff,
+    timeOff: off.filter((o) => o.startsAt < end && o.endsAt > start),
   });
 });
 
@@ -549,6 +547,42 @@ api.delete("/app/time-off/:id", async (c) => {
   return c.json({ ok: true });
 });
 
+async function bookingFields(tid: string, body: {
+  staffId?: string;
+  serviceId?: string;
+  startsAt?: string;
+  guestName?: string;
+  guestEmail?: string;
+  guestPhone?: string;
+  note?: string;
+} | null) {
+  if (!body) return { error: "Ungültige Anfrage.", status: 400 as const };
+  const [service] = await db
+    .select()
+    .from(services)
+    .where(and(eq(services.id, body.serviceId ?? ""), eq(services.tenantId, tid)))
+    .limit(1);
+  const guestName = clip(body.guestName ?? "", LEN.name);
+  if (!service || !body.staffId || !body.startsAt || !guestName) {
+    return { error: "Mitarbeiter, Leistung, Start und Name nötig.", status: 400 as const };
+  }
+  if (!(await staffInTenant(tid, body.staffId))) return { error: "Mitarbeiter ungültig.", status: 400 as const };
+  const start = new Date(body.startsAt);
+  if (Number.isNaN(start.getTime())) return { error: "Start ungültig.", status: 400 as const };
+  return {
+    fields: {
+      staffId: body.staffId,
+      serviceId: service.id,
+      startsAt: start,
+      endsAt: new Date(start.getTime() + service.durationMin * 60_000),
+      guestName,
+      guestEmail: clip(body.guestEmail ?? "", LEN.email),
+      guestPhone: clip(body.guestPhone ?? "", LEN.phone),
+      note: clip(body.note ?? "", LEN.note),
+    },
+  };
+}
+
 api.get("/app/bookings", async (c) => {
   const tid = tenantId(c);
   const rows = await db
@@ -562,45 +596,35 @@ api.get("/app/bookings", async (c) => {
 
 api.post("/app/bookings", async (c) => {
   const tid = tenantId(c);
-  const body = await readJson<{
-    staffId?: string;
-    serviceId?: string;
-    startsAt?: string;
-    guestName?: string;
-    guestEmail?: string;
-    guestPhone?: string;
-    note?: string;
-  }>(c);
-  if (!body) return c.json({ error: "Ungültige Anfrage." }, 400);
-  const [service] = await db
-    .select()
-    .from(services)
-    .where(and(eq(services.id, body.serviceId ?? ""), eq(services.tenantId, tid)))
-    .limit(1);
-  const guestName = clip(body.guestName ?? "", LEN.name);
-  if (!service || !body.staffId || !body.startsAt || !guestName) {
-    return c.json({ error: "Mitarbeiter, Leistung, Start und Name nötig." }, 400);
+  const parsed = await bookingFields(tid, await readJson(c));
+  if ("error" in parsed) return c.json({ error: parsed.error }, parsed.status);
+  try {
+    const [row] = await db.insert(bookings).values({ tenantId: tid, ...parsed.fields }).returning(bookingCols);
+    return c.json({ booking: row }, 201);
+  } catch (e) {
+    if (overlapError(e)) return c.json({ error: "Dieser Slot ist gerade vergeben." }, 409);
+    throw e;
   }
-  if (!(await staffInTenant(tid, body.staffId))) return c.json({ error: "Mitarbeiter ungültig." }, 400);
-  const start = new Date(body.startsAt);
-  if (Number.isNaN(start.getTime())) return c.json({ error: "Start ungültig." }, 400);
-  const end = new Date(start.getTime() + service.durationMin * 60_000);
+});
+
+api.patch("/app/bookings/:id", async (c) => {
+  const tid = tenantId(c);
+  const [cur] = await db
+    .select({ id: bookings.id, status: bookings.status })
+    .from(bookings)
+    .where(and(eq(bookings.id, c.req.param("id")), eq(bookings.tenantId, tid)))
+    .limit(1);
+  if (!cur) return c.json({ error: "Nicht gefunden." }, 404);
+  if (cur.status === "cancelled") return c.json({ error: "Stornierter Termin." }, 400);
+  const parsed = await bookingFields(tid, await readJson(c));
+  if ("error" in parsed) return c.json({ error: parsed.error }, parsed.status);
   try {
     const [row] = await db
-      .insert(bookings)
-      .values({
-        tenantId: tid,
-        staffId: body.staffId,
-        serviceId: service.id,
-        startsAt: start,
-        endsAt: end,
-        guestName,
-        guestEmail: clip(body.guestEmail ?? "", LEN.email),
-        guestPhone: clip(body.guestPhone ?? "", LEN.phone),
-        note: clip(body.note ?? "", LEN.note),
-      })
+      .update(bookings)
+      .set(parsed.fields)
+      .where(and(eq(bookings.id, cur.id), eq(bookings.tenantId, tid)))
       .returning(bookingCols);
-    return c.json({ booking: row }, 201);
+    return c.json({ booking: row });
   } catch (e) {
     if (overlapError(e)) return c.json({ error: "Dieser Slot ist gerade vergeben." }, 409);
     throw e;
