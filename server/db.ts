@@ -99,6 +99,8 @@ export async function migrate() {
     )
   `).catch(ignoreExists);
   await execSql(`ALTER TABLE services ADD COLUMN IF NOT EXISTS category_id uuid REFERENCES service_categories(id) ON DELETE SET NULL`).catch(ignoreExists);
+  await execSql(`ALTER TABLE services ADD COLUMN IF NOT EXISTS price_cents integer`).catch(ignoreExists);
+  await execSql(`ALTER TABLE tenants ADD COLUMN IF NOT EXISTS logo_url text`).catch(ignoreExists);
   if (isPg) {
     await requirePg(`ALTER TABLE staff ADD CONSTRAINT staff_id_tenant UNIQUE (id, tenant_id)`);
     await requirePg(`ALTER TABLE bookings ADD CONSTRAINT bookings_staff_tenant FOREIGN KEY (staff_id, tenant_id) REFERENCES staff(id, tenant_id)`);

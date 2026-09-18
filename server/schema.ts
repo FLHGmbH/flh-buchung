@@ -7,6 +7,7 @@ export const tenants = pgTable("tenants", {
   timezone: text("timezone").notNull().default("Europe/Berlin"),
   active: boolean("active").notNull().default(true),
   minNoticeMin: integer("min_notice_min").notNull().default(120),
+  logoUrl: text("logo_url"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
@@ -47,6 +48,7 @@ export const services = pgTable("services", {
   name: text("name").notNull(),
   durationMin: integer("duration_min").notNull(),
   bufferMin: integer("buffer_min").notNull().default(0),
+  priceCents: integer("price_cents"),
   active: boolean("active").notNull().default(true),
 });
 

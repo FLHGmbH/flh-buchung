@@ -1,9 +1,12 @@
+import { existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { and, desc, eq, gte, inArray, lt, lte, or } from "drizzle-orm";
 import { Hono } from "hono";
 import { DateTime } from "luxon";
 import { actorFrom, actorFromEmail, actorFromUserId, createSession, destroySession, ensurePlatformAdmin, hashPassword, sbEnsureUser, sbPassword, sbRecover, sbSetPassword, verifyLogin, verifyPassword, type Actor } from "./auth.ts";
 import { db } from "./db.ts";
-import { BOOK_MAX, LEN, LOGIN_MAX, PIN_MAX, WINDOW_MS, bookWindow, clip, clientIp, inIntRange, limited, passwordOk, readJson, sbConfigured, serviceMins, siteOrigin } from "./guard.ts";
+import { BOOK_MAX, LEN, LOGIN_MAX, PIN_MAX, WINDOW_MS, bookWindow, clip, clientIp, inIntRange, limited, logoKind, passwordOk, priceCents, readJson, sbConfigured, serviceMins, siteOrigin } from "./guard.ts";
 import { newPin, PIN_MS, sendPinMail } from "./mail.ts";
 import {
   bookings,
@@ -395,6 +398,82 @@ function tenantId(c: { get: (k: "actor") => Actor }) {
   return c.get("actor").tenantId as string;
 }
 
+const logoDir = join(dirname(fileURLToPath(import.meta.url)), "../data/logos");
+const LOGO_EXTS = ["png", "jpg", "webp"] as const;
+let logosBucket = false;
+
+function sbStorage() {
+  const base = process.env.SUPABASE_URL?.trim().replace(/\/$/, "");
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY?.trim();
+  if (!base || !key) return null;
+  return { base, key };
+}
+
+async function wipeLogoFiles(tenantId: string, keep?: string) {
+  const sb = sbStorage();
+  if (sb) {
+    await Promise.all(LOGO_EXTS.filter((e) => e !== keep).map((e) =>
+      fetch(`${sb.base}/storage/v1/object/logos/${tenantId}/logo.${e}`, {
+        method: "DELETE",
+        headers: { apikey: sb.key, authorization: `Bearer ${sb.key}` },
+      }),
+    ));
+  }
+  for (const e of LOGO_EXTS) {
+    if (e === keep) continue;
+    const p = join(logoDir, `${tenantId}.${e}`);
+    if (existsSync(p)) unlinkSync(p);
+  }
+}
+
+async function storeLogo(tenant: { id: string; slug: string }, mime: string, bytes: Buffer) {
+  const kind = logoKind(mime, bytes.length);
+  if (!kind) return { ok: false as const, error: "PNG, JPG oder WebP, max. 5 MB." };
+  const sb = sbStorage();
+  if (sb) {
+    if (!logosBucket) {
+      const made = await fetch(`${sb.base}/storage/v1/bucket`, {
+        method: "POST",
+        headers: { apikey: sb.key, authorization: `Bearer ${sb.key}`, "content-type": "application/json" },
+        body: JSON.stringify({
+          id: "logos",
+          name: "logos",
+          public: true,
+          file_size_limit: 5_000_000,
+          allowed_mime_types: ["image/png", "image/jpeg", "image/webp"],
+        }),
+      });
+      if (made.ok || made.status === 409) logosBucket = true;
+    }
+    const object = `${tenant.id}/logo.${kind.ext}`;
+    const up = await fetch(`${sb.base}/storage/v1/object/logos/${object}`, {
+      method: "POST",
+      headers: {
+        apikey: sb.key,
+        authorization: `Bearer ${sb.key}`,
+        "content-type": kind.mime,
+        "x-upsert": "true",
+        "cache-control": "3600",
+      },
+      body: bytes,
+    });
+    if (!up.ok) {
+      console.error("storeLogo", up.status, await up.text());
+      return { ok: false as const, error: "Logo konnte nicht gespeichert werden." };
+    }
+    await wipeLogoFiles(tenant.id, kind.ext);
+    return { ok: true as const, url: `${sb.base}/storage/v1/object/public/logos/${object}?v=${Date.now()}` };
+  }
+  // ponytail: local PGlite has no Storage keys; disk until SUPABASE_* is set
+  if (process.env.VERCEL || process.env.NODE_ENV === "production") {
+    return { ok: false as const, error: "Supabase Storage nicht konfiguriert." };
+  }
+  mkdirSync(logoDir, { recursive: true });
+  await wipeLogoFiles(tenant.id, kind.ext);
+  writeFileSync(join(logoDir, `${tenant.id}.${kind.ext}`), bytes);
+  return { ok: true as const, url: `/api/public/${tenant.slug}/logo?v=${Date.now()}` };
+}
+
 api.get("/app/bootstrap", async (c) => {
   const tid = tenantId(c);
   const [tenant] = await db.select().from(tenants).where(eq(tenants.id, tid)).limit(1);
@@ -471,18 +550,20 @@ api.patch("/app/staff/:id", async (c) => {
 
 api.post("/app/services", async (c) => {
   const tid = tenantId(c);
-  const body = await readJson<{ name?: string; durationMin?: number; bufferMin?: number; staffIds?: string[]; categoryId?: string | null }>(c);
+  const body = await readJson<{ name?: string; durationMin?: number; bufferMin?: number; staffIds?: string[]; categoryId?: string | null; priceCents?: number | null }>(c);
   if (!body) return c.json({ error: "Ungültige Anfrage." }, 400);
   const name = clip(body.name ?? "", LEN.name);
   const mins = serviceMins(body.durationMin, body.bufferMin);
   if (!name || !mins) return c.json({ error: "Name und Dauer (5–480 Min.) nötig." }, 400);
+  const cents = priceCents(body.priceCents);
+  if (cents === false) return c.json({ error: "Preis ungültig." }, 400);
   const ids = body.staffIds ?? [];
   if (!(await staffIdsInTenant(tid, ids))) return c.json({ error: "Mitarbeiter ungültig." }, 400);
   const categoryId = body.categoryId || null;
   if (!(await categoryInTenant(tid, categoryId))) return c.json({ error: "Kategorie ungültig." }, 400);
   const [row] = await db
     .insert(services)
-    .values({ tenantId: tid, name, durationMin: mins.durationMin, bufferMin: mins.bufferMin, categoryId })
+    .values({ tenantId: tid, name, durationMin: mins.durationMin, bufferMin: mins.bufferMin, categoryId, priceCents: cents })
     .returning();
   if (ids.length) await db.insert(serviceStaff).values(ids.map((staffId) => ({ serviceId: row.id, staffId })));
   return c.json({ service: { ...row, staffIds: ids } }, 201);
@@ -498,6 +579,7 @@ api.patch("/app/services/:id", async (c) => {
     active?: boolean;
     staffIds?: string[];
     categoryId?: string | null;
+    priceCents?: number | null;
   }>(c);
   if (!body) return c.json({ error: "Ungültige Anfrage." }, 400);
   if (body.durationMin !== undefined && !inIntRange(body.durationMin, 5, 480)) {
@@ -506,6 +588,8 @@ api.patch("/app/services/:id", async (c) => {
   if (body.bufferMin !== undefined && !inIntRange(body.bufferMin, 0, 120)) {
     return c.json({ error: "Puffer muss 0–120 Minuten sein." }, 400);
   }
+  const cents = "priceCents" in body ? priceCents(body.priceCents) : undefined;
+  if (cents === false) return c.json({ error: "Preis ungültig." }, 400);
   if (body.staffIds && !(await staffIdsInTenant(tid, body.staffIds))) {
     return c.json({ error: "Mitarbeiter ungültig." }, 400);
   }
@@ -520,6 +604,7 @@ api.patch("/app/services/:id", async (c) => {
       ...(typeof body.bufferMin === "number" ? { bufferMin: body.bufferMin } : {}),
       ...(typeof body.active === "boolean" ? { active: body.active } : {}),
       ...("categoryId" in body ? { categoryId: body.categoryId || null } : {}),
+      ...(cents !== undefined ? { priceCents: cents } : {}),
     })
     .where(and(eq(services.id, id), eq(services.tenantId, tid)))
     .returning();
@@ -583,6 +668,26 @@ api.put("/app/hours", async (c) => {
   const hours = (body.hours ?? []).filter((h) => h.startHm && h.endHm);
   if (hours.length) await db.insert(openingHours).values(hours.map((h) => ({ ...h, tenantId: tid })));
   return c.json({ hours });
+});
+
+api.post("/app/logo", async (c) => {
+  const tid = tenantId(c);
+  const [tenant] = await db.select().from(tenants).where(eq(tenants.id, tid)).limit(1);
+  if (!tenant) return c.json({ error: "Mandant fehlt." }, 404);
+  const body = await c.req.parseBody();
+  const file = body.file;
+  if (!file || typeof file === "string") return c.json({ error: "Datei fehlt." }, 400);
+  const saved = await storeLogo(tenant, file.type, Buffer.from(await file.arrayBuffer()));
+  if (!saved.ok) return c.json({ error: saved.error }, 400);
+  await db.update(tenants).set({ logoUrl: saved.url }).where(eq(tenants.id, tid));
+  return c.json({ logoUrl: saved.url });
+});
+
+api.delete("/app/logo", async (c) => {
+  const tid = tenantId(c);
+  await wipeLogoFiles(tid);
+  await db.update(tenants).set({ logoUrl: null }).where(eq(tenants.id, tid));
+  return c.json({ ok: true });
 });
 
 api.get("/app/time-off", async (c) => {
@@ -716,6 +821,20 @@ api.post("/app/bookings/:id/cancel", async (c) => {
   return c.json({ booking: row });
 });
 
+api.get("/public/:slug/logo", async (c) => {
+  const [tenant] = await db.select({ id: tenants.id }).from(tenants).where(eq(tenants.slug, c.req.param("slug"))).limit(1);
+  if (!tenant) return c.json({ error: "Unbekannt." }, 404);
+  const types: Record<string, string> = { png: "image/png", jpg: "image/jpeg", webp: "image/webp" };
+  for (const ext of Object.keys(types)) {
+    const file = join(logoDir, `${tenant.id}.${ext}`);
+    if (!existsSync(file)) continue;
+    return new Response(readFileSync(file), {
+      headers: { "content-type": types[ext], "cache-control": "public, max-age=3600" },
+    });
+  }
+  return c.json({ error: "Kein Logo." }, 404);
+});
+
 api.get("/public/:slug", async (c) => {
   const [tenant] = await db.select().from(tenants).where(eq(tenants.slug, c.req.param("slug"))).limit(1);
   if (!tenant || !tenant.active) return c.json({ error: "Unbekannt." }, 404);
@@ -736,7 +855,7 @@ api.get("/public/:slug", async (c) => {
     .where(eq(serviceCategories.tenantId, tenant.id))
     .orderBy(serviceCategories.sort);
   return c.json({
-    tenant: { name: tenant.name, slug: tenant.slug, timezone: tenant.timezone },
+    tenant: { name: tenant.name, slug: tenant.slug, timezone: tenant.timezone, logoUrl: tenant.logoUrl },
     staff: staffRows.map((s) => ({ id: s.id, name: s.name })),
     categories,
     services: serviceRows.map((s) => ({
@@ -744,6 +863,7 @@ api.get("/public/:slug", async (c) => {
       name: s.name,
       durationMin: s.durationMin,
       categoryId: s.categoryId,
+      priceCents: s.priceCents,
       staffIds: links.filter((l) => l.serviceId === s.id).map((l) => l.staffId),
     })),
   });

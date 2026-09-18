@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useParams } from "react-router-dom";
 import { api, type Pub } from "./api";
+import { serviceLine } from "./ui";
 
 function berlinDay(iso: string) {
   return new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Berlin", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date(iso));
@@ -76,12 +77,20 @@ export function BookPage() {
   const staffForService = pub.staff.filter((s) => !service || service.staffIds.includes(s.id));
   const cats = (pub.categories ?? []).filter((c) => pub.services.some((s) => s.categoryId === c.id));
   const loose = pub.services.filter((s) => !s.categoryId);
-  const shown = cats.length
-    ? pub.services.filter((s) => (catId === "_" ? !s.categoryId : s.categoryId === catId))
-    : pub.services;
+  const blocks = [
+    ...cats.map((c) => ({ id: c.id, name: c.name, rows: pub.services.filter((s) => s.categoryId === c.id) })),
+    ...(loose.length ? [{ id: "_", name: "Weitere Leistungen", rows: loose }] : []),
+  ];
+  function pickService(id: string) {
+    setServiceId(id);
+    setStaffId("");
+    setSlot(null);
+    setStep(1);
+  }
 
   return (
     <div className="book">
+      {pub.tenant.logoUrl ? <img className="book-logo" src={pub.tenant.logoUrl} alt="" /> : null}
       <h1>{pub.tenant.name}</h1>
       <p className="lead">Termin buchen</p>
       {err ? <p className="err">{err}</p> : null}
@@ -93,33 +102,30 @@ export function BookPage() {
 
       {step === 0 && (
         pub.services.length ? (
-          <>
-            {cats.length ? (
-              <label className="field">
-                <span>Kategorie</span>
-                <select
-                  value={catId}
-                  aria-label="Kategorie"
-                  onChange={(e) => { setCatId(e.target.value); setServiceId(""); }}
-                >
-                  <option value="">Bitte wählen</option>
-                  {cats.map((c) => (
-                    <option key={c.id} value={c.id}>{c.name}</option>
-                  ))}
-                  {loose.length ? <option value="_">Weitere Leistungen</option> : null}
-                </select>
-              </label>
-            ) : null}
-            {cats.length && !catId ? (
-              <p className="lead">Erst die Kategorie wählen.</p>
-            ) : shown.length ? shown.map((s) => (
-              <button key={s.id} className={"choice" + (serviceId === s.id ? " on" : "")} type="button" onClick={() => { setServiceId(s.id); setStaffId(""); setSlot(null); setStep(1); }}>
-                {s.name} · {s.durationMin} Min.
-              </button>
-            )) : (
-              <p className="err">Keine Leistung in dieser Kategorie.</p>
-            )}
-          </>
+          cats.length ? (
+            blocks.map((b) => {
+              const on = catId === b.id;
+              return (
+                <div key={b.id} className={"cat-fold" + (on ? " open" : "")}>
+                  <button type="button" className="cat-fold-h" aria-expanded={on} onClick={() => setCatId(on ? "" : b.id)}>
+                    <span>{b.name}</span>
+                    <svg className="chev" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+                      <polyline points="6 9 12 15 18 9" />
+                    </svg>
+                  </button>
+                  {on ? b.rows.map((s) => (
+                    <button key={s.id} className={"choice" + (serviceId === s.id ? " on" : "")} type="button" onClick={() => pickService(s.id)}>
+                      {serviceLine(s)}
+                    </button>
+                  )) : null}
+                </div>
+              );
+            })
+          ) : pub.services.map((s) => (
+            <button key={s.id} className={"choice" + (serviceId === s.id ? " on" : "")} type="button" onClick={() => pickService(s.id)}>
+              {serviceLine(s)}
+            </button>
+          ))
         ) : (
           <p className="err">Noch keine Leistung angelegt. Im Mandanten-Konto unter Leistungen eine anlegen.</p>
         )

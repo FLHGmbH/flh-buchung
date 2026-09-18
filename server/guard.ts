@@ -37,6 +37,21 @@ export function serviceMins(durationMin: unknown, bufferMin: unknown) {
   return { durationMin: d, bufferMin: b };
 }
 
+export function priceCents(v: unknown): number | null | false {
+  if (v == null) return null;
+  if (typeof v !== "number" || !Number.isInteger(v) || v < 0 || v > 9_999_900) return false;
+  return v;
+}
+
+const LOGO_MIME: Record<string, string> = { "image/png": "png", "image/jpeg": "jpg", "image/webp": "webp" };
+export const LOGO_MAX = 5_000_000;
+
+export function logoKind(type: unknown, size: unknown) {
+  if (typeof type !== "string" || typeof size !== "number" || !Number.isInteger(size) || size < 1 || size > LOGO_MAX) return null;
+  const ext = LOGO_MIME[type];
+  return ext ? { ext, mime: type } : null;
+}
+
 export function inIntRange(n: unknown, min: number, max: number) {
   return typeof n === "number" && Number.isInteger(n) && n >= min && n <= max;
 }

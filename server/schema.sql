@@ -8,6 +8,7 @@ CREATE TABLE IF NOT EXISTS tenants (
   timezone text NOT NULL DEFAULT 'Europe/Berlin',
   active boolean NOT NULL DEFAULT true,
   min_notice_min integer NOT NULL DEFAULT 120,
+  logo_url text,
   created_at timestamptz NOT NULL DEFAULT now()
 );
 
@@ -49,6 +50,7 @@ CREATE TABLE IF NOT EXISTS services (
   name text NOT NULL,
   duration_min integer NOT NULL,
   buffer_min integer NOT NULL DEFAULT 0,
+  price_cents integer,
   active boolean NOT NULL DEFAULT true
 );
 

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { api, useApi, type Bootstrap, type Booking, type TimeOff } from "./api";
-import { Avatar, BookingModal, Modal, PageHead, svcTone } from "./ui";
+import { Avatar, BookingModal, centsFromEuro, euro, euroInput, Modal, PageHead, svcTone } from "./ui";
 
 function useBoot() {
   return useApi<Bootstrap>("/api/app/bootstrap");
@@ -226,7 +226,7 @@ export function StaffPage() {
 
 export function ServicesPage() {
   const boot = useBoot();
-  const blank = { name: "", durationMin: 45, bufferMin: 0, staffIds: [] as string[], active: true, categoryId: "" };
+  const blank = { name: "", durationMin: 45, bufferMin: 0, staffIds: [] as string[], active: true, categoryId: "", price: "" };
   const [form, setForm] = useState<(typeof blank & { id?: string }) | null>(null);
   const [catForm, setCatForm] = useState<{ id?: string; name: string } | null>(null);
   const [err, setErr] = useState("");
@@ -273,6 +273,7 @@ export function ServicesPage() {
               <th>Leistung</th>
               <th>Kategorie</th>
               <th>Dauer</th>
+              <th>Preis</th>
               <th>Puffer</th>
               <th>Wer</th>
               <th>Status</th>
@@ -284,12 +285,13 @@ export function ServicesPage() {
                 key={s.id}
                 onClick={() => {
                   setErr("");
-                  setForm({ id: s.id, name: s.name, durationMin: s.durationMin, bufferMin: s.bufferMin, staffIds: [...s.staffIds], active: s.active, categoryId: s.categoryId ?? "" });
+                  setForm({ id: s.id, name: s.name, durationMin: s.durationMin, bufferMin: s.bufferMin, staffIds: [...s.staffIds], active: s.active, categoryId: s.categoryId ?? "", price: euroInput(s.priceCents) });
                 }}
               >
                 <td>{s.name}</td>
                 <td>{catName(s.categoryId)}</td>
                 <td>{s.durationMin} min</td>
+                <td>{s.priceCents != null ? euro(s.priceCents) : "—"}</td>
                 <td>{s.bufferMin} min</td>
                 <td>{s.staffIds.map((id) => boot.staff.find((x) => x.id === id)?.name).filter(Boolean).join(", ") || "—"}</td>
                 <td>
@@ -352,8 +354,13 @@ export function ServicesPage() {
             onSubmit={(e) => {
               e.preventDefault();
               setErr("");
+              const priceCents = centsFromEuro(form.price);
+              if (priceCents === false) {
+                setErr("Preis ungültig.");
+                return;
+              }
               setPending(true);
-              const body = { name: form.name, durationMin: form.durationMin, bufferMin: form.bufferMin, staffIds: form.staffIds, active: form.active, categoryId: form.categoryId || null };
+              const body = { name: form.name, durationMin: form.durationMin, bufferMin: form.bufferMin, staffIds: form.staffIds, active: form.active, categoryId: form.categoryId || null, priceCents };
               const done = form.id ? api.patchService(form.id, body) : api.addService(body);
               done
                 .then(() => setForm(null))
@@ -386,6 +393,11 @@ export function ServicesPage() {
                 <input type="number" min={0} max={120} value={form.bufferMin} onChange={(e) => setForm({ ...form, bufferMin: Number(e.target.value) })} />
               </label>
             </div>
+            <label className="field">
+              <span>Preis (optional)</span>
+              <input inputMode="decimal" value={form.price} onChange={(e) => setForm({ ...form, price: e.target.value })} placeholder="z. B. 29,50" />
+            </label>
+            <p className="hint-line">Leer lassen, wenn kein Preis auf der Buchungsseite stehen soll. Euro, mit Komma oder Punkt.</p>
             <div className="field">
               <span>Zuständige Mitarbeiter</span>
               {boot.staff.map((s) => (
@@ -415,6 +427,8 @@ export function ServicesPage() {
 export function HoursPage() {
   const boot = useBoot();
   const [rows, setRows] = useState<{ weekday: number; startHm: string; endHm: string; open: boolean }[]>([]);
+  const [err, setErr] = useState("");
+  const [pending, setPending] = useState(false);
   useEffect(() => {
     if (!boot || rows.length) return;
     setRows([1, 2, 3, 4, 5, 6, 7].map((weekday) => {
@@ -425,8 +439,52 @@ export function HoursPage() {
   if (!boot) return <div className="page" />;
   return (
     <div className="page slim">
-      <PageHead title="Öffnungszeiten" lead="Geschlossene Tage erzeugen keine Slots." />
+      <PageHead title="Unternehmen" lead="Logo auf der Buchungsseite. Geschlossene Tage erzeugen keine Slots." />
+      {err ? <p className="err" role="alert">{err}</p> : null}
+      <article className="hours-card">
+        <div className="card-head">Logo</div>
+        <div className="card-body">
+          {boot.tenant.logoUrl ? <img className="logo-preview" src={boot.tenant.logoUrl} alt="" /> : <p className="hint-line">Noch kein Logo. Erscheint oben im Buchungs-iframe.</p>}
+          <label className="field">
+            <span>{boot.tenant.logoUrl ? "Ersetzen" : "Hochladen"} (PNG, JPG oder WebP, max. 5 MB)</span>
+            <input
+              type="file"
+              accept="image/png,image/jpeg,image/webp"
+              disabled={pending}
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                e.target.value = "";
+                if (!file) return;
+                setErr("");
+                setPending(true);
+                const body = new FormData();
+                body.append("file", file);
+                api.putLogo(body)
+                  .catch((ex) => setErr(ex instanceof Error ? ex.message : "Upload fehlgeschlagen."))
+                  .finally(() => setPending(false));
+              }}
+            />
+          </label>
+          {boot.tenant.logoUrl ? (
+            <button
+              className="linkish"
+              type="button"
+              disabled={pending}
+              onClick={() => {
+                setErr("");
+                setPending(true);
+                api.delLogo()
+                  .catch((ex) => setErr(ex instanceof Error ? ex.message : "Löschen fehlgeschlagen."))
+                  .finally(() => setPending(false));
+              }}
+            >
+              Logo löschen
+            </button>
+          ) : null}
+        </div>
+      </article>
       <div className="hours-card">
+        <div className="card-head">Öffnungszeiten</div>
         {rows.map((r, i) => (
           <div className="hours-row" key={r.weekday}>
             <label className="check">

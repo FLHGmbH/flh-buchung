@@ -1,4 +1,4 @@
-import { bookWindow, clip, hashToken, inIntRange, limited, mailFromAddr, passwordOk, platformAdminEmail, resetLimits, sbConfigured, securityHeaders, seedAllowed, serviceMins, siteOrigin } from "./guard.ts";
+import { bookWindow, clip, hashToken, inIntRange, limited, logoKind, mailFromAddr, passwordOk, platformAdminEmail, priceCents, resetLimits, sbConfigured, securityHeaders, seedAllowed, serviceMins, siteOrigin } from "./guard.ts";
 
 function assert(cond: unknown, msg: string) {
   if (!cond) throw new Error(msg);
@@ -17,6 +17,17 @@ assert(serviceMins(481, 0) === null, "duration too big");
 assert(serviceMins(45, -1) === null, "buffer neg");
 assert(serviceMins(45, 121) === null, "buffer too big");
 assert(serviceMins(45.5, 0) === null, "duration float");
+assert(priceCents(null) === null, "no price");
+assert(priceCents(2500) === 2500, "ok cents");
+assert(priceCents(0) === 0, "zero ok");
+assert(priceCents(-1) === false, "neg price");
+assert(priceCents(29.5) === false, "float cents");
+assert(logoKind("image/png", 12)?.ext === "png", "png ok");
+assert(logoKind("image/jpeg", 12)?.ext === "jpg", "jpg ok");
+assert(logoKind("image/svg+xml", 12) === null, "no svg");
+assert(logoKind("image/png", 0) === null, "empty file");
+assert(logoKind("image/png", 2_000_001)?.ext === "png", "5mb ok");
+assert(logoKind("image/png", 5_000_001) === null, "too big");
 assert(inIntRange(5, 5, 480) && !inIntRange(4, 5, 480), "range");
 
 const w = bookWindow("Europe/Berlin", new Date("2026-09-17T10:00:00+02:00"));

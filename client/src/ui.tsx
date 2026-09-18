@@ -43,6 +43,28 @@ export function svcTone(id: string) {
   return SVC[hash(id, SVC.length)];
 }
 
+export function euro(cents?: number | null) {
+  if (cents == null) return "";
+  return new Intl.NumberFormat("de-DE", { style: "currency", currency: "EUR" }).format(cents / 100);
+}
+
+export function euroInput(cents?: number | null) {
+  if (cents == null) return "";
+  return (cents / 100).toLocaleString("de-DE", { minimumFractionDigits: 0, maximumFractionDigits: 2 });
+}
+
+export function centsFromEuro(raw: string): number | null | false {
+  const t = raw.trim().replace(/\s/g, "").replace("€", "").replace(",", ".");
+  if (!t) return null;
+  const n = Number(t);
+  if (!Number.isFinite(n) || n < 0 || n > 99_999) return false;
+  return Math.round(n * 100);
+}
+
+export function serviceLine(s: { name: string; durationMin: number; priceCents?: number | null }) {
+  return s.priceCents != null ? `${s.name} · ${s.durationMin} Min. · ${euro(s.priceCents)}` : `${s.name} · ${s.durationMin} Min.`;
+}
+
 export function Modal({ title, onClose, children }: { title: string; onClose: () => void; children: ReactNode }) {
   return (
     <div className="modal-back" onClick={onClose} role="presentation">
@@ -188,7 +210,7 @@ export function BookingModal({
                       return (
                         <optgroup key={c.id} label={c.name}>
                           {rows.map((s) => (
-                            <option key={s.id} value={s.id}>{s.name}</option>
+                            <option key={s.id} value={s.id}>{serviceLine(s)}</option>
                           ))}
                         </optgroup>
                       );
@@ -196,13 +218,13 @@ export function BookingModal({
                     {services.some((s) => !s.categoryId) ? (
                       <optgroup label="Weitere">
                         {services.filter((s) => !s.categoryId).map((s) => (
-                          <option key={s.id} value={s.id}>{s.name}</option>
+                          <option key={s.id} value={s.id}>{serviceLine(s)}</option>
                         ))}
                       </optgroup>
                     ) : null}
                   </>
                 ) : services.map((s) => (
-                  <option key={s.id} value={s.id}>{s.name}</option>
+                  <option key={s.id} value={s.id}>{serviceLine(s)}</option>
                 ))}
               </select>
             </label>

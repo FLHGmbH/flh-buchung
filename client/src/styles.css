@@ -438,6 +438,7 @@ a { color: var(--petrol); }
   border: 1px solid #e5e7eb;
   border-radius: 10px;
   box-shadow: 0 1px 2px rgba(15, 23, 32, 0.04);
+  margin-bottom: 1.25rem;
 }
 .hours-row {
   display: flex;
@@ -671,6 +672,37 @@ a { color: var(--petrol); }
   color: var(--graphite);
   font-weight: 700;
 }
+.cat-fold {
+  border: 1px solid var(--graphite-25);
+  border-radius: 8px;
+  margin-bottom: 0.65rem;
+  overflow: hidden;
+  background: var(--white);
+}
+.cat-fold-h {
+  width: 100%;
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.85rem 1rem;
+  border: 0;
+  background: var(--white);
+  font-weight: 700;
+  text-align: left;
+  color: var(--ink);
+}
+.cat-fold.open .cat-fold-h { border-bottom: 1px solid var(--graphite-25); }
+.cat-fold-h .chev { flex-shrink: 0; color: #64748b; transition: transform 0.18s ease; }
+.cat-fold.open .cat-fold-h .chev { transform: rotate(180deg); }
+.cat-fold .choice {
+  margin: 0;
+  border: 0;
+  border-radius: 0;
+  border-top: 1px solid #f3f4f6;
+}
+.cat-fold .choice:hover, .cat-fold .choice.on { background: #f8fafc; }
 .days { display: grid; grid-template-columns: repeat(7, 1fr); gap: 0.35rem; margin-bottom: 1rem; }
 .days button {
   border: 1px solid var(--graphite-25);
@@ -689,6 +721,24 @@ a { color: var(--petrol); }
   min-height: 16rem;
 }
 .book h1 { overflow-wrap: anywhere; }
+.book-logo {
+  display: block;
+  max-height: 64px;
+  max-width: 220px;
+  width: auto;
+  height: auto;
+  object-fit: contain;
+  margin: 0 0 0.85rem;
+}
+.logo-preview {
+  display: block;
+  max-height: 72px;
+  max-width: 220px;
+  width: auto;
+  height: auto;
+  object-fit: contain;
+  margin: 0 0 1rem;
+}
 .book-foot {
   margin-top: 2rem;
   font-size: 0.75rem;
@@ -758,5 +808,5 @@ a { color: var(--petrol); }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .btn { transition: none; }
+  .btn, .cat-fold-h .chev { transition: none; }
 }

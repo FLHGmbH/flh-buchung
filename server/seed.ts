@@ -41,11 +41,11 @@ export async function seed() {
 
   const [cut] = await db
     .insert(services)
-    .values({ tenantId: tenant.id, name: "Haarschnitt", durationMin: 45, bufferMin: 0, categoryId: men.id })
+    .values({ tenantId: tenant.id, name: "Haarschnitt", durationMin: 45, bufferMin: 0, categoryId: men.id, priceCents: 3500 })
     .returning();
   const [color] = await db
     .insert(services)
-    .values({ tenantId: tenant.id, name: "Farbe", durationMin: 90, bufferMin: 15, categoryId: women.id })
+    .values({ tenantId: tenant.id, name: "Farbe", durationMin: 90, bufferMin: 15, categoryId: women.id, priceCents: 8900 })
     .returning();
   await db.insert(serviceStaff).values([
     { serviceId: cut.id, staffId: anna.id },

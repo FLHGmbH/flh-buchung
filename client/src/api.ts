@@ -93,16 +93,29 @@ export function useApi<T>(path: string | null) {
 }
 
 function bust(prefix: string) {
-  for (const k of [...mem.keys()]) if (k.startsWith(prefix)) mem.delete(k);
+  const keys = [...mem.keys()].filter((k) => k.startsWith(prefix));
   for (const k of [...wait.keys()]) if (k.startsWith(prefix)) wait.delete(k);
-  bump();
+  for (const k of keys) {
+    const p = req(k).then(
+      (d) => {
+        mem.set(k, d);
+        wait.delete(k);
+        bump();
+        return d;
+      },
+      () => {
+        wait.delete(k);
+      },
+    );
+    wait.set(k, p);
+  }
 }
 
 async function req<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(path, {
     credentials: "include",
-    headers: { "content-type": "application/json", ...(init?.headers ?? {}) },
     ...init,
+    headers: init?.body instanceof FormData ? init.headers : { "content-type": "application/json", ...(init?.headers ?? {}) },
   });
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error((data as { error?: string }).error || res.statusText);
@@ -154,6 +167,8 @@ export const api = {
   patchCategory: (id: string, body: object) => mutate(`/api/app/categories/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
   delCategory: (id: string) => mutate(`/api/app/categories/${id}`, { method: "DELETE" }),
   putHours: (hours: object[]) => mutate("/api/app/hours", { method: "PUT", body: JSON.stringify({ hours }) }),
+  putLogo: (body: FormData) => mutate("/api/app/logo", { method: "POST", body }),
+  delLogo: () => mutate("/api/app/logo", { method: "DELETE" }),
   timeOff: () => inflight<{ timeOff: TimeOff[] }>("/api/app/time-off"),
   addTimeOff: (body: object) => mutate("/api/app/time-off", { method: "POST", body: JSON.stringify(body) }),
   delTimeOff: (id: string) => mutate(`/api/app/time-off/${id}`, { method: "DELETE" }),
@@ -208,7 +223,7 @@ export type TenantRow = {
 
 export type Staff = { id: string; name: string; active: boolean };
 export type ServiceCategory = { id: string; name: string };
-export type Service = { id: string; name: string; durationMin: number; bufferMin: number; active: boolean; staffIds: string[]; categoryId?: string | null };
+export type Service = { id: string; name: string; durationMin: number; bufferMin: number; active: boolean; staffIds: string[]; categoryId?: string | null; priceCents?: number | null };
 export type Booking = {
   id: string;
   staffId: string;
@@ -223,7 +238,7 @@ export type Booking = {
 };
 export type TimeOff = { id: string; staffId: string; startsAt: string; endsAt: string; reason: string };
 export type Bootstrap = {
-  tenant: { id: string; name: string; timezone: string };
+  tenant: { id: string; name: string; timezone: string; logoUrl?: string | null };
   staff: Staff[];
   categories: ServiceCategory[];
   services: Service[];
@@ -236,8 +251,8 @@ export type WeekPayload = {
   timeOff: TimeOff[];
 };
 export type Pub = {
-  tenant: { name: string; slug: string; timezone: string };
+  tenant: { name: string; slug: string; timezone: string; logoUrl?: string | null };
   staff: { id: string; name: string }[];
   categories: ServiceCategory[];
-  services: { id: string; name: string; durationMin: number; categoryId?: string | null; staffIds: string[] }[];
+  services: { id: string; name: string; durationMin: number; categoryId?: string | null; priceCents?: number | null; staffIds: string[] }[];
 };
