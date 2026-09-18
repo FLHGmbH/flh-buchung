@@ -1,9 +1,9 @@
 import { and, desc, eq, gte, inArray, lt, lte, or } from "drizzle-orm";
 import { Hono } from "hono";
 import { DateTime } from "luxon";
-import { actorFrom, actorFromEmail, actorFromUserId, createSession, destroySession, ensurePlatformAdmin, hashPassword, sbPassword, verifyLogin, verifyPassword, type Actor } from "./auth.ts";
+import { actorFrom, actorFromEmail, actorFromUserId, createSession, destroySession, ensurePlatformAdmin, hashPassword, sbEnsureUser, sbPassword, verifyLogin, verifyPassword, type Actor } from "./auth.ts";
 import { db } from "./db.ts";
-import { BOOK_MAX, LEN, LOGIN_MAX, PIN_MAX, WINDOW_MS, bookWindow, clip, clientIp, inIntRange, limited, readJson, sbConfigured, serviceMins, siteOrigin } from "./guard.ts";
+import { BOOK_MAX, LEN, LOGIN_MAX, PIN_MAX, WINDOW_MS, bookWindow, clip, clientIp, inIntRange, limited, passwordOk, readJson, sbConfigured, serviceMins, siteOrigin } from "./guard.ts";
 import { newPin, PIN_MS, sendPinMail } from "./mail.ts";
 import {
   bookings,
@@ -226,6 +226,7 @@ api.post("/admin/tenants", async (c) => {
     slug?: string;
     adminName?: string;
     adminEmail?: string;
+    adminPassword?: string;
   }>(c);
   if (!body) return c.json({ error: "Ungültige Anfrage." }, 400);
   const origin = siteOrigin(c.req.url);
@@ -233,19 +234,28 @@ api.post("/admin/tenants", async (c) => {
   const name = clip(body.name ?? "", LEN.name);
   const slug = slugify(body.slug?.trim() || name);
   const adminEmail = clip(body.adminEmail?.toLowerCase() ?? "", LEN.email);
+  const adminPassword = body.adminPassword ?? "";
   const adminName = clip(body.adminName ?? "", LEN.name) || name;
-  if (!name || !slug || !adminEmail.includes("@")) {
-    return c.json({ error: "Name, Slug und KD-E-Mail nötig." }, 400);
+  if (!name || !slug || !adminEmail.includes("@") || !passwordOk(adminPassword)) {
+    return c.json({ error: "Name, Slug, E-Mail und Passwort (min. 8 Zeichen) nötig." }, 400);
   }
   const [dup] = await db.select().from(tenants).where(eq(tenants.slug, slug)).limit(1);
   if (dup) return c.json({ error: "Slug schon vergeben." }, 409);
   const [mailTaken] = await db.select().from(users).where(eq(users.email, adminEmail)).limit(1);
   if (mailTaken) return c.json({ error: "Diese E-Mail hat schon einen Account." }, 409);
+  if (sbConfigured()) {
+    const created = await sbEnsureUser(adminEmail, adminPassword, adminName);
+    if (!created.ok) return c.json({ error: created.error }, created.status);
+  }
 
   const [tenant] = await db.insert(tenants).values({ name, slug }).returning();
   const [user] = await db
     .insert(users)
-    .values({ email: adminEmail, name: adminName, passwordHash: "" })
+    .values({
+      email: adminEmail,
+      name: adminName,
+      passwordHash: sbConfigured() ? "" : await hashPassword(adminPassword),
+    })
     .returning();
   await db.insert(memberships).values({ userId: user.id, tenantId: tenant.id, role: "tenant_admin" });
   const hours = [1, 2, 3, 4, 5].map((weekday) => ({
@@ -290,6 +300,31 @@ api.patch("/admin/tenants/:id", async (c) => {
   const [tenant] = await db.update(tenants).set(patch).where(eq(tenants.id, id)).returning();
   if (!tenant) return c.json({ error: "Nicht gefunden." }, 404);
   return c.json({ tenant });
+});
+
+api.patch("/admin/tenants/:id/password", async (c) => {
+  const id = c.req.param("id");
+  const body = await readJson<{ userId?: string; password?: string }>(c);
+  if (!body) return c.json({ error: "Ungültige Anfrage." }, 400);
+  if (!body.userId || !passwordOk(body.password ?? "")) {
+    return c.json({ error: "Nutzer und Passwort (min. 8 Zeichen) nötig." }, 400);
+  }
+  const [mem] = await db
+    .select()
+    .from(memberships)
+    .where(and(eq(memberships.userId, body.userId), eq(memberships.tenantId, id), eq(memberships.role, "tenant_admin")))
+    .limit(1);
+  if (!mem) return c.json({ error: "Nicht gefunden." }, 404);
+  const [user] = await db.select().from(users).where(eq(users.id, body.userId)).limit(1);
+  if (!user) return c.json({ error: "Nicht gefunden." }, 404);
+  if (sbConfigured()) {
+    const ensured = await sbEnsureUser(user.email, body.password as string, user.name);
+    if (!ensured.ok) return c.json({ error: ensured.error }, ensured.status);
+    await db.update(users).set({ passwordHash: "" }).where(eq(users.id, user.id));
+  } else {
+    await db.update(users).set({ passwordHash: await hashPassword(body.password as string) }).where(eq(users.id, user.id));
+  }
+  return c.json({ ok: true });
 });
 
 function tenantId(c: { get: (k: "actor") => Actor }) {

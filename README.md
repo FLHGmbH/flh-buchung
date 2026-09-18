@@ -17,9 +17,9 @@ npm run dev
 
 - App: http://localhost:5173
 - Lokal ohne Supabase-Auth: FLH `admin@flh.digital` / `Test1234!`, KD `salon@demo.test` / `Test1234!` (nur PGlite)
-- Live: Login über Supabase Auth. FLH `mail@flh-mediadigital.de`. KD-User zuerst unter Authentication → Users anlegen, dann Mandant mit derselben E-Mail.
+- Live: Login über Supabase Auth. FLH `mail@flh-mediadigital.de`. Neuer Mandant legt den KD-Login in Auth mit an (`SUPABASE_SERVICE_ROLE_KEY`).
 - iframe-Demo: http://localhost:5173/b/salon-demo
 
 ## Vercel
 
-`PUBLIC_ORIGIN` auf die Vercel-URL setzen (iframe-Snippets). `DATABASE_URL` = Supabase Transaction-Pooler (IPv4, Port 6543). PIN-Mails: Mittwald SMTP (`SMTP_HOST`/`SMTP_PORT`/`SMTP_USER`/`SMTP_PASS`, `MAIL_FROM` = Postfachadresse). Login: `SUPABASE_URL` + `SUPABASE_ANON_KEY`, FLH-Admin `AUTH_ADMIN_EMAIL`.
+`PUBLIC_ORIGIN` auf die Vercel-URL setzen (iframe-Snippets). `DATABASE_URL` = Supabase Transaction-Pooler (IPv4, Port 6543). PIN-Mails: Mittwald SMTP (`SMTP_HOST`/`SMTP_PORT`/`SMTP_USER`/`SMTP_PASS`, `MAIL_FROM` = Postfachadresse). Login: `SUPABASE_URL` + `SUPABASE_ANON_KEY`, Mandanten anlegen braucht `SUPABASE_SERVICE_ROLE_KEY`. FLH-Admin `AUTH_ADMIN_EMAIL`.

@@ -43,6 +43,52 @@ export async function sbPassword(email: string, password: string) {
   return res.ok;
 }
 
+export async function sbCreateUser(email: string, password: string, name: string) {
+  const cfg = sbAdmin();
+  if (!cfg) return { ok: false as const, status: 503, error: "SUPABASE_SERVICE_ROLE_KEY fehlt." };
+  const res = await fetch(`${cfg.base}/auth/v1/admin/users`, {
+    method: "POST",
+    headers: cfg.headers,
+    body: JSON.stringify({ email, password, email_confirm: true, user_metadata: { name } }),
+  });
+  if (res.ok) return { ok: true as const };
+  const text = await res.text();
+  if (res.status === 422 || /already|registered|exists/i.test(text)) {
+    return { ok: false as const, status: 409, error: "Diese E-Mail hat schon einen Login." };
+  }
+  console.error("sbCreateUser", res.status, text);
+  return { ok: false as const, status: 502, error: "Auth-User konnte nicht angelegt werden." };
+}
+
+function sbAdmin() {
+  const base = process.env.SUPABASE_URL?.trim().replace(/\/$/, "");
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY?.trim();
+  if (!base || !key) return null;
+  return { base, headers: { apikey: key, authorization: `Bearer ${key}`, "content-type": "application/json" } };
+}
+
+export async function sbEnsureUser(email: string, password: string, name: string) {
+  const created = await sbCreateUser(email, password, name);
+  if (created.ok || created.status !== 409) return created;
+  const cfg = sbAdmin();
+  if (!cfg) return created;
+  const list = await fetch(`${cfg.base}/auth/v1/admin/users?per_page=200`, { headers: cfg.headers });
+  if (!list.ok) return { ok: false as const, status: 502, error: "Auth-User nicht gefunden." };
+  const data = (await list.json()) as { users?: { id: string; email?: string }[] };
+  const row = data.users?.find((u) => u.email?.toLowerCase() === email);
+  if (!row) return { ok: false as const, status: 502, error: "Auth-User nicht gefunden." };
+  const upd = await fetch(`${cfg.base}/auth/v1/admin/users/${row.id}`, {
+    method: "PUT",
+    headers: cfg.headers,
+    body: JSON.stringify({ password, email_confirm: true, user_metadata: { name } }),
+  });
+  if (!upd.ok) {
+    console.error("sbEnsureUser", upd.status, await upd.text());
+    return { ok: false as const, status: 502, error: "Auth-Passwort konnte nicht gesetzt werden." };
+  }
+  return { ok: true as const };
+}
+
 function cookieOpts() {
   return {
     httpOnly: true,
