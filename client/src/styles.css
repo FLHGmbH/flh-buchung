@@ -342,7 +342,7 @@ a { color: var(--petrol); }
   backdrop-filter: blur(3px);
   display: grid;
   place-items: center;
-  z-index: 40;
+  z-index: 80;
   padding: 1.5rem;
 }
 .modal {

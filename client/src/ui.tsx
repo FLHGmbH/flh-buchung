@@ -1,4 +1,5 @@
 import { useRef, useState, type FormEvent, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import { api, type Booking, type Service, type ServiceCategory, type Staff } from "./api";
 import { gsap, reduced, useGSAP } from "./motion";
 
@@ -73,7 +74,7 @@ export function Modal({ title, onClose, children }: { title: string; onClose: ()
     const box = back?.querySelector(".modal");
     if (!back || !box || reduced()) return;
     gsap.fromTo(back, { opacity: 0 }, { opacity: 1, duration: 0.22, ease: "power2.out" });
-    gsap.fromTo(box, { y: 18, opacity: 0, scale: 0.96 }, { y: 0, opacity: 1, scale: 1, duration: 0.34, ease: "back.out(0.7)" });
+    gsap.fromTo(box, { y: 18, opacity: 0, scale: 0.96 }, { y: 0, opacity: 1, scale: 1, duration: 0.34, ease: "back.out(0.7)", clearProps: "transform" });
   }, { scope: root });
   const close = contextSafe(() => {
     const back = root.current;
@@ -86,7 +87,7 @@ export function Modal({ title, onClose, children }: { title: string; onClose: ()
       .to(box, { y: 10, opacity: 0, scale: 0.98, duration: 0.18, ease: "power2.in" })
       .to(back, { opacity: 0, duration: 0.16, ease: "power2.in" }, "<");
   });
-  return (
+  return createPortal(
     <div className="modal-back" ref={root} onClick={close} role="presentation">
       <div className="modal" role="dialog" aria-labelledby="modal-title" onClick={(e) => e.stopPropagation()}>
         <div className="modal-head">
@@ -97,7 +98,8 @@ export function Modal({ title, onClose, children }: { title: string; onClose: ()
         </div>
         {children}
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
 

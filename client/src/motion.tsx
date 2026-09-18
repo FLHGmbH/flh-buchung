@@ -14,9 +14,9 @@ export function reduced() {
 
 export function tickSaved() {
   if (reduced()) return;
-  const el = document.querySelector(".page-motion, .book");
+  const el = document.querySelector(".page-head, .book h1");
   if (!el) return;
-  gsap.fromTo(el, { filter: "brightness(1.06)" }, { filter: "brightness(1)", duration: 0.45, ease: "power2.out", overwrite: "auto" });
+  gsap.fromTo(el, { y: 3 }, { y: 0, duration: 0.4, ease: "power3.out", overwrite: "auto", clearProps: "transform" });
 }
 
 export function Fold({ open, children }: { open: boolean; children: ReactNode }) {
@@ -57,9 +57,9 @@ export function PageMotion() {
     const root = ref.current;
     if (!root || reduced()) return;
     const bits = root.querySelectorAll(".page-head, .hours-card, .card-table, .staff-card, .stat-row, .admin-grid > *, .cal-wrap, .empty, .panel");
-    gsap.fromTo(root, { opacity: 0, y: 14 }, { opacity: 1, y: 0, duration: 0.36, ease: "power3.out" });
+    gsap.fromTo(root, { opacity: 0, y: 14 }, { opacity: 1, y: 0, duration: 0.36, ease: "power3.out", clearProps: "transform" });
     if (bits.length) {
-      gsap.fromTo(bits, { opacity: 0, y: 10 }, { opacity: 1, y: 0, duration: 0.4, stagger: 0.045, delay: 0.05, ease: "power3.out" });
+      gsap.fromTo(bits, { opacity: 0, y: 10 }, { opacity: 1, y: 0, duration: 0.4, stagger: 0.045, delay: 0.05, ease: "power3.out", clearProps: "transform" });
     }
   }, { scope: ref, dependencies: [loc.pathname] });
   return (
