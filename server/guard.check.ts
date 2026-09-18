@@ -1,4 +1,4 @@
-import { bookWindow, clip, hashToken, inIntRange, limited, mailFromAddr, passwordOk, resetLimits, securityHeaders, seedAllowed, serviceMins, siteOrigin } from "./guard.ts";
+import { bookWindow, clip, hashToken, inIntRange, limited, mailFromAddr, passwordOk, platformAdminEmail, resetLimits, sbConfigured, securityHeaders, seedAllowed, serviceMins, siteOrigin } from "./guard.ts";
 
 function assert(cond: unknown, msg: string) {
   if (!cond) throw new Error(msg);
@@ -56,5 +56,9 @@ assert(!seedAllowed({ NODE_ENV: "development", DATABASE_URL: "postgres://x.poole
 assert(mailFromAddr("onboarding@resend.dev") === null, "no resend");
 assert(mailFromAddr("") === null, "empty from");
 assert(mailFromAddr("Buchung <mail@flh.digital>") === "Buchung <mail@flh.digital>", "mail from header");
+assert(!sbConfigured({}), "sb off");
+assert(sbConfigured({ SUPABASE_URL: "https://x.supabase.co", SUPABASE_ANON_KEY: "k" }), "sb on");
+assert(platformAdminEmail({}) === "mail@flh-mediadigital.de", "admin default");
+assert(platformAdminEmail({ AUTH_ADMIN_EMAIL: "A@B.de" }) === "a@b.de", "admin env");
 
 console.log("guard.check ok");

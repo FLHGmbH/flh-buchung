@@ -4,7 +4,7 @@ import { eq } from "drizzle-orm";
 import type { Context } from "hono";
 import { deleteCookie, getCookie, setCookie } from "hono/cookie";
 import { db } from "./db.ts";
-import { hashToken } from "./guard.ts";
+import { hashToken, platformAdminEmail } from "./guard.ts";
 import { memberships, sessions, tenants, users } from "./schema.ts";
 
 const scryptAsync = promisify(scrypt);
@@ -29,6 +29,18 @@ let padHash: Promise<string> | null = null;
 export async function verifyLogin(pw: string, stored: string | null | undefined) {
   padHash ??= hashPassword("timing-pad");
   return verifyPassword(pw, stored || (await padHash));
+}
+
+export async function sbPassword(email: string, password: string) {
+  const base = process.env.SUPABASE_URL?.trim().replace(/\/$/, "");
+  const key = process.env.SUPABASE_ANON_KEY?.trim();
+  if (!base || !key) return false;
+  const res = await fetch(`${base}/auth/v1/token?grant_type=password`, {
+    method: "POST",
+    headers: { apikey: key, authorization: `Bearer ${key}`, "content-type": "application/json" },
+    body: JSON.stringify({ email, password }),
+  });
+  return res.ok;
 }
 
 function cookieOpts() {
@@ -65,6 +77,25 @@ export type Actor = {
   tenantId: string | null;
   tenantName: string | null;
 };
+
+export async function actorFromEmail(email: string): Promise<Actor | null> {
+  const [user] = await db.select().from(users).where(eq(users.email, email)).limit(1);
+  if (!user) return null;
+  return actorFromUserId(user.id);
+}
+
+export async function ensurePlatformAdmin(email: string): Promise<Actor | null> {
+  if (email !== platformAdminEmail()) return null;
+  let [user] = await db.select().from(users).where(eq(users.email, email)).limit(1);
+  if (!user) {
+    [user] = await db.insert(users).values({ email, name: "FLH DIGITAL", passwordHash: "" }).returning();
+  }
+  const mems = await db.select().from(memberships).where(eq(memberships.userId, user.id));
+  if (!mems.some((m) => m.role === "platform_admin")) {
+    await db.insert(memberships).values({ userId: user.id, tenantId: null, role: "platform_admin" });
+  }
+  return actorFromUserId(user.id);
+}
 
 export async function actorFromUserId(userId: string): Promise<Actor | null> {
   const [user] = await db.select().from(users).where(eq(users.id, userId)).limit(1);

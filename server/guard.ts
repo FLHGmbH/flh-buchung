@@ -98,3 +98,11 @@ export function mailFromAddr(from: string | undefined) {
   if (!v || /@resend\.dev$/i.test(v)) return null;
   return v;
 }
+
+export function sbConfigured(env: NodeJS.ProcessEnv = process.env) {
+  return Boolean(env.SUPABASE_URL?.trim() && env.SUPABASE_ANON_KEY?.trim());
+}
+
+export function platformAdminEmail(env: NodeJS.ProcessEnv = process.env) {
+  return (env.AUTH_ADMIN_EMAIL ?? "mail@flh-mediadigital.de").trim().toLowerCase();
+}

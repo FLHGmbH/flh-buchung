@@ -27,7 +27,7 @@ export function LoginPage({ onLogin }: { onLogin: (a: Actor) => void }) {
       <form className="panel" onSubmit={submit}>
         <Mark />
         <h1>Anmelden</h1>
-        <p>Eine Tür für Mandanten und FLH.</p>
+        <p>Eine Tür für Mandanten und FLH. Login über Supabase Auth.</p>
         {err ? <p className="err">{err}</p> : null}
         <label className="field">
           <span>E-Mail</span>

@@ -1,9 +1,9 @@
 import { and, desc, eq, gte, inArray, lt, lte, or } from "drizzle-orm";
 import { Hono } from "hono";
 import { DateTime } from "luxon";
-import { actorFrom, actorFromUserId, createSession, destroySession, hashPassword, verifyLogin, verifyPassword, type Actor } from "./auth.ts";
+import { actorFrom, actorFromEmail, actorFromUserId, createSession, destroySession, ensurePlatformAdmin, hashPassword, sbPassword, verifyLogin, verifyPassword, type Actor } from "./auth.ts";
 import { db } from "./db.ts";
-import { BOOK_MAX, LEN, LOGIN_MAX, PIN_MAX, WINDOW_MS, bookWindow, clip, clientIp, inIntRange, limited, passwordOk, readJson, serviceMins, siteOrigin } from "./guard.ts";
+import { BOOK_MAX, LEN, LOGIN_MAX, PIN_MAX, WINDOW_MS, bookWindow, clip, clientIp, inIntRange, limited, readJson, sbConfigured, serviceMins, siteOrigin } from "./guard.ts";
 import { newPin, PIN_MS, sendPinMail } from "./mail.ts";
 import {
   bookings,
@@ -15,7 +15,6 @@ import {
   tenants,
   timeOff,
   users,
-  sessions,
 } from "./schema.ts";
 import { freeSlots } from "./slots.ts";
 
@@ -157,11 +156,25 @@ api.post("/auth/login", async (c) => {
   let body: { email?: string; password?: string } | null = await readJson(c);
   if (!body) return c.json({ error: "Ungültige Anfrage." }, 400);
   const email = clip(body.email?.toLowerCase() ?? "", LEN.email);
-  const [user] = await db.select().from(users).where(eq(users.email, email)).limit(1);
-  const ok = await verifyLogin(body.password ?? "", user?.passwordHash);
-  if (!user || !ok) {
-    return c.json({ error: "E-Mail oder Passwort stimmt nicht." }, 401);
+  const password = body.password ?? "";
+  if (sbConfigured()) {
+    let authed = false;
+    try {
+      authed = await sbPassword(email, password);
+    } catch (e) {
+      console.error(e);
+      return c.json({ error: "Anmeldung gerade nicht möglich." }, 503);
+    }
+    if (!authed) return c.json({ error: "E-Mail oder Passwort stimmt nicht." }, 401);
+    const actor = (await actorFromEmail(email)) ?? (await ensurePlatformAdmin(email));
+    if (!actor) return c.json({ error: "Kein Zugang. Mandant zuerst anlegen, Login in Supabase Auth." }, 403);
+    await createSession(c, actor.id);
+    return c.json({ actor });
   }
+  if (process.env.VERCEL) return c.json({ error: "Auth nicht konfiguriert." }, 503);
+  const [user] = await db.select().from(users).where(eq(users.email, email)).limit(1);
+  const ok = await verifyLogin(password, user?.passwordHash);
+  if (!user || !ok) return c.json({ error: "E-Mail oder Passwort stimmt nicht." }, 401);
   await createSession(c, user.id);
   const actor = await actorFromUserId(user.id);
   return c.json({ actor });
@@ -176,22 +189,6 @@ api.get("/me", async (c) => {
   const actor = await actorFrom(c);
   if (!actor) return c.json({ actor: null });
   return c.json({ actor });
-});
-
-api.patch("/me/password", async (c) => {
-  const actor = await actorFrom(c);
-  if (!actor) return c.json({ error: "Nicht angemeldet." }, 401);
-  const body = await readJson<{ current?: string; next?: string }>(c);
-  if (!body) return c.json({ error: "Ungültige Anfrage." }, 400);
-  if (!passwordOk(body.next ?? "")) return c.json({ error: "Neues Passwort min. 8 Zeichen." }, 400);
-  const [user] = await db.select().from(users).where(eq(users.id, actor.id)).limit(1);
-  if (!user || !(await verifyPassword(body.current ?? "", user.passwordHash))) {
-    return c.json({ error: "Aktuelles Passwort stimmt nicht." }, 400);
-  }
-  await db.update(users).set({ passwordHash: await hashPassword(body.next as string) }).where(eq(users.id, actor.id));
-  await db.delete(sessions).where(eq(sessions.userId, actor.id));
-  await createSession(c, actor.id);
-  return c.json({ ok: true });
 });
 
 api.use("/admin/*", async (c, next) => {
@@ -229,7 +226,6 @@ api.post("/admin/tenants", async (c) => {
     slug?: string;
     adminName?: string;
     adminEmail?: string;
-    adminPassword?: string;
   }>(c);
   if (!body) return c.json({ error: "Ungültige Anfrage." }, 400);
   const origin = siteOrigin(c.req.url);
@@ -237,10 +233,9 @@ api.post("/admin/tenants", async (c) => {
   const name = clip(body.name ?? "", LEN.name);
   const slug = slugify(body.slug?.trim() || name);
   const adminEmail = clip(body.adminEmail?.toLowerCase() ?? "", LEN.email);
-  const adminPassword = body.adminPassword ?? "";
   const adminName = clip(body.adminName ?? "", LEN.name) || name;
-  if (!name || !slug || !adminEmail.includes("@") || !passwordOk(adminPassword)) {
-    return c.json({ error: "Name, Slug, E-Mail und Passwort (min. 8 Zeichen) nötig." }, 400);
+  if (!name || !slug || !adminEmail.includes("@")) {
+    return c.json({ error: "Name, Slug und KD-E-Mail nötig." }, 400);
   }
   const [dup] = await db.select().from(tenants).where(eq(tenants.slug, slug)).limit(1);
   if (dup) return c.json({ error: "Slug schon vergeben." }, 409);
@@ -250,7 +245,7 @@ api.post("/admin/tenants", async (c) => {
   const [tenant] = await db.insert(tenants).values({ name, slug }).returning();
   const [user] = await db
     .insert(users)
-    .values({ email: adminEmail, name: adminName, passwordHash: await hashPassword(adminPassword) })
+    .values({ email: adminEmail, name: adminName, passwordHash: "" })
     .returning();
   await db.insert(memberships).values({ userId: user.id, tenantId: tenant.id, role: "tenant_admin" });
   const hours = [1, 2, 3, 4, 5].map((weekday) => ({
@@ -295,24 +290,6 @@ api.patch("/admin/tenants/:id", async (c) => {
   const [tenant] = await db.update(tenants).set(patch).where(eq(tenants.id, id)).returning();
   if (!tenant) return c.json({ error: "Nicht gefunden." }, 404);
   return c.json({ tenant });
-});
-
-api.patch("/admin/tenants/:id/password", async (c) => {
-  const id = c.req.param("id");
-  const body = await readJson<{ userId?: string; password?: string }>(c);
-  if (!body) return c.json({ error: "Ungültige Anfrage." }, 400);
-  if (!body.userId || !passwordOk(body.password ?? "")) {
-    return c.json({ error: "Nutzer und Passwort (min. 8 Zeichen) nötig." }, 400);
-  }
-  const [mem] = await db
-    .select()
-    .from(memberships)
-    .where(and(eq(memberships.userId, body.userId), eq(memberships.tenantId, id), eq(memberships.role, "tenant_admin")))
-    .limit(1);
-  if (!mem) return c.json({ error: "Nicht gefunden." }, 404);
-  await db.update(users).set({ passwordHash: await hashPassword(body.password as string) }).where(eq(users.id, body.userId));
-  await db.delete(sessions).where(eq(sessions.userId, body.userId));
-  return c.json({ ok: true });
 });
 
 function tenantId(c: { get: (k: "actor") => Actor }) {
