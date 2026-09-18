@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+
+<html class="h-full bg-[#f4f7f8]" lang="de"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>FLH DIGITAL - Leistungen</title>
+<!-- Tailwind CSS v3 with Plugins -->
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<!-- Tailwind Custom Configuration -->
+<script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            brand: {
+              sidebar: '#0c3539',
+              active: '#1a5257',
+              button: '#154e53',
+              buttonHover: '#114145',
+              accent: '#267980'
+            }
+          }
+        }
+      }
+    }
+  </script>
+<!-- Custom Styling for Hexagon Icon and Layout Specifics -->
+<style data-purpose="custom-shapes">
+    .clip-hexagon {
+      clip-path: polygon(50% 0%, 93% 25%, 93% 75%, 50% 100%, 7% 75%, 7% 25%);
+    }
+  </style>
+</head>
+<body class="h-full font-sans antialiased text-slate-800 flex overflow-hidden">
+<!-- BEGIN: AppSidebar -->
+<aside class="w-64 bg-brand-sidebar flex flex-col justify-between flex-shrink-0 text-slate-300 select-none z-10" data-purpose="main-navigation-sidebar">
+<!-- Top Branding & Navigation -->
+<div>
+<!-- Brand Logo FL Hexagon -->
+<div class="pt-8 pb-6 flex flex-col items-center justify-center">
+<div class="w-14 h-14 bg-[#1b555b] clip-hexagon flex items-center justify-center shadow-md">
+<span class="text-white font-bold text-lg tracking-wider">FL</span>
+</div>
+<h1 class="text-white font-bold text-sm tracking-widest mt-4">FLH DIGITAL</h1>
+</div>
+<!-- Navigation Links -->
+<nav class="mt-4 space-y-1">
+<!-- Kalender -->
+<a class="flex items-center gap-3.5 px-6 py-3 text-slate-300 hover:text-white hover:bg-brand-active/40 text-sm font-medium transition-colors" href="#">
+<svg class="w-4 h-4 text-slate-300" fill="none" stroke="currentColor" viewbox="0 0 24 24">
+<path d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path>
+</svg>
+<span>Kalender</span>
+</a>
+<!-- Termine -->
+<a class="flex items-center gap-3.5 px-6 py-3 text-slate-300 hover:text-white hover:bg-brand-active/40 text-sm font-medium transition-colors" href="#">
+<svg class="w-4 h-4 text-slate-300" fill="none" stroke="currentColor" viewbox="0 0 24 24">
+<path d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path>
+</svg>
+<span>Termine</span>
+</a>
+<!-- Mitarbeiter -->
+<a class="flex items-center gap-3.5 px-6 py-3 text-slate-300 hover:text-white hover:bg-brand-active/40 text-sm font-medium transition-colors" href="#">
+<svg class="w-4 h-4 text-slate-300" fill="none" stroke="currentColor" viewbox="0 0 24 24">
+<path d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path>
+</svg>
+<span>Mitarbeiter</span>
+</a>
+<!-- Sperren -->
+<a class="flex items-center gap-3.5 px-6 py-3 text-slate-300 hover:text-white hover:bg-brand-active/40 text-sm font-medium transition-colors" href="#">
+<svg class="w-4 h-4 text-slate-300" fill="none" stroke="currentColor" viewbox="0 0 24 24">
+<path d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path>
+</svg>
+<span>Sperren</span>
+</a>
+<!-- Leistungen (Active Page) -->
+<a class="flex items-center gap-3.5 px-6 py-3 bg-brand-active text-white text-sm font-medium border-l-4 border-teal-300" href="#">
+<svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" viewbox="0 0 24 24">
+<path d="M14.121 14.121L19 19m-7-7l7-7m-7 7l-2.879 2.879a3 3 0 11-4.242-4.242L7.757 7.757m0 0l2.122-2.122M7.757 7.757L5.636 5.636" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path>
+</svg>
+<span>Leistungen</span>
+</a>
+<!-- Öffnungszeiten -->
+<a class="flex items-center gap-3.5 px-6 py-3 text-slate-300 hover:text-white hover:bg-brand-active/40 text-sm font-medium transition-colors" href="#">
+<svg class="w-4 h-4 text-slate-300" fill="none" stroke="currentColor" viewbox="0 0 24 24">
+<path d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path>
+<path d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path>
+</svg>
+<span>Öffnungszeiten</span>
+</a>
+</nav>
+</div>
+<!-- Bottom User Profile and Logout -->
+<div class="px-6 pb-6 pt-4 border-t border-brand-active/40">
+<div class="flex items-center gap-3 mb-4">
+<div class="w-10 h-10 rounded-full bg-[#1e585e] flex items-center justify-center text-white font-semibold text-sm">
+          M
+        </div>
+<div>
+<div class="text-white text-sm font-semibold leading-tight">Maurice</div>
+<div class="text-xs text-slate-400 leading-tight">Maison Coiffure</div>
+</div>
+</div>
+<a class="flex items-center gap-2.5 text-xs text-slate-400 hover:text-white transition-colors" href="#">
+<svg class="w-4 h-4" fill="none" stroke="currentColor" viewbox="0 0 24 24">
+<path d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path>
+</svg>
+<span>Abmelden</span>
+</a>
+</div>
+</aside>
+<!-- END: AppSidebar -->
+<!-- BEGIN: MainContentWrapper -->
+<main class="flex-1 relative overflow-y-auto bg-[#f4f7f8]" data-purpose="background-main-table-view">
+<!-- Top Header and Action Button -->
+<div class="px-10 pt-8 pb-6 flex items-center justify-between">
+<h2 class="text-2xl font-bold text-slate-900 tracking-tight">Leistungen</h2>
+<button class="inline-flex items-center gap-2 bg-brand-button hover:bg-brand-buttonHover text-white px-4 py-2 rounded-lg text-sm font-medium shadow-sm transition" type="button">
+<svg class="w-4 h-4" fill="none" stroke="currentColor" viewbox="0 0 24 24">
+<path d="M12 4v16m8-8H4" stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5"></path>
+</svg>
+<span>Leistung</span>
+</button>
+</div>
+<!-- Data Table Container -->
+<div class="px-10">
+<div class="bg-white rounded-xl border border-slate-200/80 shadow-sm overflow-hidden">
+<table class="w-full text-left border-collapse text-sm">
+<thead>
+<tr class="border-b border-slate-100 bg-[#f8fafb]">
+<th class="py-3.5 px-6 font-medium text-brand-accent text-xs" scope="col">Leistung</th>
+<th class="py-3.5 px-6 font-medium text-brand-accent text-xs" scope="col">Dauer</th>
+<th class="py-3.5 px-6 font-medium text-brand-accent text-xs" scope="col">Puffer</th>
+<th class="py-3.5 px-6 font-medium text-brand-accent text-xs" scope="col">Preis</th>
+<th class="py-3.5 px-6 font-medium text-brand-accent text-xs" scope="col">Wer</th>
+</tr>
+</thead>
+<tbody class="divide-y divide-slate-100 text-slate-700">
+<!-- Row 1 -->
+<tr class="hover:bg-slate-50/50">
+<td class="py-4 px-6 font-normal">Termin</td>
+<td class="py-4 px-6 text-slate-600">45 min</td>
+<td class="py-4 px-6 text-slate-600">0 min</td>
+<td class="py-4 px-6 text-slate-600">45,00 €</td>
+<td class="py-4 px-6 text-slate-600">Jonas</td>
+</tr>
+<!-- Row 2 -->
+<tr class="hover:bg-slate-50/50">
+<td class="py-4 px-6 font-normal">Maschinen Schnitt</td>
+<td class="py-4 px-6 text-slate-600">20 min</td>
+<td class="py-4 px-6 text-slate-600">5 min</td>
+<td class="py-4 px-6 text-slate-600">25,00 €</td>
+<td class="py-4 px-6 text-slate-600">Jonas</td>
+</tr>
+<!-- Row 3 -->
+<tr class="hover:bg-slate-50/50">
+<td class="py-4 px-6 font-normal">Dauerwelle</td>
+<td class="py-4 px-6 text-slate-600">90 min</td>
+<td class="py-4 px-6 text-slate-600">10 min</td>
+<td class="py-4 px-6 text-slate-600">85,00 €</td>
+<td class="py-4 px-6 text-slate-600">Jonas</td>
+</tr>
+<!-- Row 4 -->
+<tr class="hover:bg-slate-50/50">
+<td class="py-4 px-6 font-normal">Haarfarbe</td>
+<td class="py-4 px-6 text-slate-600">60 min</td>
+<td class="py-4 px-6 text-slate-600">15 min</td>
+<td class="py-4 px-6 text-slate-600">65,00 €</td>
+<td class="py-4 px-6 text-slate-600">Jonas</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+</main>
+<!-- END: MainContentWrapper -->
+<!-- BEGIN: ModalOverlay -->
+<div class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm" data-purpose="modal-container-backdrop">
+<!-- BEGIN: ModalCard -->
+<div class="w-full max-w-[540px] bg-white rounded-2xl shadow-2xl overflow-hidden border border-slate-100 flex flex-col" data-purpose="neue-leistung-modal">
+<!-- Modal Header -->
+<div class="px-7 py-5 flex items-center justify-between border-b border-slate-100">
+<h3 class="text-xl font-bold text-slate-800 tracking-tight">Neue Leistung</h3>
+<!-- Close Button -->
+<button aria-label="Schließen" class="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 flex items-center justify-center text-slate-500 hover:text-slate-700 transition" type="button">
+<svg class="w-4 h-4" fill="none" stroke="currentColor" viewbox="0 0 24 24">
+<path d="M6 18L18 6M6 6l12 12" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path>
+</svg>
+</button>
+</div>
+<!-- Modal Body (Form Fields) -->
+<form class="px-7 py-5 space-y-4" data-purpose="create-service-form" onsubmit="event.preventDefault();">
+<!-- 1. Name der Leistung -->
+<div>
+<label class="block text-xs font-semibold text-slate-700 mb-1.5" for="service-name">
+            Name der Leistung
+          </label>
+<input class="w-full text-sm rounded-lg border-slate-200 px-3.5 py-2.5 text-slate-800 placeholder-slate-400 focus:ring-1 focus:ring-brand-button focus:border-brand-button shadow-xs" id="service-name" name="service-name" placeholder="z.B. Bartpflege / Herrenhaarschnitt" type="text"/>
+</div>
+<!-- 2. Dauer & Pufferzeit (Side by Side) -->
+<div class="grid grid-cols-2 gap-4">
+<!-- Left: Dauer -->
+<div>
+<label class="block text-xs font-semibold text-slate-700 mb-1.5" for="duration">
+              Dauer
+            </label>
+<input class="w-full text-sm rounded-lg border-slate-200 px-3.5 py-2.5 text-slate-800 placeholder-slate-400 focus:ring-1 focus:ring-brand-button focus:border-brand-button shadow-xs" id="duration" name="duration" type="text" value="30 min"/>
+</div>
+<!-- Right: Pufferzeit -->
+<div>
+<label class="block text-xs font-semibold text-slate-700 mb-1.5" for="buffer-time">
+              Pufferzeit
+            </label>
+<input class="w-full text-sm rounded-lg border-slate-200 px-3.5 py-2.5 text-slate-800 placeholder-slate-400 focus:ring-1 focus:ring-brand-button focus:border-brand-button shadow-xs" id="buffer-time" name="buffer-time" type="text" value="5 min"/>
+</div>
+</div>
+<!-- 3. Preis (€) -->
+<div>
+<label class="block text-xs font-semibold text-slate-700 mb-1.5" for="price">
+            Preis (€)
+          </label>
+<input class="w-full text-sm rounded-lg border-slate-200 px-3.5 py-2.5 text-slate-800 placeholder-slate-400 focus:ring-1 focus:ring-brand-button focus:border-brand-button shadow-xs" id="price" name="price" placeholder="z.B. 35,00 €" type="text"/>
+</div>
+<!-- 4. Zuweisung / Zuständige Mitarbeiter -->
+<div>
+<label class="block text-xs font-semibold text-slate-700 mb-1.5" for="staff-assignment">
+            Zuständige Mitarbeiter
+          </label>
+<div class="relative">
+<select class="w-full text-sm rounded-lg border-slate-200 px-3.5 py-2.5 text-slate-800 focus:ring-1 focus:ring-brand-button focus:border-brand-button shadow-xs appearance-none pr-10" id="staff-assignment" name="staff-assignment">
+<option value="all">Alle Mitarbeiter</option>
+<option value="jonas">Jonas Weber</option>
+<option value="tom">Tom Berger</option>
+<option value="anna">Anna Keller</option>
+</select>
+<div class="pointer-events-none absolute inset-y-0 right-0 flex items-center px-3.5 text-slate-400">
+<svg class="w-4 h-4" fill="none" stroke="currentColor" viewbox="0 0 24 24">
+<path d="M19 9l-7 7-7-7" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path>
+</svg>
+</div>
+</div>
+</div>
+<!-- 5. Notizen / Beschreibung -->
+<div>
+<label class="block text-xs font-semibold text-slate-700 mb-1.5" for="description">
+            Beschreibung / Notizen
+          </label>
+<textarea class="w-full text-sm rounded-lg border-slate-200 px-3.5 py-2.5 text-slate-800 placeholder-slate-400 focus:ring-1 focus:ring-brand-button focus:border-brand-button shadow-xs resize-none" id="description" name="description" placeholder="Optionale Notizen oder Beschreibung..." rows="3"></textarea>
+</div>
+<!-- Modal Footer Actions -->
+<div class="pt-4 flex items-center justify-between border-t border-slate-100 mt-6">
+<button class="px-6 py-2.5 rounded-lg border border-slate-200 text-slate-700 text-sm font-medium hover:bg-slate-50 transition" type="button">
+            Abbrechen
+          </button>
+<button class="px-6 py-2.5 rounded-lg bg-brand-button hover:bg-brand-buttonHover text-white text-sm font-medium shadow-sm transition" type="submit">
+            Leistung erstellen
+          </button>
+</div>
+</form>
+</div>
+<!-- END: ModalCard -->
+</div>
+<!-- END: ModalOverlay -->
+</body></html>

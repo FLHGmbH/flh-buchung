@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+
+<html lang="de"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Leistungen - FLH DIGITAL</title>
+<!-- Tailwind CSS v3 -->
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            sidebar: {
+              DEFAULT: '#09323b',
+              active: '#134750',
+              hover: '#0e3a44',
+              border: '#16454f',
+              icon: '#93b6bc',
+              text: '#cfdfe2'
+            },
+            badge: {
+              bg: '#164954',
+              user: '#194f5a'
+            },
+            brand: {
+              petrol: '#0d3b42'
+            }
+          },
+          fontFamily: {
+            sans: ['Inter', 'system-ui', '-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'Roboto', 'sans-serif']
+          }
+        }
+      }
+    }
+  </script>
+<style data-purpose="custom-hex-shape">
+    /* Hexagon styling for logo icon */
+    .hexagon-badge {
+      clip-path: polygon(50% 0%, 93% 25%, 93% 75%, 50% 100%, 7% 75%, 7% 25%);
+    }
+  </style>
+</head>
+<body class="bg-[#f8fafc] font-sans text-slate-800 antialiased min-h-screen flex flex-row overflow-x-hidden">
+<!-- BEGIN: Sidebar -->
+<aside class="w-[260px] min-w-[260px] bg-[#09323b] flex-shrink-0 flex flex-col justify-between select-none z-20 min-h-screen" data-purpose="main-sidebar">
+<!-- Top section: Logo & Navigation Links -->
+<div class="flex flex-col">
+<!-- Logo Container -->
+<div class="pt-8 pb-7 flex flex-col items-center justify-center">
+<div class="hexagon-badge bg-[#164954] w-14 h-16 flex items-center justify-center shadow-inner mb-3">
+<span class="text-white font-bold text-lg tracking-wider">FL</span>
+</div>
+<span class="text-white font-bold text-sm tracking-wider uppercase">FLH DIGITAL</span>
+</div>
+<!-- Navigation Links -->
+<nav aria-label="Hauptnavigation" class="mt-2 flex flex-col w-full">
+<!-- Kalender -->
+<a class="flex items-center px-6 py-3.5 text-sidebar-text hover:bg-sidebar-hover text-sm font-medium transition-colors" href="#">
+<svg class="w-4 h-4 mr-3 text-sidebar-icon" fill="none" stroke="currentColor" stroke-width="2" viewbox="0 0 24 24">
+<rect height="18" rx="2" ry="2" width="18" x="3" y="4"></rect>
+<line x1="16" x2="16" y1="2" y2="6"></line>
+<line x1="8" x2="8" y1="2" y2="6"></line>
+<line x1="3" x2="21" y1="10" y2="10"></line>
+</svg>
+          Kalender
+        </a>
+<!-- Termine -->
+<a class="flex items-center px-6 py-3.5 text-sidebar-text hover:bg-sidebar-hover text-sm font-medium transition-colors" href="#">
+<svg class="w-4 h-4 mr-3 text-sidebar-icon" fill="none" stroke="currentColor" stroke-width="2" viewbox="0 0 24 24">
+<circle cx="12" cy="12" r="10"></circle>
+<polyline points="12 6 12 12 16 14"></polyline>
+</svg>
+          Termine
+        </a>
+<!-- Mitarbeiter -->
+<a class="flex items-center px-6 py-3.5 text-sidebar-text hover:bg-sidebar-hover text-sm font-medium transition-colors" href="#">
+<svg class="w-4 h-4 mr-3 text-sidebar-icon" fill="none" stroke="currentColor" stroke-width="2" viewbox="0 0 24 24">
+<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+<circle cx="9" cy="7" r="4"></circle>
+<path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
+<path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+</svg>
+          Mitarbeiter
+        </a>
+<!-- Sperren -->
+<a class="flex items-center px-6 py-3.5 text-sidebar-text hover:bg-sidebar-hover text-sm font-medium transition-colors" href="#">
+<svg class="w-4 h-4 mr-3 text-sidebar-icon" fill="none" stroke="currentColor" stroke-width="2" viewbox="0 0 24 24">
+<rect height="11" rx="2" ry="2" width="18" x="3" y="11"></rect>
+<path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+</svg>
+          Sperren
+        </a>
+<!-- Leistungen (Active State) -->
+<a aria-current="page" class="flex items-center px-6 py-3.5 bg-sidebar-active text-white text-sm font-medium transition-colors" href="#">
+<svg class="w-4 h-4 mr-3 text-white" fill="none" stroke="currentColor" stroke-width="2" viewbox="0 0 24 24">
+<circle cx="6" cy="6" r="3"></circle>
+<circle cx="6" cy="18" r="3"></circle>
+<line x1="20" x2="8.12" y1="4" y2="15.88"></line>
+<line x1="14.47" x2="20" y1="14.48" y2="20"></line>
+<line x1="8.12" x2="12" y1="8.12" y2="12"></line>
+</svg>
+          Leistungen
+        </a>
+<!-- Öffnungszeiten -->
+<a class="flex items-center px-6 py-3.5 text-sidebar-text hover:bg-sidebar-hover text-sm font-medium transition-colors" href="#">
+<svg class="w-4 h-4 mr-3 text-sidebar-icon" fill="none" stroke="currentColor" stroke-width="2" viewbox="0 0 24 24">
+<circle cx="12" cy="12" r="3"></circle>
+<path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+</svg>
+          Öffnungszeiten
+        </a>
+</nav>
+</div>
+<!-- Bottom Profile & Logout Section -->
+<div class="px-6 pb-6 pt-4 flex flex-col" data-purpose="user-profile-section">
+<!-- Profile Item -->
+<div class="flex items-center space-x-3 mb-6">
+<div class="w-10 h-10 rounded-full bg-[#194f5a] text-white flex items-center justify-center font-medium text-sm flex-shrink-0">
+          M
+        </div>
+<div class="flex flex-col">
+<span class="text-white text-sm font-semibold leading-tight">Maurice</span>
+<span class="text-xs text-sidebar-icon leading-tight mt-0.5">Maison Coiffure</span>
+</div>
+</div>
+<div class="w-full border-t border-[#16454f] mb-4"></div>
+<!-- Abmelden / Logout Button -->
+<a class="flex items-center text-sidebar-text hover:text-white text-xs font-medium transition-colors" href="#">
+<svg class="w-4 h-4 mr-2.5 text-sidebar-icon" fill="none" stroke="currentColor" stroke-width="2" viewbox="0 0 24 24">
+<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+<polyline points="16 17 21 12 16 7"></polyline>
+<line x1="21" x2="9" y1="12" y2="12"></line>
+</svg>
+        Abmelden
+      </a>
+</div>
+</aside>
+<!-- END: Sidebar -->
+<!-- BEGIN: Main Content Area -->
+<main class="flex-1 flex flex-col px-12 py-10 min-w-0" data-purpose="main-layout">
+<!-- Header Section with Page Title and Action Button -->
+<header class="flex items-center justify-between mb-8" data-purpose="content-header">
+<h1 class="text-3xl font-bold text-slate-900 tracking-tight">Leistungen</h1>
+<!-- Primary Action Button: + Leistung -->
+<button class="inline-flex items-center bg-[#0d3b42] hover:bg-[#092d33] text-white text-sm font-medium px-5 py-2.5 rounded-lg shadow-sm transition-colors focus:outline-none focus:ring-2 focus:ring-[#0d3b42] focus:ring-offset-2" type="button">
+<svg class="w-4 h-4 mr-2 stroke-[2.5]" fill="none" stroke="currentColor" viewbox="0 0 24 24">
+<line x1="12" x2="12" y1="5" y2="19"></line>
+<line x1="5" x2="19" y1="12" y2="12"></line>
+</svg>
+        Leistung
+      </button>
+</header>
+<!-- BEGIN: Services Table Card -->
+<section class="bg-white rounded-xl border border-slate-200/80 shadow-sm overflow-hidden w-full" data-purpose="services-table-card">
+<table class="w-full text-left border-collapse" id="services-table">
+<thead>
+<tr class="border-b border-slate-100 text-[#0d3b42] text-sm font-semibold tracking-normal">
+<th class="py-4 px-6 w-1/4" scope="col">Leistung</th>
+<th class="py-4 px-6 w-1/6" scope="col">Dauer</th>
+<th class="py-4 px-6 w-1/6" scope="col">Puffer</th>
+<th class="py-4 px-6 w-1/6" scope="col">Preis</th>
+<th class="py-4 px-6 w-1/4" scope="col">Wer</th>
+</tr>
+</thead>
+<tbody class="divide-y divide-slate-100 text-sm text-slate-700">
+<!-- Row 1: Termin -->
+<tr class="hover:bg-slate-50/60 transition-colors">
+<td class="py-4 px-6 font-medium text-slate-900">Termin</td>
+<td class="py-4 px-6 font-normal">45 min</td>
+<td class="py-4 px-6 font-normal">0 min</td>
+<td class="py-4 px-6 font-normal">45,00 €</td>
+<td class="py-4 px-6 font-normal">Jonas</td>
+</tr>
+<!-- Row 2: Maschinen Schnitt -->
+<tr class="hover:bg-slate-50/60 transition-colors">
+<td class="py-4 px-6 font-medium text-slate-900">Maschinen Schnitt</td>
+<td class="py-4 px-6 font-normal">20 min</td>
+<td class="py-4 px-6 font-normal">5 min</td>
+<td class="py-4 px-6 font-normal">25,00 €</td>
+<td class="py-4 px-6 font-normal">Jonas</td>
+</tr>
+<!-- Row 3: Dauerwelle -->
+<tr class="hover:bg-slate-50/60 transition-colors">
+<td class="py-4 px-6 font-medium text-slate-900">Dauerwelle</td>
+<td class="py-4 px-6 font-normal">90 min</td>
+<td class="py-4 px-6 font-normal">10 min</td>
+<td class="py-4 px-6 font-normal">85,00 €</td>
+<td class="py-4 px-6 font-normal">Jonas</td>
+</tr>
+<!-- Row 4: Haarfarbe -->
+<tr class="hover:bg-slate-50/60 transition-colors">
+<td class="py-4 px-6 font-medium text-slate-900">Haarfarbe</td>
+<td class="py-4 px-6 font-normal">60 min</td>
+<td class="py-4 px-6 font-normal">15 min</td>
+<td class="py-4 px-6 font-normal">65,00 €</td>
+<td class="py-4 px-6 font-normal">Jonas</td>
+</tr>
+</tbody>
+</table>
+</section>
+<!-- END: Services Table Card -->
+</main>
+<!-- END: Main Content Area -->
+</body></html>

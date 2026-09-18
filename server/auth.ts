@@ -31,14 +31,42 @@ export async function verifyLogin(pw: string, stored: string | null | undefined)
   return verifyPassword(pw, stored || (await padHash));
 }
 
-export async function sbPassword(email: string, password: string) {
+function sbPublic() {
   const base = process.env.SUPABASE_URL?.trim().replace(/\/$/, "");
   const key = process.env.SUPABASE_ANON_KEY?.trim();
-  if (!base || !key) return false;
-  const res = await fetch(`${base}/auth/v1/token?grant_type=password`, {
+  if (!base || !key) return null;
+  return { base, key };
+}
+
+export async function sbPassword(email: string, password: string) {
+  const cfg = sbPublic();
+  if (!cfg) return false;
+  const res = await fetch(`${cfg.base}/auth/v1/token?grant_type=password`, {
     method: "POST",
-    headers: { apikey: key, authorization: `Bearer ${key}`, "content-type": "application/json" },
+    headers: { apikey: cfg.key, authorization: `Bearer ${cfg.key}`, "content-type": "application/json" },
     body: JSON.stringify({ email, password }),
+  });
+  return res.ok;
+}
+
+export async function sbRecover(email: string, redirectTo: string) {
+  const cfg = sbPublic();
+  if (!cfg) return false;
+  const res = await fetch(`${cfg.base}/auth/v1/recover?redirect_to=${encodeURIComponent(redirectTo)}`, {
+    method: "POST",
+    headers: { apikey: cfg.key, authorization: `Bearer ${cfg.key}`, "content-type": "application/json", "redirect-to": redirectTo },
+    body: JSON.stringify({ email }),
+  });
+  return res.ok;
+}
+
+export async function sbSetPassword(accessToken: string, password: string) {
+  const cfg = sbPublic();
+  if (!cfg) return false;
+  const res = await fetch(`${cfg.base}/auth/v1/user`, {
+    method: "PUT",
+    headers: { apikey: cfg.key, authorization: `Bearer ${accessToken}`, "content-type": "application/json" },
+    body: JSON.stringify({ password }),
   });
   return res.ok;
 }

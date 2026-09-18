@@ -1,7 +1,7 @@
 import { and, desc, eq, gte, inArray, lt, lte, or } from "drizzle-orm";
 import { Hono } from "hono";
 import { DateTime } from "luxon";
-import { actorFrom, actorFromEmail, actorFromUserId, createSession, destroySession, ensurePlatformAdmin, hashPassword, sbEnsureUser, sbPassword, verifyLogin, verifyPassword, type Actor } from "./auth.ts";
+import { actorFrom, actorFromEmail, actorFromUserId, createSession, destroySession, ensurePlatformAdmin, hashPassword, sbEnsureUser, sbPassword, sbRecover, sbSetPassword, verifyLogin, verifyPassword, type Actor } from "./auth.ts";
 import { db } from "./db.ts";
 import { BOOK_MAX, LEN, LOGIN_MAX, PIN_MAX, WINDOW_MS, bookWindow, clip, clientIp, inIntRange, limited, passwordOk, readJson, sbConfigured, serviceMins, siteOrigin } from "./guard.ts";
 import { newPin, PIN_MS, sendPinMail } from "./mail.ts";
@@ -182,6 +182,47 @@ api.post("/auth/login", async (c) => {
 
 api.post("/auth/logout", async (c) => {
   await destroySession(c);
+  return c.json({ ok: true });
+});
+
+api.post("/auth/recover", async (c) => {
+  if (limited(`recover:${clientIp(c.req)}`, LOGIN_MAX, WINDOW_MS)) {
+    return c.json({ error: "Zu viele Versuche. Bitte später erneut." }, 429);
+  }
+  if (!sbConfigured()) return c.json({ error: "Auth nicht konfiguriert." }, 503);
+  const body = await readJson<{ email?: string }>(c);
+  if (!body) return c.json({ error: "Ungültige Anfrage." }, 400);
+  const email = clip(body.email?.toLowerCase() ?? "", LEN.email);
+  if (!email.includes("@")) return c.json({ error: "E-Mail fehlt." }, 400);
+  const origin = siteOrigin(c.req.url);
+  if (!origin) return c.json({ error: "PUBLIC_ORIGIN fehlt." }, 503);
+  try {
+    const ok = await sbRecover(email, `${origin}/reset`);
+    if (!ok) return c.json({ error: "Mail gerade nicht möglich." }, 503);
+  } catch (e) {
+    console.error(e);
+    return c.json({ error: "Mail gerade nicht möglich." }, 503);
+  }
+  return c.json({ ok: true });
+});
+
+api.post("/auth/reset", async (c) => {
+  if (limited(`reset:${clientIp(c.req)}`, LOGIN_MAX, WINDOW_MS)) {
+    return c.json({ error: "Zu viele Versuche. Bitte später erneut." }, 429);
+  }
+  if (!sbConfigured()) return c.json({ error: "Auth nicht konfiguriert." }, 503);
+  const body = await readJson<{ accessToken?: string; password?: string }>(c);
+  if (!body) return c.json({ error: "Ungültige Anfrage." }, 400);
+  const accessToken = body.accessToken ?? "";
+  if (!accessToken || accessToken.length > 4096) return c.json({ error: "Link ungültig oder abgelaufen." }, 400);
+  if (!passwordOk(body.password ?? "")) return c.json({ error: "Passwort mindestens 8 Zeichen." }, 400);
+  try {
+    const ok = await sbSetPassword(accessToken, body.password as string);
+    if (!ok) return c.json({ error: "Link ungültig oder abgelaufen." }, 401);
+  } catch (e) {
+    console.error(e);
+    return c.json({ error: "Passwort konnte nicht gesetzt werden." }, 503);
+  }
   return c.json({ ok: true });
 });
 

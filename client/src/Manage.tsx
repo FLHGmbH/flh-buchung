@@ -1,49 +1,225 @@
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { api, useApi, type Bootstrap, type Booking, type TimeOff } from "./api";
+import { Avatar, BookingModal, Modal, PageHead, svcTone } from "./ui";
 
 function useBoot() {
   return useApi<Bootstrap>("/api/app/bootstrap");
 }
 
-export function StaffPage() {
+const DAYS = ["", "Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag", "Samstag", "Sonntag"];
+const REASONS = ["Urlaub", "Krankheit", "Fortbildung", "Privat"];
+
+function when(iso: string) {
+  const d = new Date(iso);
+  const day = new Intl.DateTimeFormat("de-DE", { weekday: "short", day: "2-digit", month: "2-digit", year: "numeric" }).format(d);
+  const time = new Intl.DateTimeFormat("de-DE", { hour: "2-digit", minute: "2-digit" }).format(d);
+  return { day, time };
+}
+
+function span(a: string, b: string) {
+  return `${new Date(a).toLocaleString("de-DE")} – ${new Date(b).toLocaleString("de-DE")}`;
+}
+
+function nextOff(staffId: string, rows: TimeOff[]) {
+  const now = Date.now();
+  return rows
+    .filter((o) => o.staffId === staffId && new Date(o.endsAt).getTime() > now)
+    .sort((a, b) => new Date(a.startsAt).getTime() - new Date(b.startsAt).getTime())[0];
+}
+
+function dm(iso: string) {
+  return new Intl.DateTimeFormat("de-DE", { day: "2-digit", month: "2-digit", year: "2-digit" }).format(new Date(iso));
+}
+
+export function BookingsPage() {
   const boot = useBoot();
-  const [name, setName] = useState("");
+  const list = useApi<{ bookings: Booking[] }>("/api/app/bookings");
+  const rows = list?.bookings ?? [];
+  const [q, setQ] = useState("");
+  const [open, setOpen] = useState(false);
+  const shown = useMemo(() => {
+    const s = q.trim().toLowerCase();
+    if (!s) return rows;
+    return rows.filter((b) => `${b.guestName} ${b.guestEmail} ${b.guestPhone}`.toLowerCase().includes(s));
+  }, [rows, q]);
   if (!boot) return <div className="page" />;
   return (
     <div className="page">
-      <h1>Mitarbeiter</h1>
-      <p className="lead">Ressourcen für den Kalender, ohne eigenen Login.</p>
-      <form
-        className="toolbar"
-        onSubmit={(e) => {
-          e.preventDefault();
-          api.addStaff(name).then(() => setName(""));
-        }}
-      >
-        <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Name" required />
-        <button className="btn" type="submit">Anlegen</button>
-      </form>
-      <table className="table">
-        <thead><tr><th>Name</th><th>Status</th></tr></thead>
-        <tbody>
-          {boot.staff.map((s) => (
-            <tr key={s.id}>
-              <td>{s.name}</td>
-              <td>
-                <button className="btn quiet" type="button" onClick={() => api.patchStaff(s.id, { active: !s.active })}>
-                  {s.active ? "Aktiv" : "Inaktiv"}
-                </button>
-              </td>
+      <header className="page-head">
+        <div className="head-tools">
+          <h1>Termine</h1>
+          <label className="search">
+            <span aria-hidden="true">⌕</span>
+            <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Name oder E-Mail suchen" />
+          </label>
+        </div>
+        <button className="btn" type="button" onClick={() => setOpen(true)}>+ Neuer Termin</button>
+      </header>
+      <div className="card-table">
+        <table className="table quiet">
+          <thead>
+            <tr>
+              <th>Wann</th>
+              <th>Gast</th>
+              <th>Leistung</th>
+              <th>Wer</th>
+              <th>Status</th>
+              <th />
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {shown.map((b) => {
+              const w = when(b.startsAt);
+              const svc = boot.services.find((s) => s.id === b.serviceId);
+              const who = boot.staff.find((s) => s.id === b.staffId);
+              const chip = svcTone(b.serviceId);
+              const ok = b.status === "confirmed";
+              const gone = b.status === "cancelled";
+              return (
+                <tr key={b.id}>
+                  <td>
+                    <div className="when-day">{w.day}</div>
+                    <div className="when-time">{w.time}</div>
+                  </td>
+                  <td>
+                    <div className="who-cell">
+                      <Avatar name={b.guestName} size={32} />
+                      <div>
+                        <strong>{b.guestName}</strong>
+                        {b.guestEmail ? <small>{b.guestEmail}</small> : null}
+                        {b.guestPhone ? <small>{b.guestPhone}</small> : null}
+                      </div>
+                    </div>
+                  </td>
+                  <td>
+                    <span className="pill" style={{ background: chip.bg, color: chip.fg, borderColor: chip.bd }}>{svc?.name ?? "—"}</span>
+                  </td>
+                  <td>
+                    {who ? (
+                      <div className="who-cell tight">
+                        <Avatar name={who.name} size={24} />
+                        <span>{who.name}</span>
+                      </div>
+                    ) : "—"}
+                  </td>
+                  <td>
+                    <span className={"status" + (ok ? " is-ok" : gone ? " is-off" : "")}>
+                      <i />
+                      {ok ? "Bestätigt" : gone ? "Storniert" : "PIN offen"}
+                    </span>
+                  </td>
+                  <td className="end">
+                    {gone ? null : (
+                      <button className="linkish" type="button" onClick={() => api.cancelBooking(b.id)}>Stornieren</button>
+                    )}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+      {open ? (
+        <BookingModal
+          staff={boot.staff}
+          services={boot.services}
+          initial={{ date: new Date().toISOString().slice(0, 10), time: "09:00", staffId: boot.staff[0]?.id, serviceId: boot.services[0]?.id }}
+          onClose={() => setOpen(false)}
+          onSaved={() => setOpen(false)}
+        />
+      ) : null}
+    </div>
+  );
+}
+
+export function StaffPage() {
+  const boot = useBoot();
+  const off = useApi<{ timeOff: TimeOff[] }>("/api/app/time-off");
+  const [name, setName] = useState("");
+  const [open, setOpen] = useState(false);
+  const [edit, setEdit] = useState<{ id: string; name: string; active: boolean } | null>(null);
+  if (!boot) return <div className="page" />;
+  return (
+    <div className="page">
+      <PageHead
+        title="Mitarbeiter"
+        aside={<button className="btn" type="button" onClick={() => setOpen(true)}>+ Mitarbeiter</button>}
+      />
+      <div className="staff-grid">
+        {boot.staff.map((s) => {
+          const abs = nextOff(s.id, off?.timeOff ?? []);
+          const sick = /krank/i.test(abs?.reason ?? "");
+          return (
+            <article className="staff-card" key={s.id}>
+              <button className="gear" type="button" aria-label="Einstellungen" onClick={() => setEdit({ id: s.id, name: s.name, active: s.active })}>
+                ⚙
+              </button>
+              <Avatar name={s.name} size={96} />
+              <h2>{s.name}</h2>
+              <span className={"tag" + (s.active ? "" : " mute")}>{s.active ? "Aktiv" : "Inaktiv"}</span>
+              <div className={"abs" + (sick ? " sick" : "")}>
+                {abs ? (
+                  <>
+                    <small>{abs.reason || "Abwesenheit"}</small>
+                    <strong>{dm(abs.startsAt)} – {dm(abs.endsAt)}</strong>
+                  </>
+                ) : (
+                  <span>Keine Abwesenheit</span>
+                )}
+              </div>
+            </article>
+          );
+        })}
+      </div>
+      {open ? (
+        <Modal title="Neuer Mitarbeiter" onClose={() => setOpen(false)}>
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              api.addStaff(name).then(() => { setName(""); setOpen(false); });
+            }}
+          >
+            <label className="field">
+              <span>Name</span>
+              <input value={name} onChange={(e) => setName(e.target.value)} required placeholder="Jonas S." />
+            </label>
+            <div className="modal-foot">
+              <button type="button" className="btn outline" onClick={() => setOpen(false)}>Abbrechen</button>
+              <button className="btn" type="submit">Mitarbeiter hinzufügen</button>
+            </div>
+          </form>
+        </Modal>
+      ) : null}
+      {edit ? (
+        <Modal title="Mitarbeiter-Einstellungen" onClose={() => setEdit(null)}>
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              api.patchStaff(edit.id, { name: edit.name, active: edit.active }).then(() => setEdit(null));
+            }}
+          >
+            <label className="field">
+              <span>Name</span>
+              <input value={edit.name} onChange={(e) => setEdit({ ...edit, name: e.target.value })} required />
+            </label>
+            <label className="check">
+              <input type="checkbox" checked={edit.active} onChange={(e) => setEdit({ ...edit, active: e.target.checked })} />
+              Aktiv
+            </label>
+            <div className="modal-foot">
+              <button type="button" className="btn outline" onClick={() => setEdit(null)}>Abbrechen</button>
+              <button className="btn" type="submit">Speichern</button>
+            </div>
+          </form>
+        </Modal>
+      ) : null}
     </div>
   );
 }
 
 export function ServicesPage() {
   const boot = useBoot();
+  const [open, setOpen] = useState(false);
   const [form, setForm] = useState({ name: "", durationMin: 45, bufferMin: 0, staffIds: [] as string[] });
   if (!boot) return <div className="page" />;
   function toggle(id: string) {
@@ -51,48 +227,76 @@ export function ServicesPage() {
   }
   return (
     <div className="page">
-      <h1>Leistungen</h1>
-      <p className="lead">Dauer bestimmt das Slot-Raster. Puffer sperrt die Zeit danach.</p>
-      <form
-        className="panel"
-        style={{ marginBottom: 24, maxWidth: 480 }}
-        onSubmit={(e) => {
-          e.preventDefault();
-          api.addService(form).then(() => setForm({ name: "", durationMin: 45, bufferMin: 0, staffIds: [] }));
-        }}
-      >
-        <label className="field"><span>Name</span><input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required /></label>
-        <label className="field"><span>Dauer (Minuten)</span><input type="number" min={5} value={form.durationMin} onChange={(e) => setForm({ ...form, durationMin: Number(e.target.value) })} /></label>
-        <label className="field"><span>Puffer danach (Minuten)</span><input type="number" min={0} value={form.bufferMin} onChange={(e) => setForm({ ...form, bufferMin: Number(e.target.value) })} /></label>
-        <div className="field">
-          <span>Mitarbeiter</span>
-          {boot.staff.map((s) => (
-            <label className="check" key={s.id}>
-              <input type="checkbox" checked={form.staffIds.includes(s.id)} onChange={() => toggle(s.id)} />
-              {s.name}
-            </label>
-          ))}
-        </div>
-        <button className="btn" type="submit">Anlegen</button>
-      </form>
-      <table className="table">
-        <thead><tr><th>Leistung</th><th>Dauer</th><th>Puffer</th><th>Wer</th></tr></thead>
-        <tbody>
-          {boot.services.map((s) => (
-            <tr key={s.id}>
-              <td>{s.name}</td>
-              <td>{s.durationMin} min</td>
-              <td>{s.bufferMin} min</td>
-              <td>{s.staffIds.map((id) => boot.staff.find((x) => x.id === id)?.name).filter(Boolean).join(", ")}</td>
+      <PageHead
+        title="Leistungen"
+        aside={<button className="btn" type="button" onClick={() => setOpen(true)}>+ Leistung</button>}
+      />
+      <div className="card-table">
+        <table className="table quiet">
+          <thead>
+            <tr>
+              <th>Leistung</th>
+              <th>Dauer</th>
+              <th>Puffer</th>
+              <th>Wer</th>
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {boot.services.map((s) => (
+              <tr key={s.id}>
+                <td>{s.name}</td>
+                <td>{s.durationMin} min</td>
+                <td>{s.bufferMin} min</td>
+                <td>{s.staffIds.map((id) => boot.staff.find((x) => x.id === id)?.name).filter(Boolean).join(", ")}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      {open ? (
+        <Modal title="Neue Leistung" onClose={() => setOpen(false)}>
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              api.addService(form).then(() => {
+                setForm({ name: "", durationMin: 45, bufferMin: 0, staffIds: [] });
+                setOpen(false);
+              });
+            }}
+          >
+            <label className="field">
+              <span>Name der Leistung</span>
+              <input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required placeholder="z.B. Bartpflege / Herrenhaarschnitt" />
+            </label>
+            <div className="fields-2">
+              <label className="field">
+                <span>Dauer</span>
+                <input type="number" min={5} value={form.durationMin} onChange={(e) => setForm({ ...form, durationMin: Number(e.target.value) })} />
+              </label>
+              <label className="field">
+                <span>Pufferzeit</span>
+                <input type="number" min={0} value={form.bufferMin} onChange={(e) => setForm({ ...form, bufferMin: Number(e.target.value) })} />
+              </label>
+            </div>
+            <div className="field">
+              <span>Zuständige Mitarbeiter</span>
+              {boot.staff.map((s) => (
+                <label className="check" key={s.id}>
+                  <input type="checkbox" checked={form.staffIds.includes(s.id)} onChange={() => toggle(s.id)} />
+                  {s.name}
+                </label>
+              ))}
+            </div>
+            <div className="modal-foot">
+              <button type="button" className="btn outline" onClick={() => setOpen(false)}>Abbrechen</button>
+              <button className="btn" type="submit">Leistung erstellen</button>
+            </div>
+          </form>
+        </Modal>
+      ) : null}
     </div>
   );
 }
-
-const DAYS = ["", "Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag", "Samstag", "Sonntag"];
 
 export function HoursPage() {
   const boot = useBoot();
@@ -101,25 +305,30 @@ export function HoursPage() {
     if (!boot || rows.length) return;
     setRows([1, 2, 3, 4, 5, 6, 7].map((weekday) => {
       const h = boot.hours.find((x) => x.weekday === weekday);
-      return { weekday, startHm: h?.startHm ?? "09:00", endHm: h?.endHm ?? "18:00", open: Boolean(h) };
+      return { weekday, startHm: h?.startHm ?? "09:00", endHm: h?.endHm ?? (weekday === 6 ? "14:00" : "18:00"), open: Boolean(h) };
     }));
   }, [boot, rows.length]);
   if (!boot) return <div className="page" />;
   return (
-    <div className="page">
-      <h1>Öffnungszeiten</h1>
-      <p className="lead">Geschlossene Tage erzeugen keine Slots.</p>
-      {rows.map((r, i) => (
-        <div className="toolbar" key={r.weekday}>
-          <label className="check" style={{ minWidth: 140 }}>
-            <input type="checkbox" checked={r.open} onChange={(e) => setRows(rows.map((x, j) => j === i ? { ...x, open: e.target.checked } : x))} />
-            {DAYS[r.weekday]}
-          </label>
-          <input type="time" value={r.startHm} disabled={!r.open} onChange={(e) => setRows(rows.map((x, j) => j === i ? { ...x, startHm: e.target.value } : x))} />
-          <input type="time" value={r.endHm} disabled={!r.open} onChange={(e) => setRows(rows.map((x, j) => j === i ? { ...x, endHm: e.target.value } : x))} />
+    <div className="page slim">
+      <PageHead title="Öffnungszeiten" lead="Geschlossene Tage erzeugen keine Slots." />
+      <div className="hours-card">
+        {rows.map((r, i) => (
+          <div className="hours-row" key={r.weekday}>
+            <label className="check">
+              <input type="checkbox" checked={r.open} onChange={(e) => setRows(rows.map((x, j) => j === i ? { ...x, open: e.target.checked } : x))} />
+              {DAYS[r.weekday]}
+            </label>
+            <input type="time" value={r.startHm} disabled={!r.open} onChange={(e) => setRows(rows.map((x, j) => j === i ? { ...x, startHm: e.target.value } : x))} />
+            <input type="time" value={r.endHm} disabled={!r.open} onChange={(e) => setRows(rows.map((x, j) => j === i ? { ...x, endHm: e.target.value } : x))} />
+          </div>
+        ))}
+        <div className="hours-foot">
+          <button className="btn" type="button" onClick={() => api.putHours(rows.filter((r) => r.open).map(({ weekday, startHm, endHm }) => ({ weekday, startHm, endHm })))}>
+            Speichern
+          </button>
         </div>
-      ))}
-      <button className="btn" type="button" onClick={() => api.putHours(rows.filter((r) => r.open).map(({ weekday, startHm, endHm }) => ({ weekday, startHm, endHm })))}>Speichern</button>
+      </div>
     </div>
   );
 }
@@ -128,6 +337,7 @@ export function TimeOffPage() {
   const boot = useBoot();
   const off = useApi<{ timeOff: TimeOff[] }>("/api/app/time-off");
   const rows = off?.timeOff ?? [];
+  const [open, setOpen] = useState(false);
   const [form, setForm] = useState({ staffId: "", startsAt: "", endsAt: "", reason: "Urlaub" });
   if (!boot) return <div className="page" />;
   function submit(e: FormEvent) {
@@ -136,69 +346,69 @@ export function TimeOffPage() {
       ...form,
       startsAt: new Date(form.startsAt).toISOString(),
       endsAt: new Date(form.endsAt).toISOString(),
-    }).then(() => {});
+    }).then(() => { setOpen(false); setForm({ staffId: "", startsAt: "", endsAt: "", reason: "Urlaub" }); });
   }
   return (
     <div className="page">
-      <h1>Sperren</h1>
-      <p className="lead">Urlaub, Krankheit, individuelle Blöcke. Diese Zeiten sind nicht buchbar.</p>
-      <form className="panel" style={{ maxWidth: 480, marginBottom: 24 }} onSubmit={submit}>
-        <label className="field">
-          <span>Mitarbeiter</span>
-          <select value={form.staffId} onChange={(e) => setForm({ ...form, staffId: e.target.value })} required>
-            <option value="">Bitte wählen</option>
-            {boot.staff.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
-          </select>
-        </label>
-        <label className="field"><span>Von</span><input type="datetime-local" value={form.startsAt} onChange={(e) => setForm({ ...form, startsAt: e.target.value })} required /></label>
-        <label className="field"><span>Bis</span><input type="datetime-local" value={form.endsAt} onChange={(e) => setForm({ ...form, endsAt: e.target.value })} required /></label>
-        <label className="field"><span>Grund</span><input value={form.reason} onChange={(e) => setForm({ ...form, reason: e.target.value })} /></label>
-        <button className="btn" type="submit">Sperre anlegen</button>
-      </form>
-      <table className="table">
-        <thead><tr><th>Mitarbeiter</th><th>Zeitraum</th><th>Grund</th><th /></tr></thead>
-        <tbody>
-          {rows.map((r) => (
-            <tr key={r.id}>
-              <td>{boot.staff.find((s) => s.id === r.staffId)?.name}</td>
-              <td>{new Date(r.startsAt).toLocaleString("de-DE")} – {new Date(r.endsAt).toLocaleString("de-DE")}</td>
-              <td>{r.reason}</td>
-              <td><button className="btn quiet" type="button" onClick={() => api.delTimeOff(r.id)}>Löschen</button></td>
+      <PageHead
+        title="Sperren"
+        aside={<button className="btn" type="button" onClick={() => setOpen(true)}>+ Sperre</button>}
+      />
+      <div className="card-table">
+        <table className="table quiet">
+          <thead>
+            <tr>
+              <th>Mitarbeiter</th>
+              <th>Zeitraum</th>
+              <th>Grund</th>
+              <th>Aktion</th>
             </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-  );
-}
-
-export function BookingsPage() {
-  const boot = useBoot();
-  const list = useApi<{ bookings: Booking[] }>("/api/app/bookings");
-  const rows = list?.bookings ?? [];
-  if (!boot) return <div className="page" />;
-  return (
-    <div className="page">
-      <h1>Termine</h1>
-      <table className="table">
-        <thead><tr><th>Wann</th><th>Gast</th><th>Leistung</th><th>Wer</th><th>Status</th><th /></tr></thead>
-        <tbody>
-          {rows.map((b) => (
-            <tr key={b.id}>
-              <td>{new Date(b.startsAt).toLocaleString("de-DE")}</td>
-              <td>{b.guestName}<br />{b.guestEmail} {b.guestPhone}</td>
-              <td>{boot.services.find((s) => s.id === b.serviceId)?.name}</td>
-              <td>{boot.staff.find((s) => s.id === b.staffId)?.name}</td>
-              <td>{b.status === "confirmed" ? "Bestätigt" : b.status === "pending" ? "PIN offen" : "Storniert"}</td>
-              <td>
-                {b.status !== "cancelled" ? (
-                  <button className="btn quiet" type="button" onClick={() => api.cancelBooking(b.id)}>Stornieren</button>
-                ) : null}
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {rows.map((r) => (
+              <tr key={r.id}>
+                <td>{boot.staff.find((s) => s.id === r.staffId)?.name}</td>
+                <td>{span(r.startsAt, r.endsAt)}</td>
+                <td>{r.reason}</td>
+                <td><button className="linkish" type="button" onClick={() => api.delTimeOff(r.id)}>Löschen</button></td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      {open ? (
+        <Modal title="Neue Sperre" onClose={() => setOpen(false)}>
+          <form onSubmit={submit}>
+            <label className="field">
+              <span>Mitarbeiter</span>
+              <select value={form.staffId} onChange={(e) => setForm({ ...form, staffId: e.target.value })} required>
+                <option value="">Bitte wählen</option>
+                {boot.staff.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+              </select>
+            </label>
+            <div className="fields-2">
+              <label className="field">
+                <span>Von</span>
+                <input type="datetime-local" value={form.startsAt} onChange={(e) => setForm({ ...form, startsAt: e.target.value })} required />
+              </label>
+              <label className="field">
+                <span>Bis</span>
+                <input type="datetime-local" value={form.endsAt} onChange={(e) => setForm({ ...form, endsAt: e.target.value })} required />
+              </label>
+            </div>
+            <label className="field">
+              <span>Grund</span>
+              <select value={form.reason} onChange={(e) => setForm({ ...form, reason: e.target.value })}>
+                {REASONS.map((r) => <option key={r}>{r}</option>)}
+              </select>
+            </label>
+            <div className="modal-foot">
+              <button type="button" className="btn outline" onClick={() => setOpen(false)}>Abbrechen</button>
+              <button className="btn" type="submit">Sperre erstellen</button>
+            </div>
+          </form>
+        </Modal>
+      ) : null}
     </div>
   );
 }

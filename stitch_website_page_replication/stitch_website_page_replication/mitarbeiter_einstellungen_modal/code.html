@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+
+<html class="h-full" lang="de"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Mitarbeiter - FLH DIGITAL</title>
+<!-- Tailwind CSS v3 CDN with forms & container queries plugins -->
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<!-- Font Awesome Icons -->
+<link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet"/>
+<!-- Google Fonts: Inter -->
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<!-- Custom Tailwind Configuration -->
+<script data-purpose="tailwind-config">
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Inter', 'sans-serif'],
+          },
+          colors: {
+            brand: {
+              sidebar: '#0d3b43',
+              sidebarHover: '#134953',
+              activeNav: '#1a545e',
+              button: '#154e58',
+              buttonHover: '#1c626f',
+              lightTeal: '#1c5a66',
+            }
+          }
+        }
+      }
+    }
+  </script>
+<!-- Custom Styles -->
+<style data-purpose="custom-styling">
+    body {
+      font-family: 'Inter', sans-serif;
+      -webkit-font-smoothing: antialiased;
+    }
+  </style>
+</head>
+<body class="h-full bg-[#f4f7f8] text-slate-800 flex overflow-hidden">
+<!-- BEGIN: Sidebar -->
+<aside class="w-64 bg-brand-sidebar text-white flex flex-col justify-between shrink-0 select-none" data-purpose="main-sidebar">
+<div class="flex flex-col">
+<!-- Logo FLH DIGITAL -->
+<div class="pt-10 pb-8 flex flex-col items-center justify-center">
+<div class="relative w-14 h-14 bg-[#1c5a66] flex items-center justify-center rounded-2xl shadow-inner mb-3.5 rotate-45 transform">
+<span class="-rotate-45 text-white font-bold text-lg tracking-wider">FL</span>
+</div>
+<h1 class="text-white font-bold text-sm tracking-[0.18em] uppercase mt-1">FLH DIGITAL</h1>
+</div>
+<!-- Navigation Links -->
+<nav class="mt-4 flex flex-col space-y-0.5 text-[13.5px] font-medium text-slate-200" data-purpose="sidebar-nav">
+<!-- Kalender -->
+<a class="flex items-center px-6 py-3.5 hover:bg-brand-sidebarHover transition-colors" href="#">
+<i class="fa-regular fa-calendar text-[16px] w-6 mr-2.5 opacity-90"></i>
+<span class="">Kalender</span>
+</a>
+<!-- Termine -->
+<a class="flex items-center px-6 py-3.5 hover:bg-brand-sidebarHover transition-colors" href="#">
+<i class="fa-regular fa-clock text-[16px] w-6 mr-2.5 opacity-90"></i>
+<span class="">Termine</span>
+</a>
+<!-- Mitarbeiter (Active Item) -->
+<a class="flex items-center px-6 py-3.5 bg-brand-activeNav text-white font-semibold transition-colors" href="#">
+<i class="fa-solid fa-user-group text-[15px] w-6 mr-2.5"></i>
+<span class="">Mitarbeiter</span>
+</a>
+<!-- Sperren -->
+<a class="flex items-center px-6 py-3.5 hover:bg-brand-sidebarHover transition-colors" href="#">
+<i class="fa-solid fa-lock text-[15px] w-6 mr-2.5 opacity-90"></i>
+<span class="">Sperren</span>
+</a>
+<!-- Leistungen -->
+<a class="flex items-center px-6 py-3.5 hover:bg-brand-sidebarHover transition-colors" href="#">
+<i class="fa-solid fa-scissors text-[15px] w-6 mr-2.5 opacity-90"></i>
+<span class="">Leistungen</span>
+</a>
+<!-- Öffnungszeiten -->
+<a class="flex items-center px-6 py-3.5 hover:bg-brand-sidebarHover transition-colors" href="#">
+<i class="fa-solid fa-gear text-[15px] w-6 mr-2.5 opacity-90"></i>
+<span class="">Öffnungszeiten</span>
+</a>
+</nav>
+</div>
+<!-- Sidebar Bottom / User Profile -->
+<div class="p-6" data-purpose="sidebar-profile-footer">
+<div class="flex items-center space-x-3 mb-6">
+<!-- User Avatar Initial -->
+<div class="w-10 h-10 rounded-full bg-[#185561] text-white flex items-center justify-center font-bold text-sm shadow-sm shrink-0">
+          M
+        </div>
+<!-- User Details -->
+<div class="flex flex-col overflow-hidden">
+<span class="text-white font-bold text-sm leading-tight">Maurice</span>
+<span class="text-slate-400 text-xs truncate mt-0.5">Maison Coiffure</span>
+</div>
+</div>
+<!-- Abmelden (Logout) -->
+<div class="pt-4 border-t border-[#164750]">
+<a class="flex items-center text-slate-300 hover:text-white transition-colors text-[13px] font-medium" href="#">
+<i class="fa-solid fa-arrow-right-from-bracket text-[14px] mr-3"></i>
+<span class="">Abmelden</span>
+</a>
+</div>
+</div>
+</aside>
+<!-- END: Sidebar -->
+<!-- BEGIN: MainContent -->
+<main class="flex-1 flex flex-col h-full overflow-y-auto" data-purpose="main-content">
+<!-- Top Action Bar -->
+<header class="px-10 pt-10 pb-6 flex items-center justify-between">
+<h2 class="text-3xl font-extrabold text-slate-900 tracking-tight">Mitarbeiter</h2>
+<!-- Action Button -->
+<button class="bg-brand-button hover:bg-brand-buttonHover text-white px-5 py-2 rounded-md font-medium text-sm flex items-center shadow-sm transition-all" type="button">
+<i class="fa-solid fa-plus text-xs mr-2"></i>
+<span class="">Mitarbeiter</span>
+</button>
+</header>
+<!-- Employees Cards Grid -->
+<section class="px-10 py-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 max-w-6xl">
+<!-- Card 1: Jonas Weber -->
+<article class="bg-white rounded-xl border border-slate-200/90 shadow-sm p-6 flex flex-col items-center relative transition-shadow hover:shadow-md" data-purpose="employee-card">
+<button class="absolute top-4 right-4 w-8 h-8 rounded-md bg-[#eaf1f3] text-slate-500 hover:text-slate-700 hover:bg-slate-200 flex items-center justify-center transition-colors border border-slate-200/90" type="button">
+<i class="fa-solid fa-gear text-sm"></i>
+</button>
+<div class="mt-4 mb-4">
+<img alt="Jonas Weber" class="w-24 h-24 rounded-full object-cover shadow-sm ring-1 ring-slate-100" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBrSMoFVy0qxS5UDOD5f1vwx90mVQeF7nbfEBCtptXT807kIYnB7bHCxLi1Uia3K99yobGbBtocIeKyPBq_mn1tegFduSs05TjpuhU83i8nRYT3kNcN4GcrDTTjZ0B1tOzAnsfcZ5ZuZLGAzH02MIKYcMEvq9lJPxgXAgOAW_5JhTPhPKknOIrJPqr9qwDaC0HxNAp5d_o9z7F89CPFb-q_kYh8OWYDPDcHEFcht_I4rgH4JUByNegy"/>
+</div>
+<h3 class="font-bold text-lg text-slate-900 leading-tight">Jonas Weber</h3>
+<div class="mt-2 mb-6">
+<span class="inline-block bg-[#def7ec] text-[#03543f] text-xs font-semibold px-3 py-1 rounded-full">
+            Friseur
+          </span>
+</div>
+<div class="w-full bg-[#edf3f5] rounded-lg py-3 px-4 flex flex-col items-center justify-center text-center mt-auto min-h-[58px] border border-slate-200/90">
+<div class="flex items-center text-slate-500 text-xs font-medium space-x-1.5 mb-1">
+<i class="fa-regular fa-calendar text-[11px]"></i>
+<span class="">Urlaub</span>
+</div>
+<span class="text-xs font-bold text-slate-800">01.07.26 – 20.07.26</span>
+</div>
+</article>
+<!-- Card 2: Anna Keller -->
+<article class="bg-white rounded-xl border border-slate-200/90 shadow-sm p-6 flex flex-col items-center relative transition-shadow hover:shadow-md" data-purpose="employee-card">
+<button class="absolute top-4 right-4 w-8 h-8 rounded-md bg-[#eaf1f3] text-slate-500 hover:text-slate-700 hover:bg-slate-200 flex items-center justify-center transition-colors border border-slate-200/90" type="button">
+<i class="fa-solid fa-gear text-sm"></i>
+</button>
+<div class="mt-4 mb-4">
+<img alt="Anna Keller" class="w-24 h-24 rounded-full object-cover shadow-sm ring-1 ring-slate-100" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCCMg_f_KUnVp2ZmCpj1luyxcvMQV-DVnrxZj-vPHv9XQ7otFDsPt00XRjawaP8tp0T4iDQUaya01St9oXhux_53R87wQaxazySMd2lSSqDpkQ9isU9nokUaXeLd6Y7iBApUz4lgya-dMglVbUbEK2pDCG8wm8tBHZ2XJa9MTGumHWP16ePxwt8DieU9SfsL6b1qSjtXozVX1GGVfC8-fIqx9aj_eF4oLdYw5c2nDGcl8EYWGHybun4"/>
+</div>
+<h3 class="font-bold text-lg text-slate-900 leading-tight">Anna Keller</h3>
+<div class="mt-2 mb-6">
+<span class="inline-block bg-[#ede9fe] text-[#6d28d9] text-xs font-semibold px-3 py-1 rounded-full">
+            Coloristin
+          </span>
+</div>
+<div class="w-full bg-[#edf3f5] rounded-lg py-3 px-4 flex items-center justify-center text-center mt-auto min-h-[58px] border border-slate-200/90">
+<span class="text-xs font-medium text-slate-400">Keine Abwesenheit</span>
+</div>
+</article>
+<!-- Card 3: Tom Berger -->
+<article class="bg-white rounded-xl border border-slate-200/90 shadow-sm p-6 flex flex-col items-center relative transition-shadow hover:shadow-md" data-purpose="employee-card">
+<button class="absolute top-4 right-4 w-8 h-8 rounded-md bg-[#eaf1f3] text-slate-500 hover:text-slate-700 hover:bg-slate-200 flex items-center justify-center transition-colors border border-slate-200/90" type="button">
+<i class="fa-solid fa-gear text-sm"></i>
+</button>
+<div class="mt-4 mb-4">
+<img alt="Tom Berger" class="w-24 h-24 rounded-full object-cover shadow-sm ring-1 ring-slate-100" src="https://lh3.googleusercontent.com/aida-public/AB6AXuC5J-bdG3wgyE1FjpveWlBq0EUt5DF_cgIlMEcPFUhEOel3wKKvzY88_lBJM_8LlsEF2R29Vd2NG8gyIwIvI3xzgI11EVsXdt5MPhqARepNuJbCPGnbMrCet9vCFZ5w2AmrNFAKIW_eRlYR2GKl1EPHW0KG_spadgHC1HV8TnZru-Nyn3fsC-eYYARRfLPx6VC4HrhXw4l2UacUopawxkmfqbacvxWxUMHLEjcFJzn9tJbt73bSMld7"/>
+</div>
+<h3 class="font-bold text-lg text-slate-900 leading-tight">Tom Berger</h3>
+<div class="mt-2 mb-6">
+<span class="inline-block bg-[#feecdc] text-[#b43403] text-xs font-semibold px-3 py-1 rounded-full">
+            Stylist
+          </span>
+</div>
+<div class="w-full bg-[#edf3f5] rounded-lg py-3 px-4 flex flex-col items-center justify-center text-center mt-auto min-h-[58px] border border-slate-200/90">
+<div class="flex items-center text-[#e02424] text-xs font-medium space-x-1.5 mb-1">
+<i class="fa-regular fa-calendar text-[11px]"></i>
+<span class="">Krank</span>
+</div>
+<span class="text-xs font-bold text-slate-800">03.08.26 – 05.08.26</span>
+</div>
+</article>
+</section>
+</main>
+<!-- END: MainContent -->
+<div class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center z-50 p-4 select-none" data-purpose="mitarbeiter-modal-overlay"><div class="bg-white rounded-2xl shadow-2xl border border-slate-200/90 w-full max-w-2xl overflow-hidden flex flex-col max-h-[92vh]"><div class="px-6 py-4 border-b border-slate-200/90 flex items-center justify-between bg-slate-50/70"><div class="flex items-center space-x-3.5"><img alt="Jonas Weber" class="w-11 h-11 rounded-full object-cover ring-2 ring-slate-100 shadow-sm" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBrSMoFVy0qxS5UDOD5f1vwx90mVQeF7nbfEBCtptXT807kIYnB7bHCxLi1Uia3K99yobGbBtocIeKyPBq_mn1tegFduSs05TjpuhU83i8nRYT3kNcN4GcrDTTjZ0B1tOzAnsfcZ5ZuZLGAzH02MIKYcMEvq9lJPxgXAgOAW_5JhTPhPKknOIrJPqr9qwDaC0HxNAp5d_o9z7F89CPFb-q_kYh8OWYDPDcHEFcht_I4rgH4JUByNegy"/><div><div class="flex items-center space-x-2"><h3 class="text-base font-bold text-slate-900 leading-tight">Mitarbeiter-Einstellungen</h3><span class="inline-block bg-[#def7ec] text-[#03543f] text-[11px] font-semibold px-2 py-0.5 rounded-full">Friseur</span></div><p class="text-xs text-slate-500 mt-0.5">Jonas Weber · Arbeitszeiten &amp; Verfügbarkeiten anpassen</p></div></div><button class="w-8 h-8 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-200/60 flex items-center justify-center transition-colors" type="button"><i class="fa-solid fa-xmark text-lg"></i></button></div><div class="p-6 overflow-y-auto space-y-5"><div class="bg-[#edf3f5] rounded-xl p-3.5 border border-slate-200/80 flex flex-wrap items-center justify-between gap-2"><div class="flex items-center space-x-2"><span class="text-xs font-semibold text-slate-700"><i class="fa-solid fa-wand-magic-sparkles text-brand-lightTeal mr-1"></i> Schnell-Vorlagen:</span></div><div class="flex items-center gap-1.5"><button class="px-2.5 py-1 bg-white hover:bg-slate-50 text-slate-700 text-xs font-medium rounded-md border border-slate-200/90 shadow-sm transition-colors" type="button">Vollzeit (Mo-Fr 09:00 - 18:00)</button><button class="px-2.5 py-1 bg-white hover:bg-slate-50 text-slate-700 text-xs font-medium rounded-md border border-slate-200/90 shadow-sm transition-colors" type="button">Teilzeit (Mo-Do 08:30 - 14:30)</button></div></div><div class="border border-slate-200/90 rounded-xl overflow-hidden shadow-sm"><div class="bg-slate-50 px-4 py-2.5 border-b border-slate-200/90 flex items-center justify-between text-xs font-semibold text-slate-600"><span>Wochentag</span><div class="flex items-center space-x-12 pr-6"><span>Arbeitszeit (Von - Bis)</span><span>Pause</span></div></div><div class="divide-y divide-slate-100"><div class="px-4 py-2.5 flex items-center justify-between hover:bg-slate-50/50"><div class="flex items-center space-x-3 w-32"><input checked="" class="rounded text-[#154e58] focus:ring-[#154e58] h-4 w-4 border-slate-300" type="checkbox"/><span class="text-sm font-semibold text-slate-800">Montag</span></div><div class="flex items-center space-x-2"><div class="relative"><i class="fa-regular fa-clock absolute left-2.5 top-2.5 text-[11px] text-slate-400"></i><input class="text-xs font-medium text-slate-800 pl-7 pr-2 py-1.5 rounded-lg border border-slate-200 w-20 text-center" type="text" value="09:00"/></div><span class="text-slate-400 text-xs">–</span><div class="relative"><i class="fa-regular fa-clock absolute left-2.5 top-2.5 text-[11px] text-slate-400"></i><input class="text-xs font-medium text-slate-800 pl-7 pr-2 py-1.5 rounded-lg border border-slate-200 w-20 text-center" type="text" value="18:00"/></div></div><div class="text-xs text-slate-500 font-medium pr-3">60 Min.</div></div><div class="px-4 py-2.5 flex items-center justify-between hover:bg-slate-50/50"><div class="flex items-center space-x-3 w-32"><input checked="" class="rounded text-[#154e58] focus:ring-[#154e58] h-4 w-4 border-slate-300" type="checkbox"/><span class="text-sm font-semibold text-slate-800">Dienstag</span></div><div class="flex items-center space-x-2"><div class="relative"><i class="fa-regular fa-clock absolute left-2.5 top-2.5 text-[11px] text-slate-400"></i><input class="text-xs font-medium text-slate-800 pl-7 pr-2 py-1.5 rounded-lg border border-slate-200 w-20 text-center" type="text" value="09:00"/></div><span class="text-slate-400 text-xs">–</span><div class="relative"><i class="fa-regular fa-clock absolute left-2.5 top-2.5 text-[11px] text-slate-400"></i><input class="text-xs font-medium text-slate-800 pl-7 pr-2 py-1.5 rounded-lg border border-slate-200 w-20 text-center" type="text" value="18:00"/></div></div><div class="text-xs text-slate-500 font-medium pr-3">60 Min.</div></div><div class="px-4 py-2.5 flex items-center justify-between hover:bg-slate-50/50"><div class="flex items-center space-x-3 w-32"><input checked="" class="rounded text-[#154e58] focus:ring-[#154e58] h-4 w-4 border-slate-300" type="checkbox"/><span class="text-sm font-semibold text-slate-800">Mittwoch</span></div><div class="flex items-center space-x-2"><div class="relative"><i class="fa-regular fa-clock absolute left-2.5 top-2.5 text-[11px] text-slate-400"></i><input class="text-xs font-medium text-slate-800 pl-7 pr-2 py-1.5 rounded-lg border border-slate-200 w-20 text-center" type="text" value="09:00"/></div><span class="text-slate-400 text-xs">–</span><div class="relative"><i class="fa-regular fa-clock absolute left-2.5 top-2.5 text-[11px] text-slate-400"></i><input class="text-xs font-medium text-slate-800 pl-7 pr-2 py-1.5 rounded-lg border border-slate-200 w-20 text-center" type="text" value="18:00"/></div></div><div class="text-xs text-slate-500 font-medium pr-3">60 Min.</div></div><div class="px-4 py-2.5 flex items-center justify-between hover:bg-slate-50/50"><div class="flex items-center space-x-3 w-32"><input checked="" class="rounded text-[#154e58] focus:ring-[#154e58] h-4 w-4 border-slate-300" type="checkbox"/><span class="text-sm font-semibold text-slate-800">Donnerstag</span></div><div class="flex items-center space-x-2"><div class="relative"><i class="fa-regular fa-clock absolute left-2.5 top-2.5 text-[11px] text-slate-400"></i><input class="text-xs font-medium text-slate-800 pl-7 pr-2 py-1.5 rounded-lg border border-slate-200 w-20 text-center" type="text" value="09:00"/></div><span class="text-slate-400 text-xs">–</span><div class="relative"><i class="fa-regular fa-clock absolute left-2.5 top-2.5 text-[11px] text-slate-400"></i><input class="text-xs font-medium text-slate-800 pl-7 pr-2 py-1.5 rounded-lg border border-slate-200 w-20 text-center" type="text" value="18:00"/></div></div><div class="text-xs text-slate-500 font-medium pr-3">60 Min.</div></div><div class="px-4 py-2.5 flex items-center justify-between hover:bg-slate-50/50"><div class="flex items-center space-x-3 w-32"><input checked="" class="rounded text-[#154e58] focus:ring-[#154e58] h-4 w-4 border-slate-300" type="checkbox"/><span class="text-sm font-semibold text-slate-800">Freitag</span></div><div class="flex items-center space-x-2"><div class="relative"><i class="fa-regular fa-clock absolute left-2.5 top-2.5 text-[11px] text-slate-400"></i><input class="text-xs font-medium text-slate-800 pl-7 pr-2 py-1.5 rounded-lg border border-slate-200 w-20 text-center" type="text" value="09:00"/></div><span class="text-slate-400 text-xs">–</span><div class="relative"><i class="fa-regular fa-clock absolute left-2.5 top-2.5 text-[11px] text-slate-400"></i><input class="text-xs font-medium text-slate-800 pl-7 pr-2 py-1.5 rounded-lg border border-slate-200 w-20 text-center" type="text" value="18:00"/></div></div><div class="text-xs text-slate-500 font-medium pr-3">60 Min.</div></div><div class="px-4 py-2.5 flex items-center justify-between hover:bg-slate-50/50"><div class="flex items-center space-x-3 w-32"><input class="rounded text-[#154e58] focus:ring-[#154e58] h-4 w-4 border-slate-300" type="checkbox"/><span class="text-sm font-medium text-slate-400">Samstag</span></div><div class="flex items-center space-x-2 opacity-50"><div class="relative"><i class="fa-regular fa-clock absolute left-2.5 top-2.5 text-[11px] text-slate-400"></i><input class="text-xs font-medium text-slate-400 pl-7 pr-2 py-1.5 rounded-lg border border-slate-200 bg-slate-50 w-20 text-center" disabled="" type="text" value="10:00"/></div><span class="text-slate-400 text-xs">–</span><div class="relative"><i class="fa-regular fa-clock absolute left-2.5 top-2.5 text-[11px] text-slate-400"></i><input class="text-xs font-medium text-slate-400 pl-7 pr-2 py-1.5 rounded-lg border border-slate-200 bg-slate-50 w-20 text-center" disabled="" type="text" value="16:00"/></div></div><div class="text-xs text-slate-400 font-medium pr-3">Frei</div></div><div class="px-4 py-2.5 flex items-center justify-between bg-slate-50/60"><div class="flex items-center space-x-3 w-32"><input class="rounded text-[#154e58] h-4 w-4 border-slate-300 opacity-40" disabled="" type="checkbox"/><span class="text-sm font-medium text-slate-400">Sonntag</span></div><div class="text-xs text-slate-400 italic">Geschlossen / Frei</div><div class="text-xs text-slate-400 font-medium pr-3">-</div></div></div></div><div class="flex items-center justify-between pt-1"><button class="text-xs text-[#154e58] hover:text-[#1c626f] font-semibold flex items-center space-x-1 transition-colors" type="button"><i class="fa-regular fa-clone text-[11px]"></i><span>Zeiten auf alle Werktage übertragen</span></button><div class="flex items-center space-x-2"><span class="text-xs text-slate-500 font-medium">Wochenarbeitszeit:</span><span class="bg-slate-100 border border-slate-200/90 text-slate-800 text-xs font-bold px-2.5 py-1 rounded-full">40,0 Std. / Woche</span></div></div></div><div class="px-6 py-4 bg-slate-50/80 border-t border-slate-200/90 flex items-center justify-end space-x-3"><button class="px-4 py-2 rounded-md border border-slate-200 text-slate-700 bg-white hover:bg-slate-100 text-sm font-medium transition-colors shadow-sm" type="button">Abbrechen</button><button class="bg-brand-button hover:bg-brand-buttonHover text-white px-5 py-2 rounded-md font-medium text-sm flex items-center shadow-sm transition-all" type="button"><i class="fa-solid fa-check text-xs mr-2"></i><span>Arbeitszeiten speichern</span></button></div></div></div></body></html>

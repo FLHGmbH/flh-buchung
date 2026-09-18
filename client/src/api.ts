@@ -126,6 +126,9 @@ export const api = {
     persistActor(r.actor);
     return r;
   },
+  recover: (email: string) => req("/api/auth/recover", { method: "POST", body: JSON.stringify({ email }) }),
+  resetPassword: (accessToken: string, password: string) =>
+    req("/api/auth/reset", { method: "POST", body: JSON.stringify({ accessToken, password }) }),
   logout: async () => {
     await req("/api/auth/logout", { method: "POST" });
     mem.clear();
@@ -173,7 +176,15 @@ export const api = {
       inflight("/api/app/bootstrap");
       const d = new Date();
       const z = new Date(d.getTime() - d.getTimezoneOffset() * 60000);
-      inflight(`/api/app/day?date=${z.toISOString().slice(0, 10)}`);
+      const cur = z.toISOString().slice(0, 10);
+      const mon = new Date(cur + "T12:00:00");
+      mon.setDate(mon.getDate() - ((mon.getDay() + 6) % 7));
+      for (let i = 0; i < 7; i++) {
+        const x = new Date(mon);
+        x.setDate(mon.getDate() + i);
+        const y = new Date(x.getTime() - x.getTimezoneOffset() * 60000);
+        inflight(`/api/app/day?date=${y.toISOString().slice(0, 10)}`);
+      }
     } else if (to === "/app/termine") {
       inflight("/api/app/bootstrap");
       inflight("/api/app/bookings");

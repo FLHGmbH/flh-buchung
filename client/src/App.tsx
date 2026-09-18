@@ -5,7 +5,7 @@ import { AdminDetail, AdminList, AdminNew } from "./Admin";
 import { BookPage } from "./Book";
 import { CalendarPage } from "./Calendar";
 import { BookingsPage, HoursPage, ServicesPage, StaffPage, TimeOffPage } from "./Manage";
-import { LoginPage } from "./Login";
+import { LoginPage, ResetPage } from "./Login";
 import { Shell } from "./Shell";
 
 export function App() {
@@ -19,6 +19,10 @@ export function App() {
     if (!actor) return;
     api.prefetch(actor.role === "tenant_admin" ? "/app" : "/admin");
   }, [actor]);
+
+  if (loc.hash.includes("type=recovery") && loc.pathname !== "/reset") {
+    return <Navigate to={{ pathname: "/reset", hash: loc.hash }} replace />;
+  }
 
   const publicBook = loc.pathname.startsWith("/b/");
   if (publicBook) {
@@ -34,6 +38,7 @@ export function App() {
 
   return (
     <Routes>
+      <Route path="/reset" element={<ResetPage />} />
       <Route path="/login" element={actor ? <Home actor={actor} /> : <LoginPage onLogin={(a) => { setActor(a); api.prefetch(a.role === "tenant_admin" ? "/app" : "/admin"); }} />} />
       <Route
         element={

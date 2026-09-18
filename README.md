@@ -18,6 +18,7 @@ npm run dev
 - App: http://localhost:5173
 - Lokal ohne Supabase-Auth: FLH `admin@flh.digital` / `Test1234!`, KD `salon@demo.test` / `Test1234!` (nur PGlite)
 - Live: Login über Supabase Auth. FLH `mail@flh-mediadigital.de`. Neuer Mandant legt den KD-Login in Auth mit an (`SUPABASE_SERVICE_ROLE_KEY`).
+- Passwort-Reset: Auth → URL Configuration. Site URL `https://flh-kalender.vercel.app`. Redirect URLs: `https://flh-kalender.vercel.app/reset` und `https://flh-kalender.vercel.app/**`.
 - iframe-Demo: http://localhost:5173/b/salon-demo
 
 ## Vercel
