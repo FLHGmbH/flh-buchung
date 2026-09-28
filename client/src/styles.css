@@ -856,23 +856,15 @@ a { color: var(--petrol); }
 .days button.on small, .days button.on strong { color: var(--graphite); }
 .slots { display: grid; grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); gap: 0.45rem; }
 .slots .choice { margin: 0; text-align: center; font-variant-numeric: tabular-nums; font-weight: 700; }
-.book-page {
-  min-height: 100vh;
-  background: var(--paper);
-  padding: 1rem 0.75rem 1.5rem;
-}
+.book-page { background: var(--white); }
 .book {
-  max-width: 520px;
-  margin: 0 auto;
-  padding: 1.5rem 1.25rem 1.15rem;
-  min-height: 16rem;
-  background: var(--white);
-  border: 1px solid var(--graphite-25);
-  border-radius: 16px;
-  box-shadow: 0 10px 28px rgba(15, 23, 32, 0.05);
+  width: 100%;
+  margin: 0;
+  padding: 0.35rem 0 0.25rem;
+  background: transparent;
 }
-.book h1 { overflow-wrap: anywhere; margin: 0 0 0.35rem; font-size: 1.65rem; letter-spacing: -0.02em; }
-.book .lead { margin: 0 0 1.15rem; color: var(--graphite-75); }
+.book h1 { overflow-wrap: anywhere; margin: 0 0 0.35rem; font-size: 1.65rem; letter-spacing: -0.02em; text-align: center; }
+.book .lead { margin: 0 0 1.15rem; color: var(--graphite-75); text-align: center; }
 .book .btn { width: 100%; margin-top: 0.25rem; }
 .book .book-back { width: auto; margin-top: 0.85rem; }
 .book-progress { margin-bottom: 1rem; }
@@ -946,7 +938,7 @@ a { color: var(--petrol); }
   width: auto;
   height: auto;
   object-fit: contain;
-  margin: 0 0 0.85rem;
+  margin: 0 auto 0.85rem;
 }
 .logo-preview {
   display: block;
@@ -958,7 +950,7 @@ a { color: var(--petrol); }
   margin: 0 0 1rem;
 }
 .book-foot {
-  margin-top: 2rem;
+  margin-top: 1.35rem;
   font-size: 0.75rem;
   color: var(--graphite-50);
   text-align: center;
