@@ -44,8 +44,13 @@ export function Fold({ open, children }: { open: boolean; children: ReactNode })
 export function StepPane({ id, children }: { id: string | number; children: ReactNode }) {
   const ref = useRef<HTMLDivElement>(null);
   useGSAP(() => {
-    if (reduced() || !ref.current) return;
-    gsap.fromTo(ref.current, { opacity: 0, y: 10 }, { opacity: 1, y: 0, duration: 0.28, ease: "power3.out" });
+    const root = ref.current;
+    if (!root || reduced()) return;
+    const items = root.querySelectorAll(".cat-fold, .choice, .days button, .field, .book-done");
+    gsap.fromTo(root, { opacity: 0 }, { opacity: 1, duration: 0.2, ease: "power2.out" });
+    if (items.length) {
+      gsap.fromTo(items, { opacity: 0, y: 8 }, { opacity: 1, y: 0, duration: 0.32, stagger: 0.03, ease: "power2.out", clearProps: "transform" });
+    }
   }, { dependencies: [id], scope: ref });
   return <div ref={ref}>{children}</div>;
 }

@@ -1,0 +1,68 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="543" height="608" viewBox="0 0 543 608" role="img" aria-labelledby="title desc">
+  <title id="title">Kalender-Logo als flache SVG</title>
+  <desc id="desc">Flaches Kalender-Logo mit weißer kalenderförmiger Plakette, türkisfarbenem FH-Monogramm und orangefarbenem Akzent, ohne Schatten.</desc>
+
+  <!-- Kalenderkörper -->
+  <path d="
+    M 267 14
+    C 273 13 281 14 291 19
+    L 364 61
+    C 370 65 373 68 373 74
+    L 373 132
+    C 373 153 390 169 414 169
+    C 437 169 456 151 456 129
+    L 456 110
+    L 518 145
+    C 528 151 533 161 533 175
+    L 533 435
+    C 533 449 527 458 515 466
+    L 292 592
+    C 283 597 269 598 258 593
+    L 34 468
+    C 21 461 14 451 14 438
+    L 14 173
+    C 14 160 21 150 32 142
+    L 90 110
+    L 90 130
+    C 90 153 109 169 132 169
+    C 155 169 172 153 172 131
+    L 172 73
+    C 172 68 175 64 181 60
+    L 252 18
+    C 258 15 263 14 267 14 Z" fill="#FFFFFF"/>
+
+  <!-- Kalenderösen -->
+  <path d="M132 35 C118.8 35 109 45.2 109 58.5 L109 126.5 C109 140.1 118.9 150 132 150 C145.1 150 156 140.1 156 126.5 L156 58.5 C156 45.2 145.2 35 132 35 Z" fill="#FFFFFF"/>
+  <path d="M414.5 33 C401.1 33 391 43.3 391 56.8 L391 126.4 C391 140.1 401.1 150 414.5 150 C427.9 150 438 140.1 438 126.4 L438 56.8 C438 43.3 427.9 33 414.5 33 Z" fill="#FFFFFF"/>
+
+  <!-- FH-Monogramm -->
+  <path d="
+    M 472 309
+    L 420 309
+    L 420 320
+    L 361 320
+    L 361 239
+    L 308 239
+    L 308 389
+    L 255 389
+    L 255 239
+    L 75 239
+    L 75 434
+    L 128 434
+    L 128 365
+    L 183 365
+    L 183 320
+    L 128 320
+    L 128 285
+    L 202 285
+    L 203 434
+    L 361 434
+    L 361 367
+    L 420 367
+    L 420 434
+    L 473 434
+    L 473 309 Z" fill="#006A73"/>
+
+  <!-- Orangener Akzent -->
+  <rect x="419" y="240" width="56" height="64" rx="7" fill="#FF8500"/>
+</svg>

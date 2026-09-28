@@ -102,7 +102,7 @@ export function Shell({ actor, onLogout }: { actor: Actor; onLogout: () => void 
     <div className="app">
       <aside className="sidebar" ref={side}>
         <div className="brand">
-          <Mark invert word />
+          <Mark />
         </div>
         <nav>
           {kd ? (

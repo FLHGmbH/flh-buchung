@@ -59,7 +59,13 @@ export function BookPage() {
       const d = new Date(start);
       d.setDate(d.getDate() + i);
       const key = berlinDay(d.toISOString());
-      out.push({ key, label: d.toLocaleDateString("de-DE", { weekday: "short", day: "numeric", month: "numeric" }), open: map.has(key) });
+      out.push({
+        key,
+        wd: d.toLocaleDateString("de-DE", { weekday: "short" }).replace(".", ""),
+        num: d.toLocaleDateString("de-DE", { day: "numeric" }),
+        mon: d.toLocaleDateString("de-DE", { month: "short" }).replace(".", ""),
+        open: map.has(key),
+      });
     }
     return out;
   }, [slots]);
@@ -68,9 +74,9 @@ export function BookPage() {
 
   if (!pub) {
     return (
-      <div className="book">
+      <BookShell>
         {err ? <p className="err" role="alert">{err}</p> : <p className="lead wait">Laden…</p>}
-      </div>
+      </BookShell>
     );
   }
 
@@ -88,18 +94,38 @@ export function BookPage() {
     setSlot(null);
     setStep(1);
   }
+  const who = staffId ? pub.staff.find((s) => s.id === staffId)?.name ?? "Egal" : "Egal";
+  const pickedDay = days.find((d) => d.key === day);
+  const recap = [
+    service?.name,
+    step > 1 ? who : "",
+    step > 2 && pickedDay ? `${pickedDay.wd} ${pickedDay.num}. ${pickedDay.mon}` : "",
+    step > 3 && slot ? new Date(slot.start).toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" }) : "",
+  ].filter(Boolean).join(" · ");
 
   return (
     <BookShell>
       {pub.tenant.logoUrl ? <img className="book-logo" src={pub.tenant.logoUrl} alt="" /> : null}
       <h1>{pub.tenant.name}</h1>
-      <p className="lead">Termin buchen</p>
-      {err ? <p className="err">{err}</p> : null}
-      <div className="steps">
-        {STEPS.map((s, i) => (
-          <span key={s} className={i === step ? "on" : ""}>{s}</span>
-        ))}
+      <p className="lead">Leistung, Zeit, dann der Code aus der Mail.</p>
+      {err ? <p className="err" role="alert">{err}</p> : null}
+      <div className="book-progress">
+        <div className="book-progress-top">
+          <span>Schritt {step + 1} von {STEPS.length}</span>
+          <strong>{STEPS[step]}</strong>
+        </div>
+        <div
+          className="book-bar"
+          role="progressbar"
+          aria-valuenow={step + 1}
+          aria-valuemin={1}
+          aria-valuemax={STEPS.length}
+          aria-label={STEPS[step]}
+        >
+          <i style={{ transform: `scaleX(${(step + 1) / STEPS.length})` }} />
+        </div>
       </div>
+      {step > 0 && step < 6 && recap ? <p className="book-recap">{recap}</p> : null}
 
       <StepPane id={step}>
       {step === 0 && (
@@ -137,14 +163,22 @@ export function BookPage() {
 
       {step === 1 && (
         <>
-          <button className={"choice" + (staffId === "" ? " on" : "")} type="button" onClick={() => { setStaffId(""); setStep(2); }}>Egal</button>
+          <button className="choice person" type="button" onClick={() => { setStaffId(""); setStep(2); }}>
+            <span className="ph" aria-hidden="true">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+                <circle cx="9" cy="7" r="4" />
+              </svg>
+            </span>
+            Egal
+          </button>
           {staffForService.map((s) => (
             <button key={s.id} className={"choice person" + (staffId === s.id ? " on" : "")} type="button" onClick={() => { setStaffId(s.id); setStep(2); }}>
               {s.photoUrl ? <img src={s.photoUrl} alt="" /> : <span className="ph">{s.name.slice(0, 1)}</span>}
               {s.name}
             </button>
           ))}
-          <button className="btn quiet" type="button" onClick={() => setStep(0)}>Zurück</button>
+          <button className="btn quiet book-back" type="button" onClick={() => setStep(0)}>Zurück</button>
         </>
       )}
 
@@ -154,12 +188,14 @@ export function BookPage() {
           <div className="days">
             {days.map((d) => (
               <button key={d.key} type="button" disabled={!d.open} className={day === d.key ? "on" : ""} onClick={() => { setDay(d.key); setStep(3); }}>
-                {d.label}
+                <small>{d.wd}</small>
+                <strong>{d.num}</strong>
+                <small>{d.mon}</small>
               </button>
             ))}
           </div>
           {!pending && !slots.length && days.every((d) => !d.open) ? <p>In den nächsten 14 Tagen kein freier Slot.</p> : null}
-          <button className="btn quiet" type="button" onClick={() => setStep(1)}>Zurück</button>
+          <button className="btn quiet book-back" type="button" onClick={() => setStep(1)}>Zurück</button>
         </>
       )}
 
@@ -177,7 +213,7 @@ export function BookPage() {
               </button>
             ))}
           </div>
-          <button className="btn quiet" type="button" onClick={() => setStep(2)}>Zurück</button>
+          <button className="btn quiet book-back" type="button" onClick={() => setStep(2)}>Zurück</button>
         </>
       )}
 
@@ -201,13 +237,13 @@ export function BookPage() {
               .finally(() => setPending(false));
           }}
         >
-          <p>{new Date(slot.start).toLocaleString("de-DE")} · {service?.name}</p>
+          <p className="book-when">{new Date(slot.start).toLocaleString("de-DE", { weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })} · {service?.name}</p>
           <label className="field"><span>Name</span><input required value={guest.guestName} onChange={(e) => setGuest({ ...guest, guestName: e.target.value })} /></label>
           <label className="field"><span>E-Mail</span><input type="email" required value={guest.guestEmail} onChange={(e) => setGuest({ ...guest, guestEmail: e.target.value })} /></label>
           <label className="field"><span>Telefon</span><input value={guest.guestPhone} onChange={(e) => setGuest({ ...guest, guestPhone: e.target.value })} /></label>
           <label className="field"><span>Notiz</span><textarea value={guest.note} onChange={(e) => setGuest({ ...guest, note: e.target.value })} /></label>
           <button className="btn" disabled={pending} type="submit">{pending ? "Sendet Code…" : "Code per Mail"}</button>
-          <button className="btn quiet" type="button" onClick={() => setStep(3)}>Zurück</button>
+          <button className="btn quiet book-back" type="button" onClick={() => setStep(3)}>Zurück</button>
         </form>
       )}
 
@@ -226,10 +262,11 @@ export function BookPage() {
               .finally(() => setPending(false));
           }}
         >
-          <p>Code ist unterwegs (15 Minuten gültig).</p>
+          <p>Code aus der Mail, 15 Minuten gültig.</p>
           <label className="field">
             <span>6-stelliger Code</span>
             <input
+              className="pin"
               required
               inputMode="numeric"
               autoComplete="one-time-code"
@@ -244,10 +281,15 @@ export function BookPage() {
       )}
 
       {step === 6 && done && (
-        <div className="panel">
-          <h1 style={{ fontSize: "1.25rem" }}>Gebucht</h1>
-          <p>Nummer {done.id.slice(0, 8).toUpperCase()}</p>
-          <p>{new Date(done.startsAt).toLocaleString("de-DE")}</p>
+        <div className="book-done">
+          <span className="book-check" aria-hidden="true">
+            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4">
+              <polyline points="20 6 9 17 4 12" />
+            </svg>
+          </span>
+          <h2>Gebucht</h2>
+          <p>{new Date(done.startsAt).toLocaleString("de-DE", { weekday: "long", day: "numeric", month: "long", hour: "2-digit", minute: "2-digit" })}</p>
+          <p className="book-code">{done.id.slice(0, 8).toUpperCase()}</p>
         </div>
       )}
       </StepPane>
@@ -263,7 +305,11 @@ function BookShell({ children }: { children: ReactNode }) {
     if (reduced() || !ref.current) return;
     gsap.fromTo(ref.current, { opacity: 0, y: 12 }, { opacity: 1, y: 0, duration: 0.4, ease: "power3.out" });
   }, { scope: ref });
-  return <div className="book" ref={ref}>{children}</div>;
+  return (
+    <div className="book-page">
+      <div className="book" ref={ref}>{children}</div>
+    </div>
+  );
 }
 
 function uniqueStarts(slots: { start: string; end: string; staffId: string }[]) {
