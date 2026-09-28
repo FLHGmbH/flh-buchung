@@ -13,6 +13,12 @@ function overlaps(a0: DateTime, a1: DateTime, b0: DateTime, b1: DateTime) {
   return a0 < b1 && a1 > b0;
 }
 
+export function staffTaken(start: Date, end: Date, ownBufferMin: number, busy: { start: Date; end: Date }[]) {
+  const until = end.getTime() + ownBufferMin * 60_000;
+  const from = start.getTime();
+  return busy.some((b) => from < b.end.getTime() && until > b.start.getTime());
+}
+
 export function freeSlots(opts: {
   zone: string;
   hours: Hours[];

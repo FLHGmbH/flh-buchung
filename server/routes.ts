@@ -20,7 +20,8 @@ import {
   timeOff,
   users,
 } from "./schema.ts";
-import { freeSlots } from "./slots.ts";
+import { freeSlots, staffTaken } from "./slots.ts";
+import { buildDashboard } from "./stats.ts";
 
 type Env = { Variables: { actor: Actor } };
 
@@ -138,7 +139,7 @@ async function expireHolds() {
     .where(and(eq(bookings.status, "pending"), lt(bookings.pinExpiresAt, new Date())));
 }
 
-async function busyFor(tenantId: string, staffIds: string[], bufferByService: Map<string, number>) {
+async function busyFor(tenantId: string, staffIds: string[], bufferByService: Map<string, number>, exceptId?: string) {
   await expireHolds();
   const off = await db.select().from(timeOff).where(eq(timeOff.tenantId, tenantId));
   const books = await db
@@ -147,13 +148,13 @@ async function busyFor(tenantId: string, staffIds: string[], bufferByService: Ma
     .where(
       and(eq(bookings.tenantId, tenantId), or(eq(bookings.status, "confirmed"), eq(bookings.status, "pending"))),
     );
-  // ponytail: buffer only in slot busy times, GiST uses raw ends_at. Persist buffer on the row if that window gets double-booked.
+  // ponytail: GiST ignores buffer; this check is the guard. Widen the row if two requests race past it.
   const busy = [
     ...off
       .filter((o) => staffIds.includes(o.staffId))
       .map((o) => ({ staffId: o.staffId, start: o.startsAt, end: o.endsAt })),
     ...books
-      .filter((b) => staffIds.includes(b.staffId))
+      .filter((b) => b.id !== exceptId && staffIds.includes(b.staffId))
       .map((b) => ({
         staffId: b.staffId,
         start: b.startsAt,
@@ -161,6 +162,28 @@ async function busyFor(tenantId: string, staffIds: string[], bufferByService: Ma
       })),
   ];
   return busy;
+}
+
+async function denyIfTaken(
+  tid: string,
+  fields: { staffId: string; serviceId: string; startsAt: Date; endsAt: Date },
+  exceptId?: string,
+) {
+  const [who] = await db
+    .select({ id: staff.id, name: staff.name, active: staff.active })
+    .from(staff)
+    .where(and(eq(staff.id, fields.staffId), eq(staff.tenantId, tid)))
+    .limit(1);
+  if (!who?.active) return "Mitarbeiter ungültig.";
+  const allowed = await bookableStaffIds(tid, fields.serviceId, fields.staffId);
+  if (!allowed.includes(fields.staffId)) return "Dieser Mitarbeiter macht die Leistung nicht.";
+  const rows = await db.select({ id: services.id, bufferMin: services.bufferMin }).from(services).where(eq(services.tenantId, tid));
+  const buffers = new Map(rows.map((s) => [s.id, s.bufferMin]));
+  const busy = await busyFor(tid, [fields.staffId], buffers, exceptId);
+  if (staffTaken(fields.startsAt, fields.endsAt, buffers.get(fields.serviceId) ?? 0, busy)) {
+    return `${who.name} ist zu der Zeit nicht frei.`;
+  }
+  return null;
 }
 
 api.post("/auth/login", async (c) => {
@@ -773,10 +796,42 @@ api.get("/app/bookings", async (c) => {
   return c.json({ bookings: rows });
 });
 
+api.get("/app/dashboard", async (c) => {
+  const tid = tenantId(c);
+  const [tenant] = await db.select({ timezone: tenants.timezone }).from(tenants).where(eq(tenants.id, tid)).limit(1);
+  if (!tenant) return c.json({ error: "Mandant fehlt." }, 404);
+  const zone = tenant.timezone || "Europe/Berlin";
+  const rows = await db
+    .select({
+      serviceId: bookings.serviceId,
+      startsAt: bookings.startsAt,
+      guestName: bookings.guestName,
+      guestEmail: bookings.guestEmail,
+      status: bookings.status,
+      pinHash: bookings.pinHash,
+    })
+    .from(bookings)
+    .where(eq(bookings.tenantId, tid));
+  const svcs = await db
+    .select({ id: services.id, name: services.name, priceCents: services.priceCents })
+    .from(services)
+    .where(eq(services.tenantId, tid));
+  return c.json(
+    buildDashboard(
+      DateTime.now().setZone(zone),
+      zone,
+      rows.map((b) => ({ ...b, fromPage: b.pinHash !== "" })),
+      svcs,
+    ),
+  );
+});
+
 api.post("/app/bookings", async (c) => {
   const tid = tenantId(c);
   const parsed = await bookingFields(tid, await readJson(c));
   if ("error" in parsed) return c.json({ error: parsed.error }, parsed.status);
+  const deny = await denyIfTaken(tid, parsed.fields);
+  if (deny) return c.json({ error: deny }, 409);
   try {
     const [row] = await db.insert(bookings).values({ tenantId: tid, ...parsed.fields }).returning(bookingCols);
     return c.json({ booking: row }, 201);
@@ -797,6 +852,8 @@ api.patch("/app/bookings/:id", async (c) => {
   if (cur.status === "cancelled") return c.json({ error: "Stornierter Termin." }, 400);
   const parsed = await bookingFields(tid, await readJson(c));
   if ("error" in parsed) return c.json({ error: parsed.error }, parsed.status);
+  const deny = await denyIfTaken(tid, parsed.fields, cur.id);
+  if (deny) return c.json({ error: deny }, 409);
   try {
     const [row] = await db
       .update(bookings)

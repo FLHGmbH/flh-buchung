@@ -4,6 +4,7 @@ import { api, rememberedActor, type Actor } from "./api";
 import { AdminDetail, AdminList, AdminNew } from "./Admin";
 import { BookPage } from "./Book";
 import { CalendarPage } from "./Calendar";
+import { DashboardPage } from "./Dashboard";
 import { BookingsPage, HoursPage, ServicesPage, StaffPage, TimeOffPage } from "./Manage";
 import { LoginPage, ResetPage } from "./Login";
 import { Shell } from "./Shell";
@@ -51,6 +52,7 @@ export function App() {
       >
         <Route element={kd ? <Outlet /> : <Navigate to="/admin" replace />}>
           <Route path="/app" element={<CalendarPage />} />
+          <Route path="/app/dashboard" element={<DashboardPage />} />
           <Route path="/app/termine" element={<BookingsPage />} />
           <Route path="/app/mitarbeiter" element={<StaffPage />} />
           <Route path="/app/sperren" element={<TimeOffPage />} />

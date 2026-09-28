@@ -1,5 +1,5 @@
 import { DateTime } from "luxon";
-import { freeSlots } from "./slots.ts";
+import { freeSlots, staffTaken } from "./slots.ts";
 
 function assert(cond: unknown, msg: string) {
   if (!cond) throw new Error(msg);
@@ -65,5 +65,15 @@ const otherStaff = freeSlots({
   ],
 });
 assert(otherStaff.length === open.length, "other staff busy must not block anna");
+
+const nine = monday.set({ hour: 9 }).toJSDate();
+const nine45 = monday.set({ hour: 9, minute: 45 }).toJSDate();
+const ten = monday.set({ hour: 10 }).toJSDate();
+const ten15 = monday.set({ hour: 10, minute: 15 }).toJSDate();
+const ten45 = monday.set({ hour: 10, minute: 45 }).toJSDate();
+assert(staffTaken(nine, nine45, 0, [{ start: nine, end: nine45 }]), "same window is taken");
+assert(!staffTaken(nine45, ten, 0, [{ start: nine, end: nine45 }]), "abutting the end is free");
+assert(staffTaken(nine45, ten, 0, [{ start: nine, end: ten15 }]), "their buffer blocks the next start");
+assert(staffTaken(nine, nine45, 30, [{ start: ten, end: ten45 }]), "own buffer reaches the next booking");
 
 console.log("slots.check ok");

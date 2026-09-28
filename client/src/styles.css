@@ -497,7 +497,63 @@ a { color: var(--petrol); }
   color: var(--ink);
   line-height: 1.2;
 }
-.stat span { font-size: 0.75rem; color: #6b7280; font-weight: 500; }
+.stat-note { margin: 0.45rem 0 0; font-size: 0.8125rem; color: var(--graphite-75); font-weight: 500; }
+.stat-row.four { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.dash-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+.dash-card {
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  padding: 1.1rem 1.25rem 1rem;
+  box-shadow: 0 1px 2px rgba(15, 23, 32, 0.04);
+  min-width: 0;
+}
+.dash-card h2 { margin: 0; font-size: 1rem; font-weight: 700; color: var(--ink); }
+.dash-card .sub { margin: 0.2rem 0 0.85rem; color: var(--graphite-50); font-size: 0.8125rem; }
+.bars {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(0, 1fr);
+  align-items: end;
+  gap: 0.35rem;
+  height: 168px;
+}
+.bar { display: flex; flex-direction: column; align-items: center; height: 100%; min-width: 0; gap: 0.35rem; }
+.bar-track { height: calc(100% - 1.15rem); width: 100%; display: flex; align-items: flex-end; justify-content: center; }
+.bar-track > i { display: block; width: min(100%, 22px); border-radius: 4px 4px 0 0; }
+.bar-track > i.is-cal { background: var(--petrol); }
+.bar-track > i.is-empty { height: 2px; background: var(--petrol-25); }
+.bar-stack { width: min(100%, 22px); display: flex; flex-direction: column; justify-content: flex-end; border-radius: 4px 4px 0 0; overflow: hidden; }
+.bar-stack i { display: block; width: 100%; min-height: 0; }
+.bar-stack .is-page { background: var(--amber); }
+.bar-stack .is-cal { background: var(--petrol); }
+.bar > span { font-size: 0.75rem; color: var(--graphite-75); line-height: 1; }
+.donut-row { display: flex; align-items: center; gap: 1.25rem; min-height: 168px; }
+.donut {
+  width: 148px;
+  height: 148px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+}
+.donut span {
+  width: 88px;
+  height: 88px;
+  border-radius: 50%;
+  background: #fff;
+  display: grid;
+  place-items: center;
+  font-weight: 800;
+  font-size: 1.25rem;
+  color: var(--ink);
+}
+.legend { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 0.4rem; min-width: 0; flex: 1; }
+.legend.flat { flex-direction: row; flex-wrap: wrap; gap: 0.85rem; margin: 0 0 0.75rem; flex: none; }
+.legend li { display: flex; align-items: center; gap: 0.45rem; min-width: 0; font-size: 0.8125rem; color: var(--graphite); }
+.legend i { width: 10px; height: 10px; border-radius: 2px; flex-shrink: 0; }
+.legend span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.legend strong { margin-left: auto; font-variant-numeric: tabular-nums; }
 .admin-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -606,12 +662,19 @@ a { color: var(--petrol); }
   font-weight: 500;
   padding: 0.5rem 0;
   text-align: center;
-  height: 48px;
+  min-height: 48px;
 }
-.week-cell { height: 48px; padding: 3px; cursor: pointer; }
+.week-cell {
+  min-height: 48px;
+  padding: 3px;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
 .ev {
   width: 100%;
-  height: 100%;
+  min-height: 28px;
   border: 0;
   border-left: 4px solid;
   border-radius: 0 4px 4px 0;
@@ -799,6 +862,10 @@ a { color: var(--petrol); }
   accent-color: var(--btn);
 }
 
+@media (max-width: 1200px) {
+  .stat-row.four { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
 @media (max-width: 900px) {
   .app { grid-template-columns: 1fr; }
   .sidebar { flex-direction: row; flex-wrap: wrap; padding: 0.75rem; }
@@ -814,7 +881,8 @@ a { color: var(--petrol); }
   .search input { width: 12rem; }
   .fields-2 { grid-template-columns: 1fr; }
   .week-nav { margin-left: 0; width: 100%; justify-content: space-between; }
-  .admin-grid, .stat-row { grid-template-columns: 1fr; }
+  .admin-grid, .stat-row, .dash-grid { grid-template-columns: 1fr; }
+  .donut-row { flex-direction: column; align-items: flex-start; }
   .copy-row { flex-direction: column; }
 }
 

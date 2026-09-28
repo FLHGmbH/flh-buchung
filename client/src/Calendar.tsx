@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { api, useApi, type Booking, type Bootstrap, type WeekPayload } from "./api";
-import { gsap, reduced, useGSAP } from "./motion";
-import { BookingModal, eventTone, PageHead } from "./ui";
+import { BookingModal, coverService, eventTone, firstOpen, PageHead } from "./ui";
 
 const START = 8;
 const END = 20;
@@ -77,23 +76,22 @@ export function CalendarPage() {
 
   const tz = week?.timezone ?? boot?.tenant.timezone ?? "Europe/Berlin";
   const today = ymd(new Date());
-  const nowTop = useMemo(() => {
+  const nowMark = useMemo(() => {
     if (!dates.includes(today)) return null;
     const parts = new Intl.DateTimeFormat("de-DE", { timeZone: tz, hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).formatToParts(new Date());
     const h = Number(parts.find((p) => p.type === "hour")?.value);
     const m = Number(parts.find((p) => p.type === "minute")?.value);
     if (h < START || h >= END) return null;
-    return 48 + (h - START) * 48 + (m / 60) * 48;
+    return { h, m };
   }, [dates, today, tz]);
-
-  const wrap = useRef<HTMLDivElement>(null);
-  const weekKey = useRef(mon);
-  useGSAP(() => {
-    if (reduced() || !wrap.current) return;
-    if (weekKey.current === mon) return;
-    weekKey.current = mon;
-    gsap.fromTo(wrap.current, { opacity: 0.7, y: 8 }, { opacity: 1, y: 0, duration: 0.32, ease: "power3.out" });
-  }, { dependencies: [mon, !!boot], scope: wrap });
+  const timeRef = useRef<HTMLDivElement>(null);
+  const lineRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const cell = timeRef.current;
+    const line = lineRef.current;
+    if (!cell || !line || !nowMark) return;
+    line.style.top = `${cell.offsetTop + (nowMark.m / 60) * cell.offsetHeight}px`;
+  }, [nowMark, week, mon]);
 
   if (!boot) return <div className="page"><p className="lead wait">Laden…</p></div>;
 
@@ -102,7 +100,7 @@ export function CalendarPage() {
   const books = week?.bookings ?? [];
 
   return (
-    <div className="page wide" ref={wrap}>
+    <div className="page wide">
       <PageHead
         title="Kalender"
         aside={
@@ -116,7 +114,17 @@ export function CalendarPage() {
                 →
               </button>
             </div>
-            <button className="btn" type="button" onClick={() => setDraft({ date: today, time: "09:00", staffId: boot.staff[0]?.id, serviceId: boot.services[0]?.id })}>
+            <button
+              className="btn"
+              type="button"
+              onClick={() => {
+                const time = "09:00";
+                const hit = firstOpen(boot.staff, boot.services, today, time, books, week?.timeOff ?? []);
+                const svc = coverService(boot.services);
+                const who = boot.staff.find((s) => s.active && svc?.staffIds.includes(s.id)) ?? boot.staff.find((s) => s.active);
+                setDraft(hit ? { date: today, time, ...hit } : { date: today, time, staffId: who?.id, serviceId: svc?.id });
+              }}
+            >
               + Neuer Termin
             </button>
           </div>
@@ -127,7 +135,7 @@ export function CalendarPage() {
       ) : (
         <div className="cal-wrap">
           <div className="week-cal">
-            {nowTop != null ? <div className="now-line" style={{ top: nowTop }} /> : null}
+            {nowMark ? <div className="now-line" ref={lineRef} /> : null}
             <div className="week-grid">
               <div className="week-head" />
               {dates.map((d, i) => (
@@ -135,8 +143,9 @@ export function CalendarPage() {
               ))}
               {hours.map((h) => (
                 <div className="week-row" key={h}>
-                  <div className="week-time">{String(h).padStart(2, "0")}:00</div>
+                  <div className="week-time" ref={nowMark?.h === h ? timeRef : undefined}>{String(h).padStart(2, "0")}:00</div>
                   {dates.map((d) => {
+                    const time = `${String(h).padStart(2, "0")}:00`;
                     const cellBooks = books.filter(
                       (b) => b.status !== "cancelled" && ymdTz(b.startsAt, tz) === d && hourOf(b.startsAt, tz) === h,
                     );
@@ -144,18 +153,17 @@ export function CalendarPage() {
                       <div
                         className="week-cell"
                         key={d + h}
-                        onClick={() =>
-                          setDraft({
-                            date: d,
-                            time: `${String(h).padStart(2, "0")}:00`,
-                            staffId: boot.staff[0]?.id,
-                            serviceId: boot.services[0]?.id,
-                          })
-                        }
+                        onClick={() => {
+                          const hit = firstOpen(boot.staff, boot.services, d, time, books, week?.timeOff ?? []);
+                          const svc = coverService(boot.services);
+                          const who = boot.staff.find((s) => s.active && svc?.staffIds.includes(s.id)) ?? boot.staff.find((s) => s.active);
+                          setDraft(hit ? { date: d, time, ...hit } : { date: d, time, staffId: who?.id, serviceId: svc?.id });
+                        }}
                       >
                         {cellBooks.map((b) => {
                           const t = eventTone(b.serviceId);
                           const svc = boot.services.find((s) => s.id === b.serviceId)?.name ?? "Termin";
+                          const who = boot.staff.find((s) => s.id === b.staffId)?.name;
                           return (
                             <button
                               key={b.id}
@@ -168,7 +176,7 @@ export function CalendarPage() {
                               }}
                             >
                               <strong style={{ color: t.title }}>{svc}</strong>
-                              <span style={{ color: t.sub }}>{shortName(b.guestName)}</span>
+                              <span style={{ color: t.sub }}>{who ? `${shortName(who)} · ` : ""}{shortName(b.guestName)}</span>
                             </button>
                           );
                         })}
@@ -180,7 +188,7 @@ export function CalendarPage() {
             </div>
           </div>
           <aside className="hint">
-            <p>Klick auf einen Termin oder eine leere Stunde.</p>
+            <p>Klick auf einen Termin oder eine freie Stunde. Der Termin geht an die nächste freie Person.</p>
           </aside>
         </div>
       )}
@@ -191,6 +199,7 @@ export function CalendarPage() {
           categories={boot.categories}
           booking={pick}
           timezone={tz}
+          occupied={{ bookings: books, timeOff: week?.timeOff ?? [] }}
           onClose={() => setPick(null)}
           onSaved={() => setPick(null)}
         />
@@ -201,6 +210,7 @@ export function CalendarPage() {
           categories={boot.categories}
           timezone={tz}
           initial={draft}
+          occupied={{ bookings: books, timeOff: week?.timeOff ?? [] }}
           onClose={() => setDraft(null)}
           onSaved={() => setDraft(null)}
         />

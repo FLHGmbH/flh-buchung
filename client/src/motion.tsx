@@ -56,7 +56,7 @@ export function PageMotion() {
   useGSAP(() => {
     const root = ref.current;
     if (!root || reduced()) return;
-    const bits = root.querySelectorAll(".page-head, .hours-card, .card-table, .staff-card, .stat-row, .admin-grid > *, .cal-wrap, .empty, .panel");
+    const bits = root.querySelectorAll(".page-head, .hours-card, .card-table, .staff-card, .stat-row, .dash-card, .admin-grid > *, .cal-wrap, .empty, .panel");
     gsap.fromTo(root, { opacity: 0, y: 14 }, { opacity: 1, y: 0, duration: 0.36, ease: "power3.out", clearProps: "transform" });
     if (bits.length) {
       gsap.fromTo(bits, { opacity: 0, y: 10 }, { opacity: 1, y: 0, duration: 0.4, stagger: 0.045, delay: 0.05, ease: "power3.out", clearProps: "transform" });

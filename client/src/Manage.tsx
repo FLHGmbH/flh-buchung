@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { api, useApi, type Bootstrap, type Booking, type TimeOff } from "./api";
-import { Avatar, BookingModal, centsFromEuro, euro, euroInput, Modal, PageHead, svcTone } from "./ui";
+import { Avatar, BookingModal, centsFromEuro, euro, euroInput, firstOpen, Modal, PageHead, svcTone } from "./ui";
 
 function useBoot() {
   return useApi<Bootstrap>("/api/app/bootstrap");
@@ -34,6 +34,7 @@ function dm(iso: string) {
 export function BookingsPage() {
   const boot = useBoot();
   const list = useApi<{ bookings: Booking[] }>("/api/app/bookings");
+  const off = useApi<{ timeOff: TimeOff[] }>("/api/app/time-off");
   const rows = list?.bookings ?? [];
   const [q, setQ] = useState("");
   const [open, setOpen] = useState(false);
@@ -121,6 +122,7 @@ export function BookingsPage() {
           categories={boot.categories}
           booking={pick}
           timezone={boot.tenant.timezone}
+          occupied={{ bookings: rows, timeOff: off?.timeOff ?? [] }}
           onClose={() => setPick(null)}
           onSaved={() => setPick(null)}
         />
@@ -130,7 +132,13 @@ export function BookingsPage() {
           services={boot.services}
           categories={boot.categories}
           timezone={boot.tenant.timezone}
-          initial={{ date: new Date().toISOString().slice(0, 10), time: "09:00", staffId: boot.staff[0]?.id, serviceId: boot.services[0]?.id }}
+          occupied={{ bookings: rows, timeOff: off?.timeOff ?? [] }}
+          initial={(() => {
+            const date = new Date().toISOString().slice(0, 10);
+            const time = "09:00";
+            const hit = firstOpen(boot.staff, boot.services, date, time, rows, off?.timeOff ?? []);
+            return hit ? { date, time, ...hit } : { date, time, staffId: boot.staff[0]?.id, serviceId: boot.services[0]?.id };
+          })()}
           onClose={() => setOpen(false)}
           onSaved={() => setOpen(false)}
         />

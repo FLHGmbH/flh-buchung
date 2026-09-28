@@ -203,6 +203,8 @@ export const api = {
         const y = new Date(x.getTime() - x.getTimezoneOffset() * 60000);
         inflight(`/api/app/week?from=${y.toISOString().slice(0, 10)}`);
       }
+    } else if (to === "/app/dashboard") {
+      inflight("/api/app/dashboard");
     } else if (to === "/app/termine") {
       inflight("/api/app/bootstrap");
       inflight("/api/app/bookings");
@@ -245,6 +247,22 @@ export type Bootstrap = {
   categories: ServiceCategory[];
   services: Service[];
   hours: { weekday: number; startHm: string; endHm: string }[];
+};
+export type Dashboard = {
+  monthLabel: string;
+  year: number;
+  revenueCents: number;
+  revenueDeltaCents: number;
+  appointments: number;
+  appointmentsDelta: number;
+  bookings: number;
+  bookingsDelta: number;
+  customers: number;
+  customersDelta: number;
+  months: { label: string; revenueCents: number }[];
+  services: { name: string; count: number }[];
+  origins: { label: string; calendar: number; page: number }[];
+  weekdays: { label: string; count: number }[];
 };
 export type WeekPayload = {
   from: string;

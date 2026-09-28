@@ -14,6 +14,13 @@ function Ico({ children }: { children: ReactNode }) {
 }
 
 const ICONS: Record<string, ReactNode> = {
+  Dashboard: (
+    <Ico>
+      <line x1="6" x2="6" y1="20" y2="10" />
+      <line x1="12" x2="12" y1="20" y2="4" />
+      <line x1="18" x2="18" y1="20" y2="14" />
+    </Ico>
+  ),
   Kalender: (
     <Ico>
       <rect x="3" y="4" width="18" height="18" rx="2" />
@@ -99,6 +106,7 @@ export function Shell({ actor, onLogout }: { actor: Actor; onLogout: () => void 
         <nav>
           {kd ? (
             <>
+              {link("/app/dashboard", "Dashboard")}
               {link("/app", "Kalender")}
               {link("/app/termine", "Termine")}
               {link("/app/mitarbeiter", "Mitarbeiter")}
