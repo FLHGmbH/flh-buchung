@@ -152,7 +152,9 @@ export function StaffPage() {
   const off = useApi<{ timeOff: TimeOff[] }>("/api/app/time-off");
   const [name, setName] = useState("");
   const [open, setOpen] = useState(false);
-  const [edit, setEdit] = useState<{ id: string; name: string; active: boolean } | null>(null);
+  const [edit, setEdit] = useState<{ id: string; name: string; active: boolean; photoUrl?: string | null } | null>(null);
+  const [err, setErr] = useState("");
+  const [pending, setPending] = useState(false);
   if (!boot) return <div className="page" />;
   return (
     <div className="page">
@@ -166,10 +168,10 @@ export function StaffPage() {
           const sick = /krank/i.test(abs?.reason ?? "");
           return (
             <article className="staff-card" key={s.id}>
-              <button className="gear" type="button" aria-label="Einstellungen" onClick={() => setEdit({ id: s.id, name: s.name, active: s.active })}>
+              <button className="gear" type="button" aria-label="Einstellungen" onClick={() => { setErr(""); setEdit({ id: s.id, name: s.name, active: s.active, photoUrl: s.photoUrl }); }}>
                 ⚙
               </button>
-              <Avatar name={s.name} size={96} />
+              {s.photoUrl ? <img className="staff-photo" src={s.photoUrl} alt="" /> : <Avatar name={s.name} size={96} />}
               <h2>{s.name}</h2>
               <span className={"tag" + (s.active ? "" : " mute")}>{s.active ? "Aktiv" : "Inaktiv"}</span>
               <div className={"abs" + (sick ? " sick" : "")}>
@@ -210,9 +212,50 @@ export function StaffPage() {
           <form
             onSubmit={(e) => {
               e.preventDefault();
-              api.patchStaff(edit.id, { name: edit.name, active: edit.active }).then(() => setEdit(null));
+              setErr("");
+              api.patchStaff(edit.id, { name: edit.name, active: edit.active }).then(() => setEdit(null)).catch((ex) => setErr(ex instanceof Error ? ex.message : "Speichern fehlgeschlagen."));
             }}
           >
+            {err ? <p className="err" role="alert">{err}</p> : null}
+            {edit.photoUrl ? <img className="staff-photo" src={edit.photoUrl} alt="" /> : <Avatar name={edit.name} size={96} />}
+            <label className="field">
+              <span>{edit.photoUrl ? "Profilbild ersetzen" : "Profilbild"} (optional, PNG, JPG oder WebP, max. 5 MB)</span>
+              <input
+                type="file"
+                accept="image/png,image/jpeg,image/webp"
+                disabled={pending}
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  e.target.value = "";
+                  if (!file || !edit) return;
+                  setErr("");
+                  setPending(true);
+                  const body = new FormData();
+                  body.append("file", file);
+                  api.putStaffPhoto(edit.id, body)
+                    .then((r) => setEdit((cur) => cur ? { ...cur, photoUrl: r.photoUrl } : cur))
+                    .catch((ex) => setErr(ex instanceof Error ? ex.message : "Upload fehlgeschlagen."))
+                    .finally(() => setPending(false));
+                }}
+              />
+            </label>
+            {edit.photoUrl ? (
+              <button
+                className="linkish"
+                type="button"
+                disabled={pending}
+                onClick={() => {
+                  setErr("");
+                  setPending(true);
+                  api.delStaffPhoto(edit.id)
+                    .then(() => setEdit((cur) => cur ? { ...cur, photoUrl: null } : cur))
+                    .catch((ex) => setErr(ex instanceof Error ? ex.message : "Löschen fehlgeschlagen."))
+                    .finally(() => setPending(false));
+                }}
+              >
+                Profilbild entfernen
+              </button>
+            ) : null}
             <label className="field">
               <span>Name</span>
               <input value={edit.name} onChange={(e) => setEdit({ ...edit, name: e.target.value })} required />
@@ -221,9 +264,25 @@ export function StaffPage() {
               <input type="checkbox" checked={edit.active} onChange={(e) => setEdit({ ...edit, active: e.target.checked })} />
               Aktiv
             </label>
+            <button
+              type="button"
+              className="btn danger staff-del"
+              disabled={pending}
+              onClick={() => {
+                if (!window.confirm(`${edit.name} wirklich löschen?`)) return;
+                setErr("");
+                setPending(true);
+                api.delStaff(edit.id)
+                  .then(() => setEdit(null))
+                  .catch((ex) => setErr(ex instanceof Error ? ex.message : "Löschen fehlgeschlagen."))
+                  .finally(() => setPending(false));
+              }}
+            >
+              Löschen
+            </button>
             <div className="modal-foot">
               <button type="button" className="btn outline" onClick={() => setEdit(null)}>Abbrechen</button>
-              <button className="btn" type="submit">Speichern</button>
+              <button className="btn" type="submit" disabled={pending}>Speichern</button>
             </div>
           </form>
         </Modal>

@@ -432,11 +432,11 @@ function sbStorage() {
   return { base, key };
 }
 
-async function wipeLogoFiles(tenantId: string, keep?: string) {
+async function wipeStored(localStem: string, objectStem: string, keep?: string) {
   const sb = sbStorage();
   if (sb) {
     await Promise.all(LOGO_EXTS.filter((e) => e !== keep).map((e) =>
-      fetch(`${sb.base}/storage/v1/object/logos/${tenantId}/logo.${e}`, {
+      fetch(`${sb.base}/storage/v1/object/logos/${objectStem}.${e}`, {
         method: "DELETE",
         headers: { apikey: sb.key, authorization: `Bearer ${sb.key}` },
       }),
@@ -444,12 +444,12 @@ async function wipeLogoFiles(tenantId: string, keep?: string) {
   }
   for (const e of LOGO_EXTS) {
     if (e === keep) continue;
-    const p = join(logoDir, `${tenantId}.${e}`);
+    const p = join(logoDir, `${localStem}.${e}`);
     if (existsSync(p)) unlinkSync(p);
   }
 }
 
-async function storeLogo(tenant: { id: string; slug: string }, mime: string, bytes: Buffer) {
+async function storeImage(localStem: string, objectStem: string, localUrl: string, mime: string, bytes: Buffer) {
   const kind = logoKind(mime, bytes.length);
   if (!kind) return { ok: false as const, error: "PNG, JPG oder WebP, max. 5 MB." };
   const sb = sbStorage();
@@ -468,7 +468,7 @@ async function storeLogo(tenant: { id: string; slug: string }, mime: string, byt
       });
       if (made.ok || made.status === 409) logosBucket = true;
     }
-    const object = `${tenant.id}/logo.${kind.ext}`;
+    const object = `${objectStem}.${kind.ext}`;
     const up = await fetch(`${sb.base}/storage/v1/object/logos/${object}`, {
       method: "POST",
       headers: {
@@ -481,10 +481,10 @@ async function storeLogo(tenant: { id: string; slug: string }, mime: string, byt
       body: bytes,
     });
     if (!up.ok) {
-      console.error("storeLogo", up.status, await up.text());
-      return { ok: false as const, error: "Logo konnte nicht gespeichert werden." };
+      console.error("storeImage", up.status, await up.text());
+      return { ok: false as const, error: "Bild konnte nicht gespeichert werden." };
     }
-    await wipeLogoFiles(tenant.id, kind.ext);
+    await wipeStored(localStem, objectStem, kind.ext);
     return { ok: true as const, url: `${sb.base}/storage/v1/object/public/logos/${object}?v=${Date.now()}` };
   }
   // ponytail: local PGlite has no Storage keys; disk until SUPABASE_* is set
@@ -492,9 +492,29 @@ async function storeLogo(tenant: { id: string; slug: string }, mime: string, byt
     return { ok: false as const, error: "Supabase Storage nicht konfiguriert." };
   }
   mkdirSync(logoDir, { recursive: true });
-  await wipeLogoFiles(tenant.id, kind.ext);
-  writeFileSync(join(logoDir, `${tenant.id}.${kind.ext}`), bytes);
-  return { ok: true as const, url: `/api/public/${tenant.slug}/logo?v=${Date.now()}` };
+  await wipeStored(localStem, objectStem, kind.ext);
+  writeFileSync(join(logoDir, `${localStem}.${kind.ext}`), bytes);
+  return { ok: true as const, url: `${localUrl}?v=${Date.now()}` };
+}
+
+function readLocalImage(localStem: string) {
+  const types: Record<string, string> = { png: "image/png", jpg: "image/jpeg", webp: "image/webp" };
+  for (const ext of Object.keys(types)) {
+    const file = join(logoDir, `${localStem}.${ext}`);
+    if (!existsSync(file)) continue;
+    return new Response(readFileSync(file), {
+      headers: { "content-type": types[ext], "cache-control": "public, max-age=3600" },
+    });
+  }
+  return null;
+}
+
+function storeLogo(tenant: { id: string; slug: string }, mime: string, bytes: Buffer) {
+  return storeImage(tenant.id, `${tenant.id}/logo`, `/api/public/${tenant.slug}/logo`, mime, bytes);
+}
+
+function wipeLogoFiles(tenantId: string, keep?: string) {
+  return wipeStored(tenantId, `${tenantId}/logo`, keep);
 }
 
 api.get("/app/bootstrap", async (c) => {
@@ -569,6 +589,44 @@ api.patch("/app/staff/:id", async (c) => {
     .returning();
   if (!row) return c.json({ error: "Nicht gefunden." }, 404);
   return c.json({ staff: row });
+});
+
+api.delete("/app/staff/:id", async (c) => {
+  const tid = tenantId(c);
+  const id = c.req.param("id");
+  const [row] = await db.select({ id: staff.id }).from(staff).where(and(eq(staff.id, id), eq(staff.tenantId, tid))).limit(1);
+  if (!row) return c.json({ error: "Nicht gefunden." }, 404);
+  const [used] = await db.select({ id: bookings.id }).from(bookings).where(and(eq(bookings.staffId, id), eq(bookings.tenantId, tid))).limit(1);
+  if (used) return c.json({ error: "Mitarbeiter hat noch Termine. Bitte deaktivieren." }, 409);
+  await wipeStored(`staff-${id}`, `${tid}/staff/${id}`);
+  await db.delete(staff).where(eq(staff.id, id));
+  return c.json({ ok: true });
+});
+
+api.post("/app/staff/:id/photo", async (c) => {
+  const tid = tenantId(c);
+  const id = c.req.param("id");
+  const [who] = await db.select({ id: staff.id }).from(staff).where(and(eq(staff.id, id), eq(staff.tenantId, tid))).limit(1);
+  if (!who) return c.json({ error: "Nicht gefunden." }, 404);
+  const [tenant] = await db.select({ slug: tenants.slug }).from(tenants).where(eq(tenants.id, tid)).limit(1);
+  if (!tenant) return c.json({ error: "Mandant fehlt." }, 404);
+  const body = await c.req.parseBody();
+  const file = body.file;
+  if (!file || typeof file === "string") return c.json({ error: "Datei fehlt." }, 400);
+  const saved = await storeImage(`staff-${id}`, `${tid}/staff/${id}`, `/api/public/${tenant.slug}/staff/${id}/photo`, file.type, Buffer.from(await file.arrayBuffer()));
+  if (!saved.ok) return c.json({ error: saved.error }, 400);
+  await db.update(staff).set({ photoUrl: saved.url }).where(eq(staff.id, id));
+  return c.json({ photoUrl: saved.url });
+});
+
+api.delete("/app/staff/:id/photo", async (c) => {
+  const tid = tenantId(c);
+  const id = c.req.param("id");
+  const [who] = await db.select({ id: staff.id }).from(staff).where(and(eq(staff.id, id), eq(staff.tenantId, tid))).limit(1);
+  if (!who) return c.json({ error: "Nicht gefunden." }, 404);
+  await wipeStored(`staff-${id}`, `${tid}/staff/${id}`);
+  await db.update(staff).set({ photoUrl: null }).where(eq(staff.id, id));
+  return c.json({ ok: true });
 });
 
 api.post("/app/services", async (c) => {
@@ -900,15 +958,16 @@ api.post("/app/bookings/:id/cancel", async (c) => {
 api.get("/public/:slug/logo", async (c) => {
   const [tenant] = await db.select({ id: tenants.id }).from(tenants).where(eq(tenants.slug, c.req.param("slug"))).limit(1);
   if (!tenant) return c.json({ error: "Unbekannt." }, 404);
-  const types: Record<string, string> = { png: "image/png", jpg: "image/jpeg", webp: "image/webp" };
-  for (const ext of Object.keys(types)) {
-    const file = join(logoDir, `${tenant.id}.${ext}`);
-    if (!existsSync(file)) continue;
-    return new Response(readFileSync(file), {
-      headers: { "content-type": types[ext], "cache-control": "public, max-age=3600" },
-    });
-  }
-  return c.json({ error: "Kein Logo." }, 404);
+  return readLocalImage(tenant.id) ?? c.json({ error: "Kein Logo." }, 404);
+});
+
+api.get("/public/:slug/staff/:id/photo", async (c) => {
+  const [tenant] = await db.select({ id: tenants.id }).from(tenants).where(eq(tenants.slug, c.req.param("slug"))).limit(1);
+  if (!tenant) return c.json({ error: "Unbekannt." }, 404);
+  const id = c.req.param("id");
+  const [who] = await db.select({ id: staff.id }).from(staff).where(and(eq(staff.id, id), eq(staff.tenantId, tenant.id))).limit(1);
+  if (!who) return c.json({ error: "Unbekannt." }, 404);
+  return readLocalImage(`staff-${id}`) ?? c.json({ error: "Kein Bild." }, 404);
 });
 
 api.get("/public/:slug", async (c) => {
@@ -932,7 +991,7 @@ api.get("/public/:slug", async (c) => {
     .orderBy(serviceCategories.sort);
   return c.json({
     tenant: { name: tenant.name, slug: tenant.slug, timezone: tenant.timezone, logoUrl: tenant.logoUrl },
-    staff: staffRows.map((s) => ({ id: s.id, name: s.name })),
+    staff: staffRows.map((s) => ({ id: s.id, name: s.name, photoUrl: s.photoUrl })),
     categories,
     services: serviceRows.map((s) => ({
       id: s.id,

@@ -775,6 +775,23 @@ a { color: var(--petrol); }
   margin-bottom: 0.5rem;
   transition: border-color 0.16s ease, background 0.16s ease, transform 0.16s ease;
 }
+.choice.person { display: flex; align-items: center; gap: 0.75rem; }
+.choice.person img, .choice.person .ph {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  object-fit: cover;
+  flex-shrink: 0;
+}
+.choice.person .ph {
+  display: grid;
+  place-items: center;
+  background: var(--petrol-25, #eaf1f3);
+  color: var(--petrol);
+  font-weight: 700;
+}
+.staff-photo { width: 96px; height: 96px; border-radius: 50%; object-fit: cover; }
+.staff-del { width: 100%; margin: 0.25rem 0 0.75rem; }
 .choice:hover, .choice.on { border-color: var(--petrol); }
 .choice:active { transform: scale(0.99); }
 .choice.amber {

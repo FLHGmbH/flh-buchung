@@ -32,6 +32,7 @@ export const staff = pgTable("staff", {
   name: text("name").notNull(),
   active: boolean("active").notNull().default(true),
   sort: integer("sort").notNull().default(0),
+  photoUrl: text("photo_url"),
 });
 
 export const serviceCategories = pgTable("service_categories", {

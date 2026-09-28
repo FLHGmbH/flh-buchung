@@ -139,7 +139,8 @@ export function BookPage() {
         <>
           <button className={"choice" + (staffId === "" ? " on" : "")} type="button" onClick={() => { setStaffId(""); setStep(2); }}>Egal</button>
           {staffForService.map((s) => (
-            <button key={s.id} className={"choice" + (staffId === s.id ? " on" : "")} type="button" onClick={() => { setStaffId(s.id); setStep(2); }}>
+            <button key={s.id} className={"choice person" + (staffId === s.id ? " on" : "")} type="button" onClick={() => { setStaffId(s.id); setStep(2); }}>
+              {s.photoUrl ? <img src={s.photoUrl} alt="" /> : <span className="ph">{s.name.slice(0, 1)}</span>}
               {s.name}
             </button>
           ))}

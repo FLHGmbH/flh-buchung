@@ -163,6 +163,9 @@ export const api = {
   week: (from: string) => inflight<WeekPayload>(`/api/app/week?from=${from}`),
   addStaff: (name: string) => mutate("/api/app/staff", { method: "POST", body: JSON.stringify({ name }) }),
   patchStaff: (id: string, body: object) => mutate(`/api/app/staff/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
+  delStaff: (id: string) => mutate(`/api/app/staff/${id}`, { method: "DELETE" }),
+  putStaffPhoto: (id: string, body: FormData) => mutate<{ photoUrl: string }>(`/api/app/staff/${id}/photo`, { method: "POST", body }),
+  delStaffPhoto: (id: string) => mutate(`/api/app/staff/${id}/photo`, { method: "DELETE" }),
   addService: (body: object) => mutate("/api/app/services", { method: "POST", body: JSON.stringify(body) }),
   patchService: (id: string, body: object) => mutate(`/api/app/services/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
   addCategory: (name: string) => mutate("/api/app/categories", { method: "POST", body: JSON.stringify({ name }) }),
@@ -226,7 +229,7 @@ export type TenantRow = {
   iframe?: string;
 };
 
-export type Staff = { id: string; name: string; active: boolean };
+export type Staff = { id: string; name: string; active: boolean; photoUrl?: string | null };
 export type ServiceCategory = { id: string; name: string };
 export type Service = { id: string; name: string; durationMin: number; bufferMin: number; active: boolean; staffIds: string[]; categoryId?: string | null; priceCents?: number | null };
 export type Booking = {
@@ -273,7 +276,7 @@ export type WeekPayload = {
 };
 export type Pub = {
   tenant: { name: string; slug: string; timezone: string; logoUrl?: string | null };
-  staff: { id: string; name: string }[];
+  staff: { id: string; name: string; photoUrl?: string | null }[];
   categories: ServiceCategory[];
   services: { id: string; name: string; durationMin: number; categoryId?: string | null; priceCents?: number | null; staffIds: string[] }[];
 };

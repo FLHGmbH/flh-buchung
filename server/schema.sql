@@ -33,7 +33,8 @@ CREATE TABLE IF NOT EXISTS staff (
   tenant_id uuid NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
   name text NOT NULL,
   active boolean NOT NULL DEFAULT true,
-  sort integer NOT NULL DEFAULT 0
+  sort integer NOT NULL DEFAULT 0,
+  photo_url text
 );
 
 CREATE TABLE IF NOT EXISTS service_categories (
