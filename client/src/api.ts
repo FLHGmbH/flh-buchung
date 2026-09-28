@@ -178,6 +178,7 @@ export const api = {
   addBooking: (body: object) => mutate("/api/app/bookings", { method: "POST", body: JSON.stringify(body) }),
   patchBooking: (id: string, body: object) => mutate(`/api/app/bookings/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
   cancelBooking: (id: string) => mutate(`/api/app/bookings/${id}/cancel`, { method: "POST" }),
+  sync: () => bust("/api/app"),
   pub: (slug: string) => inflight<Pub>(`/api/public/${slug}`),
   slots: (slug: string, serviceId: string, staffId?: string) =>
     inflight<{ slots: { start: string; end: string; staffId: string }[] }>(

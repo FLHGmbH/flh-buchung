@@ -826,6 +826,25 @@ api.get("/app/dashboard", async (c) => {
   );
 });
 
+api.get("/app/pulse", async (c) => {
+  const tid = tenantId(c);
+  const rows = await db
+    .select({
+      id: bookings.id,
+      guestName: bookings.guestName,
+      startsAt: bookings.startsAt,
+      serviceName: services.name,
+      staffName: staff.name,
+    })
+    .from(bookings)
+    .innerJoin(services, eq(services.id, bookings.serviceId))
+    .innerJoin(staff, eq(staff.id, bookings.staffId))
+    .where(and(eq(bookings.tenantId, tid), eq(bookings.status, "confirmed")))
+    .orderBy(desc(bookings.createdAt))
+    .limit(20);
+  return c.json({ bookings: rows });
+});
+
 api.post("/app/bookings", async (c) => {
   const tid = tenantId(c);
   const parsed = await bookingFields(tid, await readJson(c));

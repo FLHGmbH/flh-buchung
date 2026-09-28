@@ -3,6 +3,7 @@ import { NavLink } from "react-router-dom";
 import { api, type Actor } from "./api";
 import { gsap, PageMotion, reduced, useGSAP } from "./motion";
 import { Avatar } from "./ui";
+import { LiveBookings } from "./Live";
 import { Mark } from "./Mark";
 
 function Ico({ children }: { children: ReactNode }) {
@@ -141,6 +142,7 @@ export function Shell({ actor, onLogout }: { actor: Actor; onLogout: () => void 
       <div className="main">
         <PageMotion />
       </div>
+      {kd ? <LiveBookings /> : null}
     </div>
   );
 }
