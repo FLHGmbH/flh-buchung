@@ -1,7 +1,7 @@
 import { existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { and, desc, eq, gte, inArray, lt, lte, or } from "drizzle-orm";
+import { and, desc, eq, gt, gte, inArray, lt, lte, ne, or } from "drizzle-orm";
 import { Hono } from "hono";
 import { DateTime } from "luxon";
 import { actorFrom, actorFromEmail, actorFromUserId, createSession, destroySession, ensurePlatformAdmin, hashPassword, sbEnsureUser, sbPassword, sbRecover, sbSetPassword, verifyLogin, verifyPassword, type Actor } from "./auth.ts";
@@ -21,7 +21,7 @@ import {
   users,
 } from "./schema.ts";
 import { freeSlots, staffTaken } from "./slots.ts";
-import { buildDashboard } from "./stats.ts";
+import { buildDashboard, buildFleet } from "./stats.ts";
 
 type Env = { Variables: { actor: Actor } };
 
@@ -283,6 +283,38 @@ api.use("/app/*", async (c, next) => {
   }
   c.set("actor", actor);
   await next();
+});
+
+api.get("/admin/dashboard", async (c) => {
+  const zone = "Europe/Berlin";
+  const [tenantRows, staffRows, serviceRows, bookingRows] = await Promise.all([
+    db.select({ id: tenants.id, name: tenants.name, active: tenants.active, createdAt: tenants.createdAt }).from(tenants),
+    db.select({ tenantId: staff.tenantId, active: staff.active }).from(staff),
+    db.select({ id: services.id, tenantId: services.tenantId, priceCents: services.priceCents, active: services.active }).from(services),
+    db.select({
+      tenantId: bookings.tenantId,
+      serviceId: bookings.serviceId,
+      startsAt: bookings.startsAt,
+      status: bookings.status,
+    }).from(bookings),
+  ]);
+  const staffN = new Map<string, number>();
+  for (const row of staffRows) if (row.active) staffN.set(row.tenantId, (staffN.get(row.tenantId) ?? 0) + 1);
+  const serviceN = new Map<string, number>();
+  for (const row of serviceRows) if (row.active) serviceN.set(row.tenantId, (serviceN.get(row.tenantId) ?? 0) + 1);
+  return c.json(
+    buildFleet(
+      DateTime.now().setZone(zone),
+      zone,
+      tenantRows.map((t) => ({
+        ...t,
+        staff: staffN.get(t.id) ?? 0,
+        services: serviceN.get(t.id) ?? 0,
+      })),
+      bookingRows,
+      new Map(serviceRows.map((s) => [s.id, s.priceCents ?? 0])),
+    ),
+  );
 });
 
 api.get("/admin/tenants", async (c) => {
@@ -596,8 +628,18 @@ api.delete("/app/staff/:id", async (c) => {
   const id = c.req.param("id");
   const [row] = await db.select({ id: staff.id }).from(staff).where(and(eq(staff.id, id), eq(staff.tenantId, tid))).limit(1);
   if (!row) return c.json({ error: "Nicht gefunden." }, 404);
-  const [used] = await db.select({ id: bookings.id }).from(bookings).where(and(eq(bookings.staffId, id), eq(bookings.tenantId, tid))).limit(1);
-  if (used) return c.json({ error: "Mitarbeiter hat noch Termine. Bitte deaktivieren." }, 409);
+  const [open] = await db
+    .select({ id: bookings.id })
+    .from(bookings)
+    .where(and(
+      eq(bookings.staffId, id),
+      eq(bookings.tenantId, tid),
+      gt(bookings.endsAt, new Date()),
+      ne(bookings.status, "cancelled"),
+    ))
+    .limit(1);
+  if (open) return c.json({ error: "Mitarbeiter hat noch offene Termine. Bitte deaktivieren." }, 409);
+  await db.update(bookings).set({ staffId: null }).where(and(eq(bookings.staffId, id), eq(bookings.tenantId, tid)));
   await wipeStored(`staff-${id}`, `${tid}/staff/${id}`);
   await db.delete(staff).where(eq(staff.id, id));
   return c.json({ ok: true });

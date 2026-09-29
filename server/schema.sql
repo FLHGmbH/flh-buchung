@@ -81,7 +81,7 @@ CREATE TABLE IF NOT EXISTS time_off (
 CREATE TABLE IF NOT EXISTS bookings (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   tenant_id uuid NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
-  staff_id uuid NOT NULL REFERENCES staff(id),
+  staff_id uuid REFERENCES staff(id),
   service_id uuid NOT NULL REFERENCES services(id),
   starts_at timestamptz NOT NULL,
   ends_at timestamptz NOT NULL,

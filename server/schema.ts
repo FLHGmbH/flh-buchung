@@ -82,7 +82,7 @@ export const timeOff = pgTable("time_off", {
 export const bookings = pgTable("bookings", {
   id: uuid("id").primaryKey().defaultRandom(),
   tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
-  staffId: uuid("staff_id").notNull().references(() => staff.id),
+  staffId: uuid("staff_id").references(() => staff.id),
   serviceId: uuid("service_id").notNull().references(() => services.id),
   startsAt: timestamp("starts_at", { withTimezone: true }).notNull(),
   endsAt: timestamp("ends_at", { withTimezone: true }).notNull(),

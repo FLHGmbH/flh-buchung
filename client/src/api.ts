@@ -216,6 +216,7 @@ export const api = {
       inflight("/api/app/bootstrap");
       inflight("/api/app/time-off");
     } else if (to.startsWith("/app")) inflight("/api/app/bootstrap");
+    else if (to === "/admin/dashboard") inflight("/api/admin/dashboard");
     else if (to === "/admin") inflight("/api/admin/tenants");
   },
 };
@@ -234,7 +235,7 @@ export type ServiceCategory = { id: string; name: string };
 export type Service = { id: string; name: string; durationMin: number; bufferMin: number; active: boolean; staffIds: string[]; categoryId?: string | null; priceCents?: number | null };
 export type Booking = {
   id: string;
-  staffId: string;
+  staffId: string | null;
   serviceId: string;
   startsAt: string;
   endsAt: string;
@@ -252,6 +253,23 @@ export type Bootstrap = {
   services: Service[];
   hours: { weekday: number; startHm: string; endHm: string }[];
 };
+export type AdminFleet = {
+  monthLabel: string;
+  year: number;
+  tenants: number;
+  active: number;
+  locked: number;
+  newTenants: number;
+  appointments: number;
+  appointmentsDelta: number;
+  revenueCents: number;
+  revenueDeltaCents: number;
+  today: number;
+  months: { label: string; count: number }[];
+  attention: { id: string; name: string; reason: string }[];
+  activity: { id: string; name: string; month: number; last: string }[];
+};
+
 export type Dashboard = {
   monthLabel: string;
   year: number;

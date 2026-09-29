@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Navigate, Outlet, Route, Routes, useLocation } from "react-router-dom";
 import { api, rememberedActor, type Actor } from "./api";
-import { AdminDetail, AdminList, AdminNew } from "./Admin";
+import { AdminDashboard, AdminDetail, AdminList, AdminNew } from "./Admin";
 import { BookPage } from "./Book";
 import { CalendarPage } from "./Calendar";
 import { DashboardPage } from "./Dashboard";
@@ -60,6 +60,7 @@ export function App() {
           <Route path="/app/zeiten" element={<HoursPage />} />
         </Route>
         <Route element={flh ? <Outlet /> : <Navigate to="/app" replace />}>
+          <Route path="/admin/dashboard" element={<AdminDashboard />} />
           <Route path="/admin" element={<AdminList />} />
           <Route path="/admin/neu" element={<AdminNew />} />
           <Route path="/admin/:id" element={<AdminDetail />} />

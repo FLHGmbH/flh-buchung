@@ -306,6 +306,8 @@ a { color: var(--petrol); }
 .status.is-ok { background: #e4f9ee; color: #1da05c; }
 .status.is-ok i { background: #20bf6b; }
 .status.is-off { background: #f3f4f6; color: #6b7280; }
+.status.is-look { background: #fff4e5; color: #9a6200; }
+.status.is-look i { background: #ff9600; }
 .linkish {
   background: none;
   border: 0;

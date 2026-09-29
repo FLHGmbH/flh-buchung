@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { api, useApi, type TenantRow } from "./api";
-import { Avatar, PageHead } from "./ui";
+import { useApi, type AdminFleet, type TenantRow, api } from "./api";
+import { Bars, vsLast } from "./Dashboard";
+import { Avatar, PageHead, euro } from "./ui";
 
 type TenantDetail = {
   tenant: TenantRow;
@@ -336,6 +337,106 @@ export function AdminDetail() {
           </div>
         </div>
       </article>
+    </div>
+  );
+}
+
+export function AdminDashboard() {
+  const data = useApi<AdminFleet>("/api/admin/dashboard");
+  const nav = useNavigate();
+  if (!data) return <div className="page"><p className="lead wait">Laden…</p></div>;
+  const month = data.monthLabel.split(" ")[0];
+  if (!data.tenants) {
+    return (
+      <div className="page wide">
+        <PageHead title="Dashboard" lead="Noch kein Mandant." />
+        <div className="empty">
+          <p>Leg den ersten Betrieb an. Hier siehst du danach, wer eingerichtet ist und wer bucht.</p>
+          <Link className="btn" to="/admin/neu">+ Neuer Mandant</Link>
+        </div>
+      </div>
+    );
+  }
+  return (
+    <div className="page wide">
+      <PageHead
+        title="Dashboard"
+        lead={`${data.monthLabel}. Stornierte Termine zählen nicht. Umsatz nur aus bestätigten Terminen zum aktuellen Preis.`}
+      />
+      <div className="stat-row four">
+        <div className="stat">
+          <strong>{data.active}</strong>
+          <span>Aktive Mandanten</span>
+          <p className="stat-note">
+            {data.locked ? `${data.locked} gesperrt` : "keiner gesperrt"}
+            {data.newTenants ? ` · ${data.newTenants} neu` : ""}
+          </p>
+        </div>
+        <div className="stat">
+          <strong>{data.today}</strong>
+          <span>Termine heute</span>
+          <p className="stat-note">{data.appointments} im {month}</p>
+        </div>
+        <div className="stat">
+          <strong>{data.appointments}</strong>
+          <span>Termine im {month}</span>
+          <p className="stat-note">{vsLast(data.appointmentsDelta)}</p>
+        </div>
+        <div className="stat">
+          <strong>{euro(data.revenueCents)}</strong>
+          <span>Umsatz im {month}</span>
+          <p className="stat-note">{vsLast(data.revenueDeltaCents, true)}</p>
+        </div>
+      </div>
+      <div className="dash-grid">
+        <section className="dash-card">
+          <h2>Nachschauen</h2>
+          <p className="sub">Gesperrt, unvollständig, oder seit 45 Tagen ohne Buchung</p>
+          {data.attention.length ? (
+            <table className="table quiet click">
+              <tbody>
+                {data.attention.map((t) => (
+                  <tr key={t.id} onClick={() => nav(`/admin/${t.id}`)}>
+                    <td><strong>{t.name}</strong></td>
+                    <td>
+                      <span className={"status" + (t.reason === "Gesperrt" ? " is-off" : " is-look")}>
+                        <i />
+                        {t.reason}
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          ) : (
+            <p className="hint-line">Nichts offen. Jeder aktive Betrieb hat Mitarbeiter, Leistungen und eine Buchung der letzten 45 Tage.</p>
+          )}
+        </section>
+        <section className="dash-card">
+          <h2>Buchungen nach Monat</h2>
+          <p className="sub">{data.year} · alle Mandanten</p>
+          <Bars rows={data.months.map((m) => ({ label: m.label, value: m.count }))} />
+        </section>
+        <section className="dash-card">
+          <h2>Aktiv im {month}</h2>
+          <p className="sub">Betriebe mit mindestens einem Termin</p>
+          {data.activity.length ? (
+            <table className="table quiet click">
+              <tbody>
+                {data.activity.map((t) => (
+                  <tr key={t.id} onClick={() => nav(`/admin/${t.id}`)}>
+                    <td><strong>{t.name}</strong></td>
+                    <td>{t.month}</td>
+                    <td>{t.last}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          ) : (
+            <p className="hint-line">In diesem Monat hat noch kein Betrieb gebucht.</p>
+          )}
+        </section>
+      </div>
     </div>
   );
 }

@@ -3,13 +3,13 @@ import { euro, PageHead } from "./ui";
 
 const SLICE = ["#006478", "#408b9a", "#ff9600", "#253239", "#80b1bb", "#ffb040"];
 
-function vsLast(n: number, money = false) {
+export function vsLast(n: number, money = false) {
   if (n === 0) return "wie im Vormonat";
   const abs = money ? euro(Math.abs(n)) : String(Math.abs(n));
   return n > 0 ? `${abs} mehr als im Vormonat` : `${abs} weniger als im Vormonat`;
 }
 
-function Bars({
+export function Bars({
   rows,
   tone = "petrol",
 }: {
