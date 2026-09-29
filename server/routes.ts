@@ -287,17 +287,16 @@ api.use("/app/*", async (c, next) => {
 
 api.get("/admin/dashboard", async (c) => {
   const zone = "Europe/Berlin";
-  const [tenantRows, staffRows, serviceRows, bookingRows] = await Promise.all([
-    db.select({ id: tenants.id, name: tenants.name, active: tenants.active, createdAt: tenants.createdAt }).from(tenants),
-    db.select({ tenantId: staff.tenantId, active: staff.active }).from(staff),
-    db.select({ id: services.id, tenantId: services.tenantId, priceCents: services.priceCents, active: services.active }).from(services),
-    db.select({
-      tenantId: bookings.tenantId,
-      serviceId: bookings.serviceId,
-      startsAt: bookings.startsAt,
-      status: bookings.status,
-    }).from(bookings),
-  ]);
+  // ponytail: Vercel uses one pooled connection; parallel selects hang on the Supabase pooler. Sequence them.
+  const tenantRows = await db.select({ id: tenants.id, name: tenants.name, active: tenants.active, createdAt: tenants.createdAt }).from(tenants);
+  const staffRows = await db.select({ tenantId: staff.tenantId, active: staff.active }).from(staff);
+  const serviceRows = await db.select({ id: services.id, tenantId: services.tenantId, priceCents: services.priceCents, active: services.active }).from(services);
+  const bookingRows = await db.select({
+    tenantId: bookings.tenantId,
+    serviceId: bookings.serviceId,
+    startsAt: bookings.startsAt,
+    status: bookings.status,
+  }).from(bookings);
   const staffN = new Map<string, number>();
   for (const row of staffRows) if (row.active) staffN.set(row.tenantId, (staffN.get(row.tenantId) ?? 0) + 1);
   const serviceN = new Map<string, number>();
