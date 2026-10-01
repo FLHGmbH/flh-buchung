@@ -37,6 +37,22 @@ export function Avatar({ name, size = 32 }: { name: string; size?: number }) {
   );
 }
 
+export const STAFF_COLORS = ["#1b5561", "#348a8a", "#8359dd", "#b45309", "#0f766e", "#be185d"];
+
+export function staffColor(s: { id: string; color?: string | null }) {
+  return s.color && /^#[0-9a-f]{6}$/i.test(s.color) ? s.color.toLowerCase() : STAFF_COLORS[hash(s.id, STAFF_COLORS.length)];
+}
+
+function lum(hex: string) {
+  const n = (i: number) => parseInt(hex.slice(1 + i * 2, 3 + i * 2), 16) / 255;
+  return 0.2126 * n(0) + 0.7152 * n(1) + 0.0722 * n(2);
+}
+
+export function staffTone(hex?: string | null) {
+  const edge = hex && /^#[0-9a-f]{6}$/i.test(hex) ? hex.toLowerCase() : "#64748b";
+  return { bg: `${edge}22`, edge, title: lum(edge) > 0.62 ? "#0f172a" : edge, sub: "#475569" };
+}
+
 export function eventTone(id: string) {
   return EVENT[hash(id, EVENT.length)];
 }

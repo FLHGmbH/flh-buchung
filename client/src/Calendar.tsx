@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { api, useApi, type Booking, type Bootstrap, type WeekPayload } from "./api";
-import { BookingModal, coverService, eventTone, firstOpen, PageHead } from "./ui";
+import { BookingModal, coverService, firstOpen, PageHead, staffColor, staffTone } from "./ui";
 
 const START = 8;
 const END = 20;
@@ -25,6 +25,26 @@ function mondayOf(date: string) {
 
 function weekDays(mon: string) {
   return Array.from({ length: 7 }, (_, i) => shift(mon, i));
+}
+
+function addMonth(date: string, n: number) {
+  const [y, m, d] = date.split("-").map(Number);
+  const dim = new Date(y, m - 1 + n + 1, 0).getDate();
+  return ymd(new Date(y, m - 1 + n, Math.min(d, dim)));
+}
+
+function monthGrid(anchor: string) {
+  const first = anchor.slice(0, 8) + "01";
+  const start = mondayOf(first);
+  const dim = new Date(Number(first.slice(0, 4)), Number(first.slice(5, 7)), 0).getDate();
+  const end = shift(mondayOf(shift(first, dim - 1)), 6);
+  const days: string[] = [];
+  for (let d = start; d <= end; d = shift(d, 1)) days.push(d);
+  return days;
+}
+
+function weekdayIndex(date: string) {
+  return (new Date(date + "T12:00:00").getDay() + 6) % 7;
 }
 
 function isoWeek(mon: string) {
@@ -62,11 +82,18 @@ function warm(mon: string) {
   api.week(shift(mon, 7));
 }
 
+type CalView = "day" | "week" | "month";
+
 export function CalendarPage() {
-  const [mon, setMon] = useState(() => mondayOf(ymd(new Date())));
-  const dates = useMemo(() => weekDays(mon), [mon]);
+  const [view, setView] = useState<CalView>("week");
+  const [anchor, setAnchor] = useState(() => ymd(new Date()));
+  const mon = mondayOf(anchor);
+  const monthDays = useMemo(() => monthGrid(anchor), [anchor]);
+  const dates = view === "day" ? [anchor] : view === "month" ? monthDays : weekDays(mon);
+  const from = view === "month" ? monthDays[0] : mon;
+  const span = view === "month" ? monthDays.length : 7;
   const boot = useApi<Bootstrap>("/api/app/bootstrap");
-  const week = useApi<WeekPayload>(`/api/app/week?from=${mon}`);
+  const week = useApi<WeekPayload>(span === 7 ? `/api/app/week?from=${from}` : `/api/app/week?from=${from}&days=${span}`);
   const [pick, setPick] = useState<Booking | null>(null);
   const [draft, setDraft] = useState<{ staffId?: string; serviceId?: string; date?: string; time?: string } | null>(null);
   const [focus, setFocus] = useState<{ day: string; hour: number } | null>(null);
@@ -92,29 +119,43 @@ export function CalendarPage() {
     const line = lineRef.current;
     if (!cell || !line || !nowMark) return;
     line.style.top = `${cell.offsetTop + (nowMark.m / 60) * cell.offsetHeight}px`;
-  }, [nowMark, week, mon]);
+  }, [nowMark, week, anchor, view]);
   useEffect(() => {
     if (!focus) return;
     const cell = document.querySelector(`[data-slot="${focus.day}-${focus.hour}"]`);
     if (!cell) return;
     cell.scrollIntoView({ block: "center", inline: "nearest" });
     setFocus(null);
-  }, [focus, mon, week]);
+  }, [focus, anchor, week, view]);
 
   function showSaved(startsAt?: string) {
     setPick(null);
     setDraft(null);
     if (!startsAt) return;
     const day = ymdTz(startsAt, tz);
-    setMon(mondayOf(day));
+    setAnchor(day);
+    if (view === "month") return;
     const hour = hourOf(startsAt, tz);
     if (Number.isFinite(hour)) setFocus({ day, hour });
   }
 
+  function step(dir: number) {
+    if (view === "day") setAnchor(shift(anchor, dir));
+    else if (view === "week") setAnchor(shift(anchor, dir * 7));
+    else setAnchor(addMonth(anchor, dir));
+  }
+
   if (!boot) return <div className="page"><p className="lead wait">Laden…</p></div>;
 
-  const last = dates[6];
   const emptyStaff = boot.staff.length === 0;
+  const monthKey = anchor.slice(0, 7);
+  const period = view === "day"
+    ? new Date(anchor + "T12:00:00").toLocaleDateString("de-DE", { weekday: "long", day: "numeric", month: "long", year: "numeric" })
+    : view === "month"
+      ? new Date(monthKey + "-01T12:00:00").toLocaleDateString("de-DE", { month: "long", year: "numeric" })
+      : `KW ${isoWeek(mon)}: ${dm(mon)} – ${dm(dates[6])}${dates[6].slice(0, 4)}`;
+  const prevLabel = view === "day" ? "Vorheriger Tag" : view === "month" ? "Vorheriger Monat" : "Vorherige Woche";
+  const nextLabel = view === "day" ? "Nächster Tag" : view === "month" ? "Nächster Monat" : "Nächste Woche";
   const books = week?.bookings ?? [];
   const used = books
     .filter((b) => b.status !== "cancelled" && dates.includes(ymdTz(b.startsAt, tz)))
@@ -130,12 +171,19 @@ export function CalendarPage() {
         title="Kalender"
         aside={
           <div className="week-nav">
+            <div className="view-switch" role="group" aria-label="Ansicht">
+              {([["day", "Tag"], ["week", "Woche"], ["month", "Monat"]] as const).map(([id, label]) => (
+                <button key={id} type="button" className={view === id ? "on" : ""} aria-pressed={view === id} onClick={() => setView(id)}>
+                  {label}
+                </button>
+              ))}
+            </div>
             <div className="week-switch">
-              <button type="button" className="week-arrow" aria-label="Vorherige Woche" onClick={() => setMon(shift(mon, -7))}>
+              <button type="button" className="week-arrow" aria-label={prevLabel} onClick={() => step(-1)}>
                 ←
               </button>
-              <span>KW {isoWeek(mon)}: {dm(mon)} – {dm(last)}{last.slice(0, 4)}</span>
-              <button type="button" className="week-arrow" aria-label="Nächste Woche" onClick={() => setMon(shift(mon, 7))}>
+              <span>{period}</span>
+              <button type="button" className="week-arrow" aria-label={nextLabel} onClick={() => step(1)}>
                 →
               </button>
             </div>
@@ -160,11 +208,56 @@ export function CalendarPage() {
       ) : (
         <div className="cal-wrap">
           <div className="week-cal">
-            {nowMark ? <div className="now-line" ref={lineRef} /> : null}
-            <div className="week-grid">
+            {view === "month" ? (
+              <div className="month-grid">
+                {DAYS.map((name) => <div className="week-head" key={name}>{name}</div>)}
+                {dates.map((d) => {
+                  const cellBooks = books.filter((b) => b.status !== "cancelled" && ymdTz(b.startsAt, tz) === d);
+                  return (
+                    <div
+                      key={d}
+                      className={"month-cell" + (d.slice(0, 7) === monthKey ? "" : " off") + (d === today ? " today" : "")}
+                      onClick={() => {
+                        const time = "09:00";
+                        const hit = firstOpen(boot.staff, boot.services, d, time, books, week?.timeOff ?? []);
+                        const svc = coverService(boot.services);
+                        const who = boot.staff.find((s) => s.active && svc?.staffIds.includes(s.id)) ?? boot.staff.find((s) => s.active);
+                        setDraft(hit ? { date: d, time, ...hit } : { date: d, time, staffId: who?.id, serviceId: svc?.id });
+                      }}
+                    >
+                      <span className="month-num">{Number(d.slice(8))}</span>
+                      {cellBooks.map((b) => {
+                        const member = boot.staff.find((s) => s.id === b.staffId);
+                        const t = staffTone(member ? staffColor(member) : null);
+                        const svc = boot.services.find((s) => s.id === b.serviceId)?.name ?? "Termin";
+                        const who = member?.name;
+                        return (
+                          <button
+                            key={b.id}
+                            type="button"
+                            className="ev"
+                            style={{ background: t.bg, borderLeftColor: t.edge, color: t.title }}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setPick(b);
+                            }}
+                          >
+                            <strong style={{ color: t.title }}>{svc}</strong>
+                            <span style={{ color: t.sub }}>{who ? `${shortName(who)} · ` : ""}{shortName(b.guestName)}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  );
+                })}
+              </div>
+            ) : null}
+            {view !== "month" ? nowMark ? <div className="now-line" ref={lineRef} /> : null : null}
+            {view !== "month" ? (
+            <div className={"week-grid" + (view === "day" ? " is-day" : "")}>
               <div className="week-head" />
-              {dates.map((d, i) => (
-                <div className="week-head" key={d}>{DAYS[i]} {dm(d)}</div>
+              {dates.map((d) => (
+                <div className="week-head" key={d}>{DAYS[weekdayIndex(d)]} {dm(d)}</div>
               ))}
               {rows.map((h) => (
                 <div className="week-row" key={h}>
@@ -187,9 +280,10 @@ export function CalendarPage() {
                         }}
                       >
                         {cellBooks.map((b) => {
-                          const t = eventTone(b.serviceId);
+                          const member = boot.staff.find((s) => s.id === b.staffId);
+                          const t = staffTone(member ? staffColor(member) : null);
                           const svc = boot.services.find((s) => s.id === b.serviceId)?.name ?? "Termin";
-                          const who = boot.staff.find((s) => s.id === b.staffId)?.name;
+                          const who = member?.name;
                           return (
                             <button
                               key={b.id}
@@ -212,6 +306,7 @@ export function CalendarPage() {
                 </div>
               ))}
             </div>
+            ) : null}
           </div>
           <aside className="hint">
             <p>Klick auf einen Termin oder eine freie Stunde. Der Termin geht an die nächste freie Person.</p>

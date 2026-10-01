@@ -102,6 +102,7 @@ export async function migrate() {
   await execSql(`ALTER TABLE services ADD COLUMN IF NOT EXISTS price_cents integer`).catch(ignoreExists);
   await execSql(`ALTER TABLE tenants ADD COLUMN IF NOT EXISTS logo_url text`).catch(ignoreExists);
   await execSql(`ALTER TABLE staff ADD COLUMN IF NOT EXISTS photo_url text`).catch(ignoreExists);
+  await execSql(`ALTER TABLE staff ADD COLUMN IF NOT EXISTS color text`).catch(ignoreExists);
   await execSql(`ALTER TABLE bookings ALTER COLUMN staff_id DROP NOT NULL`).catch(ignoreExists);
   if (isPg) {
     await requirePg(`ALTER TABLE staff ADD CONSTRAINT staff_id_tenant UNIQUE (id, tenant_id)`);

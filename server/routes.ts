@@ -596,8 +596,10 @@ api.get("/app/week", async (c) => {
   const raw = c.req.query("from") || "";
   const day = DateTime.fromISO(raw, { zone: tenant.timezone });
   if (!day.isValid) return c.json({ error: "Woche ungültig." }, 400);
+  const asked = Number(c.req.query("days") || 7);
+  const span = Number.isInteger(asked) && asked >= 1 && asked <= 42 ? asked : 7;
   const from = day.startOf("day");
-  const to = from.plus({ days: 6 }).endOf("day");
+  const to = from.plus({ days: span - 1 }).endOf("day");
   const books = await db
     .select(bookingCols)
     .from(bookings)
@@ -613,29 +615,39 @@ api.get("/app/week", async (c) => {
   });
 });
 
+function staffColor(raw: unknown) {
+  if (typeof raw !== "string" || !/^#[0-9a-fA-F]{6}$/.test(raw)) return null;
+  return raw.toLowerCase();
+}
+
 api.post("/app/staff", async (c) => {
   const tid = tenantId(c);
-  const body = await readJson<{ name?: string }>(c);
+  const body = await readJson<{ name?: string; color?: string }>(c);
   if (!body) return c.json({ error: "Ungültige Anfrage." }, 400);
   const name = clip(body.name ?? "", LEN.name);
+  const color = staffColor(body.color);
   if (!name) return c.json({ error: "Name nötig." }, 400);
+  if (!color) return c.json({ error: "Farbe nötig." }, 400);
   const existing = await db.select().from(staff).where(eq(staff.tenantId, tid));
   const [row] = await db
     .insert(staff)
-    .values({ tenantId: tid, name, sort: existing.length })
+    .values({ tenantId: tid, name, sort: existing.length, color })
     .returning();
   return c.json({ staff: row }, 201);
 });
 
 api.patch("/app/staff/:id", async (c) => {
   const tid = tenantId(c);
-  const body = await readJson<{ name?: string; active?: boolean }>(c);
+  const body = await readJson<{ name?: string; active?: boolean; color?: string }>(c);
   if (!body) return c.json({ error: "Ungültige Anfrage." }, 400);
+  const color = body.color == null ? undefined : staffColor(body.color);
+  if (body.color != null && !color) return c.json({ error: "Farbe ungültig." }, 400);
   const [row] = await db
     .update(staff)
     .set({
       ...(typeof body.name === "string" ? { name: clip(body.name, LEN.name) } : {}),
       ...(typeof body.active === "boolean" ? { active: body.active } : {}),
+      ...(color ? { color } : {}),
     })
     .where(and(eq(staff.id, c.req.param("id")), eq(staff.tenantId, tid)))
     .returning();

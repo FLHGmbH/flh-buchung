@@ -1,9 +1,31 @@
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { api, useApi, type Bootstrap, type Booking, type TimeOff } from "./api";
-import { Avatar, BookingModal, centsFromEuro, euro, euroInput, firstOpen, Modal, PageHead, svcTone } from "./ui";
+import { Avatar, BookingModal, centsFromEuro, euro, euroInput, firstOpen, Modal, PageHead, STAFF_COLORS, staffColor, svcTone } from "./ui";
 
 function useBoot() {
   return useApi<Bootstrap>("/api/app/bootstrap");
+}
+
+function ColorPick({ value, onChange }: { value: string; onChange: (c: string) => void }) {
+  return (
+    <label className="field">
+      <span>Farbe</span>
+      <div className="swatches">
+        {STAFF_COLORS.map((c) => (
+          <button
+            key={c}
+            type="button"
+            className={value === c ? "on" : ""}
+            style={{ background: c }}
+            aria-label={`Farbe ${c}`}
+            aria-pressed={value === c}
+            onClick={() => onChange(c)}
+          />
+        ))}
+        <input type="color" value={value} aria-label="Eigene Farbe" onChange={(e) => onChange(e.target.value)} />
+      </div>
+    </label>
+  );
 }
 
 const DAYS = ["", "Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag", "Samstag", "Sonntag"];
@@ -152,10 +174,11 @@ export function StaffPage() {
   const off = useApi<{ timeOff: TimeOff[] }>("/api/app/time-off");
   const list = useApi<{ bookings: Booking[] }>("/api/app/bookings");
   const [name, setName] = useState("");
+  const [color, setColor] = useState(STAFF_COLORS[0]);
   const [open, setOpen] = useState(false);
   const [sel, setSel] = useState<string | null>(null);
   const [pick, setPick] = useState<Booking | null>(null);
-  const [edit, setEdit] = useState<{ id: string; name: string; active: boolean; photoUrl?: string | null } | null>(null);
+  const [edit, setEdit] = useState<{ id: string; name: string; active: boolean; photoUrl?: string | null; color: string } | null>(null);
   const [err, setErr] = useState("");
   const [pending, setPending] = useState(false);
   const who = boot?.staff.find((s) => s.id === sel) ?? null;
@@ -171,7 +194,7 @@ export function StaffPage() {
     <div className="page">
       <PageHead
         title="Mitarbeiter"
-        aside={<button className="btn" type="button" onClick={() => setOpen(true)}>+ Mitarbeiter</button>}
+        aside={<button className="btn" type="button" onClick={() => { setColor(STAFF_COLORS[boot.staff.length % STAFF_COLORS.length]); setOpen(true); }}>+ Mitarbeiter</button>}
       />
       <div className="staff-grid">
         {boot.staff.map((s) => {
@@ -179,7 +202,7 @@ export function StaffPage() {
           const sick = /krank/i.test(abs?.reason ?? "");
           return (
             <article className={"staff-card" + (sel === s.id ? " on" : "")} key={s.id}>
-              <button className="gear" type="button" aria-label="Einstellungen" onClick={() => { setErr(""); setEdit({ id: s.id, name: s.name, active: s.active, photoUrl: s.photoUrl }); }}>
+              <button className="gear" type="button" aria-label="Einstellungen" onClick={() => { setErr(""); setEdit({ id: s.id, name: s.name, active: s.active, photoUrl: s.photoUrl, color: staffColor(s) }); }}>
                 ⚙
               </button>
               <button
@@ -189,7 +212,7 @@ export function StaffPage() {
                 onClick={() => setSel(sel === s.id ? null : s.id)}
               >
                 {s.photoUrl ? <img className="staff-photo" src={s.photoUrl} alt="" /> : <Avatar name={s.name} size={96} />}
-                <strong className="staff-name">{s.name}</strong>
+                <strong className="staff-name"><i className="staff-dot" style={{ background: staffColor(s) }} />{s.name}</strong>
                 <span className={"tag" + (s.active ? "" : " mute")}>{s.active ? "Aktiv" : "Inaktiv"}</span>
                 <div className={"abs" + (sick ? " sick" : "")}>
                   {abs ? (
@@ -282,13 +305,14 @@ export function StaffPage() {
           <form
             onSubmit={(e) => {
               e.preventDefault();
-              api.addStaff(name).then(() => { setName(""); setOpen(false); });
+              api.addStaff(name, color).then(() => { setName(""); setOpen(false); });
             }}
           >
             <label className="field">
               <span>Name</span>
               <input value={name} onChange={(e) => setName(e.target.value)} required placeholder="Jonas S." />
             </label>
+            <ColorPick value={color} onChange={setColor} />
             <div className="modal-foot">
               <button type="button" className="btn outline" onClick={() => setOpen(false)}>Abbrechen</button>
               <button className="btn" type="submit">Mitarbeiter hinzufügen</button>
@@ -302,7 +326,7 @@ export function StaffPage() {
             onSubmit={(e) => {
               e.preventDefault();
               setErr("");
-              api.patchStaff(edit.id, { name: edit.name, active: edit.active }).then(() => setEdit(null)).catch((ex) => setErr(ex instanceof Error ? ex.message : "Speichern fehlgeschlagen."));
+              api.patchStaff(edit.id, { name: edit.name, active: edit.active, color: edit.color }).then(() => setEdit(null)).catch((ex) => setErr(ex instanceof Error ? ex.message : "Speichern fehlgeschlagen."));
             }}
           >
             {err ? <p className="err" role="alert">{err}</p> : null}
@@ -349,6 +373,7 @@ export function StaffPage() {
               <span>Name</span>
               <input value={edit.name} onChange={(e) => setEdit({ ...edit, name: e.target.value })} required />
             </label>
+            <ColorPick value={edit.color} onChange={(c) => setEdit({ ...edit, color: c })} />
             <label className="check">
               <input type="checkbox" checked={edit.active} onChange={(e) => setEdit({ ...edit, active: e.target.checked })} />
               Aktiv

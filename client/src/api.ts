@@ -202,7 +202,7 @@ export const api = {
     req(`/api/admin/tenants/${tenantId}/password`, { method: "PATCH", body: JSON.stringify({ userId, password }) }),
   bootstrap: () => inflight<Bootstrap>("/api/app/bootstrap"),
   week: (from: string) => inflight<WeekPayload>(`/api/app/week?from=${from}`),
-  addStaff: (name: string) => mutate("/api/app/staff", { method: "POST", body: JSON.stringify({ name }) }),
+  addStaff: (name: string, color: string) => mutate("/api/app/staff", { method: "POST", body: JSON.stringify({ name, color }) }),
   patchStaff: (id: string, body: object) => mutate(`/api/app/staff/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
   delStaff: (id: string) => mutate(`/api/app/staff/${id}`, { method: "DELETE" }),
   putStaffPhoto: (id: string, body: FormData) => mutate<{ photoUrl: string }>(`/api/app/staff/${id}/photo`, { method: "POST", body }),
@@ -283,7 +283,7 @@ export type TenantRow = {
   iframe?: string;
 };
 
-export type Staff = { id: string; name: string; active: boolean; photoUrl?: string | null };
+export type Staff = { id: string; name: string; active: boolean; photoUrl?: string | null; color?: string | null };
 export type ServiceCategory = { id: string; name: string };
 export type Service = { id: string; name: string; durationMin: number; bufferMin: number; active: boolean; staffIds: string[]; categoryId?: string | null; priceCents?: number | null };
 export type Booking = {

@@ -33,8 +33,8 @@ export async function seed() {
     .returning();
   await db.insert(memberships).values({ userId: kd.id, tenantId: tenant.id, role: "tenant_admin" });
 
-  const [anna] = await db.insert(staff).values({ tenantId: tenant.id, name: "Anna Berger", sort: 0 }).returning();
-  const [ben] = await db.insert(staff).values({ tenantId: tenant.id, name: "Ben Krüger", sort: 1 }).returning();
+  const [anna] = await db.insert(staff).values({ tenantId: tenant.id, name: "Anna Berger", sort: 0, color: "#1b5561" }).returning();
+  const [ben] = await db.insert(staff).values({ tenantId: tenant.id, name: "Ben Krüger", sort: 1, color: "#b45309" }).returning();
 
   const [women] = await db.insert(serviceCategories).values({ tenantId: tenant.id, name: "Frauenhaarschnitt", sort: 0 }).returning();
   const [men] = await db.insert(serviceCategories).values({ tenantId: tenant.id, name: "Männerhaarschnitt", sort: 1 }).returning();
