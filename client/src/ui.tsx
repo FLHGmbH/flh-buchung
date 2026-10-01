@@ -204,7 +204,7 @@ export function BookingModal({
   initial?: { staffId?: string; serviceId?: string; date?: string; time?: string };
   occupied?: { bookings: Booking[]; timeOff: Off[] };
   onClose: () => void;
-  onSaved: () => void;
+  onSaved: (startsAt?: string) => void;
 }) {
   const start = booking ? clock(booking.startsAt, timezone) : null;
   const gone = booking?.status === "cancelled";
@@ -247,9 +247,8 @@ export function BookingModal({
     setErr("");
     setPending(true);
     try {
-      if (booking) await api.patchBooking(booking.id, payload());
-      else await api.addBooking(payload());
-      onSaved();
+      const saved = booking ? await api.patchBooking(booking.id, payload()) : await api.addBooking(payload());
+      onSaved(saved.booking.startsAt);
     } catch (ex) {
       setErr(ex instanceof Error ? ex.message : "Termin konnte nicht gespeichert werden.");
     } finally {

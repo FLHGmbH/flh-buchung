@@ -34,6 +34,7 @@ export function BookPage() {
   const [done, setDone] = useState<{ id: string; startsAt: string } | null>(null);
   const [hold, setHold] = useState<{ id: string; startsAt: string } | null>(null);
   const [pin, setPin] = useState("");
+  const [agree, setAgree] = useState(false);
   const [pending, setPending] = useState(false);
 
   useEffect(() => {
@@ -221,6 +222,7 @@ export function BookPage() {
         <form
           onSubmit={(e) => {
             e.preventDefault();
+            if (!agree) return;
             setPending(true);
             api.book(slug, {
               serviceId,
@@ -242,7 +244,13 @@ export function BookPage() {
           <label className="field"><span>E-Mail</span><input type="email" required value={guest.guestEmail} onChange={(e) => setGuest({ ...guest, guestEmail: e.target.value })} /></label>
           <label className="field"><span>Telefon</span><input value={guest.guestPhone} onChange={(e) => setGuest({ ...guest, guestPhone: e.target.value })} /></label>
           <label className="field"><span>Notiz</span><textarea value={guest.note} onChange={(e) => setGuest({ ...guest, note: e.target.value })} /></label>
-          <button className="btn" disabled={pending} type="submit">{pending ? "Sendet Code…" : "Code per Mail"}</button>
+          <label className="check agree">
+            <input type="checkbox" checked={agree} onChange={(e) => setAgree(e.target.checked)} required />
+            <span>
+              Ich habe die <a href="/agb" target="_blank" rel="noreferrer">AGB</a> und die <a href="/datenschutz" target="_blank" rel="noreferrer">Datenschutzerklärung</a> gelesen und bin einverstanden.
+            </span>
+          </label>
+          <button className={agree ? "btn" : "btn is-hold"} disabled={pending || !agree} type="submit">{pending ? "Sendet Code…" : "Code per Mail"}</button>
           <button className="btn quiet book-back" type="button" onClick={() => setStep(3)}>Zurück</button>
         </form>
       )}
@@ -299,15 +307,47 @@ export function BookPage() {
   );
 }
 
+const COOKIE_KEY = "flh-book-ok";
+
+function CookieBar({ onOk }: { onOk: () => void }) {
+  return (
+    <div className="cookie-bar" role="dialog" aria-label="Cookies">
+      <p>Nur technisch nötige Daten für die Buchung. Keine Werbe-Cookies.</p>
+      <button
+        className="btn"
+        type="button"
+        onClick={() => {
+          try {
+            localStorage.setItem(COOKIE_KEY, "1");
+          } catch {
+            /* storage blocked in the iframe */
+          }
+          onOk();
+        }}
+      >
+        Verstanden
+      </button>
+    </div>
+  );
+}
+
 function BookShell({ children }: { children: ReactNode }) {
   const ref = useRef<HTMLDivElement>(null);
+  const [cookies, setCookies] = useState(() => {
+    try {
+      return localStorage.getItem(COOKIE_KEY) !== "1";
+    } catch {
+      return true;
+    }
+  });
   useGSAP(() => {
     if (reduced() || !ref.current) return;
     gsap.fromTo(ref.current, { opacity: 0, y: 12 }, { opacity: 1, y: 0, duration: 0.4, ease: "power3.out" });
   }, { scope: ref });
   return (
-    <div className="book-page">
+    <div className={"book-page" + (cookies ? " has-cookie" : "")}>
       <div className="book" ref={ref}>{children}</div>
+      {cookies ? <CookieBar onOk={() => setCookies(false)} /> : null}
     </div>
   );
 }

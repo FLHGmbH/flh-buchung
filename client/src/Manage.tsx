@@ -150,11 +150,22 @@ export function BookingsPage() {
 export function StaffPage() {
   const boot = useBoot();
   const off = useApi<{ timeOff: TimeOff[] }>("/api/app/time-off");
+  const list = useApi<{ bookings: Booking[] }>("/api/app/bookings");
   const [name, setName] = useState("");
   const [open, setOpen] = useState(false);
+  const [sel, setSel] = useState<string | null>(null);
+  const [pick, setPick] = useState<Booking | null>(null);
   const [edit, setEdit] = useState<{ id: string; name: string; active: boolean; photoUrl?: string | null } | null>(null);
   const [err, setErr] = useState("");
   const [pending, setPending] = useState(false);
+  const who = boot?.staff.find((s) => s.id === sel) ?? null;
+  const upcoming = useMemo(() => {
+    if (!who || !list) return [];
+    const now = Date.now();
+    return list.bookings
+      .filter((b) => b.staffId === who.id && b.status !== "cancelled" && new Date(b.endsAt).getTime() > now)
+      .sort((a, b) => new Date(a.startsAt).getTime() - new Date(b.startsAt).getTime());
+  }, [who, list]);
   if (!boot) return <div className="page" />;
   return (
     <div className="page">
@@ -167,27 +178,105 @@ export function StaffPage() {
           const abs = nextOff(s.id, off?.timeOff ?? []);
           const sick = /krank/i.test(abs?.reason ?? "");
           return (
-            <article className="staff-card" key={s.id}>
+            <article className={"staff-card" + (sel === s.id ? " on" : "")} key={s.id}>
               <button className="gear" type="button" aria-label="Einstellungen" onClick={() => { setErr(""); setEdit({ id: s.id, name: s.name, active: s.active, photoUrl: s.photoUrl }); }}>
                 ⚙
               </button>
-              {s.photoUrl ? <img className="staff-photo" src={s.photoUrl} alt="" /> : <Avatar name={s.name} size={96} />}
-              <h2>{s.name}</h2>
-              <span className={"tag" + (s.active ? "" : " mute")}>{s.active ? "Aktiv" : "Inaktiv"}</span>
-              <div className={"abs" + (sick ? " sick" : "")}>
-                {abs ? (
-                  <>
-                    <small>{abs.reason || "Abwesenheit"}</small>
-                    <strong>{dm(abs.startsAt)} – {dm(abs.endsAt)}</strong>
-                  </>
-                ) : (
-                  <span>Keine Abwesenheit</span>
-                )}
-              </div>
+              <button
+                type="button"
+                className="staff-open"
+                aria-pressed={sel === s.id}
+                onClick={() => setSel(sel === s.id ? null : s.id)}
+              >
+                {s.photoUrl ? <img className="staff-photo" src={s.photoUrl} alt="" /> : <Avatar name={s.name} size={96} />}
+                <strong className="staff-name">{s.name}</strong>
+                <span className={"tag" + (s.active ? "" : " mute")}>{s.active ? "Aktiv" : "Inaktiv"}</span>
+                <div className={"abs" + (sick ? " sick" : "")}>
+                  {abs ? (
+                    <>
+                      <small>{abs.reason || "Abwesenheit"}</small>
+                      <strong>{dm(abs.startsAt)} – {dm(abs.endsAt)}</strong>
+                    </>
+                  ) : (
+                    <span>Keine Abwesenheit</span>
+                  )}
+                </div>
+              </button>
             </article>
           );
         })}
       </div>
+      {who ? (
+        <section className="hours-card staff-appts">
+          <div className="card-head">Termine von {who.name}</div>
+          {!list ? (
+            <p className="hint-line card-body">Laden…</p>
+          ) : upcoming.length ? (
+            <div className="card-table flat">
+              <table className="table quiet click">
+                <thead>
+                  <tr>
+                    <th>Wann</th>
+                    <th>Gast</th>
+                    <th>Leistung</th>
+                    <th>Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {upcoming.map((b) => {
+                    const w = when(b.startsAt);
+                    const svc = boot.services.find((s) => s.id === b.serviceId);
+                    const chip = svcTone(b.serviceId);
+                    const live = new Date(b.startsAt).getTime() <= Date.now();
+                    const ok = b.status === "confirmed";
+                    return (
+                      <tr key={b.id} onClick={() => setPick(b)}>
+                        <td>
+                          <div className="when-day">{w.day}</div>
+                          <div className="when-time">{w.time}</div>
+                        </td>
+                        <td>
+                          <div className="who-cell">
+                            <Avatar name={b.guestName} size={32} />
+                            <div>
+                              <strong>{b.guestName}</strong>
+                              {b.guestEmail ? <small>{b.guestEmail}</small> : null}
+                              {b.guestPhone ? <small>{b.guestPhone}</small> : null}
+                            </div>
+                          </div>
+                        </td>
+                        <td>
+                          <span className="pill" style={{ background: chip.bg, color: chip.fg, borderColor: chip.bd }}>{svc?.name ?? "—"}</span>
+                        </td>
+                        <td>
+                          <span className={"status" + (live ? " is-look" : ok ? " is-ok" : "")}>
+                            <i />
+                            {live ? "Jetzt" : ok ? "Bestätigt" : "PIN offen"}
+                          </span>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <p className="hint-line card-body">Keine kommenden Termine.</p>
+          )}
+        </section>
+      ) : null}
+      {pick && who ? (
+        <BookingModal
+          staff={boot.staff}
+          services={boot.services}
+          categories={boot.categories}
+          booking={pick}
+          timezone={boot.tenant.timezone}
+          occupied={{ bookings: list?.bookings ?? [], timeOff: off?.timeOff ?? [] }}
+          onClose={() => setPick(null)}
+          onSaved={() => setPick(null)}
+        />
+      ) : null}
       {open ? (
         <Modal title="Neuer Mitarbeiter" onClose={() => setOpen(false)}>
           <form

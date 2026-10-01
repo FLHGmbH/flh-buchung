@@ -4,7 +4,6 @@ import { BookingModal, coverService, eventTone, firstOpen, PageHead } from "./ui
 
 const START = 8;
 const END = 20;
-const hours = Array.from({ length: END - START }, (_, i) => START + i);
 const DAYS = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"];
 
 function ymd(d: Date) {
@@ -47,7 +46,8 @@ function ymdTz(iso: string, tz: string) {
 
 function hourOf(iso: string, tz: string) {
   const parts = new Intl.DateTimeFormat("de-DE", { timeZone: tz, hour: "2-digit", hourCycle: "h23" }).formatToParts(new Date(iso));
-  return Number(parts.find((p) => p.type === "hour")?.value);
+  const n = Number(parts.find((p) => p.type === "hour")?.value);
+  return n === 24 ? 0 : n;
 }
 
 function shortName(name: string) {
@@ -69,6 +69,7 @@ export function CalendarPage() {
   const week = useApi<WeekPayload>(`/api/app/week?from=${mon}`);
   const [pick, setPick] = useState<Booking | null>(null);
   const [draft, setDraft] = useState<{ staffId?: string; serviceId?: string; date?: string; time?: string } | null>(null);
+  const [focus, setFocus] = useState<{ day: string; hour: number } | null>(null);
 
   useEffect(() => {
     warm(mon);
@@ -92,12 +93,36 @@ export function CalendarPage() {
     if (!cell || !line || !nowMark) return;
     line.style.top = `${cell.offsetTop + (nowMark.m / 60) * cell.offsetHeight}px`;
   }, [nowMark, week, mon]);
+  useEffect(() => {
+    if (!focus) return;
+    const cell = document.querySelector(`[data-slot="${focus.day}-${focus.hour}"]`);
+    if (!cell) return;
+    cell.scrollIntoView({ block: "center", inline: "nearest" });
+    setFocus(null);
+  }, [focus, mon, week]);
+
+  function showSaved(startsAt?: string) {
+    setPick(null);
+    setDraft(null);
+    if (!startsAt) return;
+    const day = ymdTz(startsAt, tz);
+    setMon(mondayOf(day));
+    const hour = hourOf(startsAt, tz);
+    if (Number.isFinite(hour)) setFocus({ day, hour });
+  }
 
   if (!boot) return <div className="page"><p className="lead wait">Laden…</p></div>;
 
   const last = dates[6];
   const emptyStaff = boot.staff.length === 0;
   const books = week?.bookings ?? [];
+  const used = books
+    .filter((b) => b.status !== "cancelled" && dates.includes(ymdTz(b.startsAt, tz)))
+    .map((b) => hourOf(b.startsAt, tz))
+    .filter((h) => Number.isFinite(h));
+  const first = Math.min(START, ...used);
+  const lastH = Math.max(END - 1, ...used);
+  const rows = Array.from({ length: lastH - first + 1 }, (_, i) => first + i);
 
   return (
     <div className="page wide">
@@ -141,7 +166,7 @@ export function CalendarPage() {
               {dates.map((d, i) => (
                 <div className="week-head" key={d}>{DAYS[i]} {dm(d)}</div>
               ))}
-              {hours.map((h) => (
+              {rows.map((h) => (
                 <div className="week-row" key={h}>
                   <div className="week-time" ref={nowMark?.h === h ? timeRef : undefined}>{String(h).padStart(2, "0")}:00</div>
                   {dates.map((d) => {
@@ -152,6 +177,7 @@ export function CalendarPage() {
                     return (
                       <div
                         className="week-cell"
+                        data-slot={`${d}-${h}`}
                         key={d + h}
                         onClick={() => {
                           const hit = firstOpen(boot.staff, boot.services, d, time, books, week?.timeOff ?? []);
@@ -201,7 +227,7 @@ export function CalendarPage() {
           timezone={tz}
           occupied={{ bookings: books, timeOff: week?.timeOff ?? [] }}
           onClose={() => setPick(null)}
-          onSaved={() => setPick(null)}
+          onSaved={showSaved}
         />
       ) : draft ? (
         <BookingModal
@@ -212,7 +238,7 @@ export function CalendarPage() {
           initial={draft}
           occupied={{ bookings: books, timeOff: week?.timeOff ?? [] }}
           onClose={() => setDraft(null)}
-          onSaved={() => setDraft(null)}
+          onSaved={showSaved}
         />
       ) : null}
     </div>

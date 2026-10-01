@@ -4,7 +4,7 @@ import { fileURLToPath } from "node:url";
 import { and, desc, eq, gt, gte, inArray, lt, lte, ne, or } from "drizzle-orm";
 import { Hono } from "hono";
 import { DateTime } from "luxon";
-import { actorFrom, actorFromEmail, actorFromUserId, createSession, destroySession, ensurePlatformAdmin, hashPassword, sbEnsureUser, sbPassword, sbRecover, sbSetPassword, verifyLogin, verifyPassword, type Actor } from "./auth.ts";
+import { actorFrom, actorFromEmail, actorFromUserId, createSession, destroySession, ensurePlatformAdmin, hashPassword, sbEnsureUser, sbPassword, sbRecover, sbSetPassword, sbUser, verifyLogin, verifyPassword, type Actor } from "./auth.ts";
 import { db } from "./db.ts";
 import { BOOK_MAX, LEN, LOGIN_MAX, PIN_MAX, WINDOW_MS, bookWindow, clip, clientIp, inIntRange, limited, logoKind, passwordOk, priceCents, readJson, sbConfigured, serviceMins, siteOrigin } from "./guard.ts";
 import { newPin, PIN_MS, sendPinMail } from "./mail.ts";
@@ -241,6 +241,27 @@ api.post("/auth/recover", async (c) => {
     return c.json({ error: "Mail gerade nicht möglich." }, 503);
   }
   return c.json({ ok: true });
+});
+
+api.post("/auth/reset-context", async (c) => {
+  if (limited(`resetctx:${clientIp(c.req)}`, LOGIN_MAX, WINDOW_MS)) {
+    return c.json({ error: "Zu viele Versuche. Bitte später erneut." }, 429);
+  }
+  if (!sbConfigured()) return c.json({ error: "Auth nicht konfiguriert." }, 503);
+  const body = await readJson<{ accessToken?: string }>(c);
+  const accessToken = body?.accessToken ?? "";
+  if (!accessToken || accessToken.length > 4096) return c.json({ error: "Link ungültig oder abgelaufen." }, 400);
+  try {
+    const user = await sbUser(accessToken);
+    if (!user) return c.json({ error: "Link ungültig oder abgelaufen." }, 401);
+    const actor = await actorFromEmail(user.email);
+    const name = actor?.name || user.name || "";
+    const company = actor?.tenantName || (actor?.role === "platform_admin" ? "FLH DIGITAL" : "");
+    return c.json({ name, company });
+  } catch (e) {
+    console.error(e);
+    return c.json({ error: "Link ungültig oder abgelaufen." }, 401);
+  }
 });
 
 api.post("/auth/reset", async (c) => {

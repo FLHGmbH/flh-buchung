@@ -60,6 +60,20 @@ export async function sbRecover(email: string, redirectTo: string) {
   return res.ok;
 }
 
+export async function sbUser(accessToken: string) {
+  const cfg = sbPublic();
+  if (!cfg || !accessToken) return null;
+  const res = await fetch(`${cfg.base}/auth/v1/user`, {
+    headers: { apikey: cfg.key, authorization: `Bearer ${accessToken}` },
+  });
+  if (!res.ok) return null;
+  const data = (await res.json()) as { email?: string; user_metadata?: { name?: string } };
+  const email = (data.email ?? "").toLowerCase();
+  if (!email.includes("@")) return null;
+  const meta = data.user_metadata?.name;
+  return { email, name: typeof meta === "string" ? meta.trim() : "" };
+}
+
 export async function sbSetPassword(accessToken: string, password: string) {
   const cfg = sbPublic();
   if (!cfg) return false;

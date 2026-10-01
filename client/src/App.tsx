@@ -6,7 +6,7 @@ import { BookPage } from "./Book";
 import { CalendarPage } from "./Calendar";
 import { DashboardPage } from "./Dashboard";
 import { BookingsPage, HoursPage, ServicesPage, StaffPage, TimeOffPage } from "./Manage";
-import { LoginPage, ResetPage } from "./Login";
+import { LegalPage, LoginPage, ResetPage } from "./Login";
 import { Shell } from "./Shell";
 
 export function App() {
@@ -40,6 +40,8 @@ export function App() {
   return (
     <Routes>
       <Route path="/reset" element={<ResetPage />} />
+      <Route path="/agb" element={<LegalPage kind="agb" />} />
+      <Route path="/datenschutz" element={<LegalPage kind="privacy" />} />
       <Route path="/login" element={actor ? <Home actor={actor} /> : <LoginPage onLogin={(a) => { setActor(a); api.prefetch(a.role === "tenant_admin" ? "/app" : "/admin"); }} />} />
       <Route
         element={

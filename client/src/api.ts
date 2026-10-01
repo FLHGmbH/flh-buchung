@@ -12,6 +12,7 @@ export type Actor = {
 
 const mem = new Map<string, unknown>();
 const wait = new Map<string, Promise<unknown>>();
+const gen = new Map<string, number>();
 const subs = new Set<() => void>();
 const ACTOR_KEY = "flh-actor";
 
@@ -50,16 +51,18 @@ function inflight<T>(path: string): Promise<T> {
   if (mem.has(path)) return Promise.resolve(mem.get(path) as T);
   const w = wait.get(path);
   if (w) return w as Promise<T>;
+  const n = gen.get(path) ?? 0;
   const early = path === "/api/me" ? (window as unknown as { __FLH_ME?: Promise<T> }).__FLH_ME : undefined;
   const p = (early ?? req<T>(path)).then(
     (d) => {
+      if ((gen.get(path) ?? 0) !== n) return d;
       mem.set(path, d);
       wait.delete(path);
       if (path === "/api/me") persistActor((d as { actor: Actor | null }).actor);
       return d;
     },
     (e) => {
-      wait.delete(path);
+      if ((gen.get(path) ?? 0) === n) wait.delete(path);
       throw e;
     },
   );
@@ -94,28 +97,63 @@ export function useApi<T>(path: string | null) {
 }
 
 function bust(prefix: string) {
-  const keys = [...mem.keys()].filter((k) => k.startsWith(prefix));
-  for (const k of [...wait.keys()]) if (k.startsWith(prefix)) wait.delete(k);
+  // ponytail: drop responses that started before this bust. A still-running prefetch must not repaint the old week.
+  const keys = new Set([...mem.keys(), ...wait.keys()].filter((k) => k.startsWith(prefix)));
   for (const k of keys) {
+    const n = (gen.get(k) ?? 0) + 1;
+    gen.set(k, n);
     const p = req(k).then(
       (d) => {
+        if ((gen.get(k) ?? 0) !== n) return d;
         mem.set(k, d);
         wait.delete(k);
         bump();
         return d;
       },
       () => {
-        wait.delete(k);
+        if ((gen.get(k) ?? 0) === n) wait.delete(k);
       },
     );
     wait.set(k, p);
   }
 }
 
+function dayKey(iso: string, tz: string) {
+  return new Intl.DateTimeFormat("en-CA", { timeZone: tz, year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date(iso));
+}
+
+function shiftDay(date: string, days: number) {
+  const d = new Date(date + "T12:00:00");
+  d.setDate(d.getDate() + days);
+  const z = new Date(d.getTime() - d.getTimezoneOffset() * 60000);
+  return z.toISOString().slice(0, 10);
+}
+
+function placeBooking(row: Booking) {
+  const list = mem.get("/api/app/bookings") as { bookings: Booking[] } | undefined;
+  if (list) {
+    const has = list.bookings.some((b) => b.id === row.id);
+    mem.set("/api/app/bookings", {
+      bookings: has ? list.bookings.map((b) => (b.id === row.id ? { ...b, ...row } : b)) : [row, ...list.bookings],
+    });
+  }
+  for (const [k, v] of mem) {
+    if (!k.startsWith("/api/app/week?")) continue;
+    const week = v as WeekPayload;
+    const end = shiftDay(week.from, 6);
+    const day = dayKey(row.startsAt, week.timezone);
+    const bookings = week.bookings.filter((b) => b.id !== row.id);
+    if (day >= week.from && day <= end) bookings.push(row);
+    mem.set(k, { ...week, bookings });
+  }
+  bump();
+}
+
 async function req<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(path, {
     credentials: "include",
     ...init,
+    cache: "no-store",
     headers: init?.body instanceof FormData ? init.headers : { "content-type": "application/json", ...(init?.headers ?? {}) },
   });
   const data = await res.json().catch(() => ({}));
@@ -139,10 +177,13 @@ export const api = {
     return r;
   },
   recover: (email: string) => req("/api/auth/recover", { method: "POST", body: JSON.stringify({ email }) }),
+  resetContext: (accessToken: string) =>
+    req<{ name: string; company: string }>("/api/auth/reset-context", { method: "POST", body: JSON.stringify({ accessToken }) }),
   resetPassword: (accessToken: string, password: string) =>
     req("/api/auth/reset", { method: "POST", body: JSON.stringify({ accessToken, password }) }),
   logout: async () => {
     await req("/api/auth/logout", { method: "POST" });
+    for (const k of new Set([...mem.keys(), ...wait.keys()])) gen.set(k, (gen.get(k) ?? 0) + 1);
     mem.clear();
     wait.clear();
     try {
@@ -178,8 +219,16 @@ export const api = {
   addTimeOff: (body: object) => mutate("/api/app/time-off", { method: "POST", body: JSON.stringify(body) }),
   delTimeOff: (id: string) => mutate(`/api/app/time-off/${id}`, { method: "DELETE" }),
   bookings: () => inflight<{ bookings: Booking[] }>("/api/app/bookings"),
-  addBooking: (body: object) => mutate("/api/app/bookings", { method: "POST", body: JSON.stringify(body) }),
-  patchBooking: (id: string, body: object) => mutate(`/api/app/bookings/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
+  addBooking: async (body: object) => {
+    const r = await mutate<{ booking: Booking }>("/api/app/bookings", { method: "POST", body: JSON.stringify(body) });
+    placeBooking(r.booking);
+    return r;
+  },
+  patchBooking: async (id: string, body: object) => {
+    const r = await mutate<{ booking: Booking }>(`/api/app/bookings/${id}`, { method: "PATCH", body: JSON.stringify(body) });
+    placeBooking(r.booking);
+    return r;
+  },
   cancelBooking: (id: string) => mutate(`/api/app/bookings/${id}/cancel`, { method: "POST" }),
   sync: () => bust("/api/app"),
   pub: (slug: string) => inflight<Pub>(`/api/public/${slug}`),
@@ -212,6 +261,10 @@ export const api = {
     } else if (to === "/app/termine") {
       inflight("/api/app/bootstrap");
       inflight("/api/app/bookings");
+    } else if (to === "/app/mitarbeiter") {
+      inflight("/api/app/bootstrap");
+      inflight("/api/app/bookings");
+      inflight("/api/app/time-off");
     } else if (to === "/app/sperren") {
       inflight("/api/app/bootstrap");
       inflight("/api/app/time-off");
