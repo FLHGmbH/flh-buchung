@@ -76,6 +76,7 @@ function schemaFile(name: string) {
 }
 
 export async function migrate() {
+  await execSql(`ALTER TABLE staff ADD COLUMN IF NOT EXISTS color text`).catch(ignoreExists);
   const file = isPg ? "schema.sql" : "schema.lite.sql";
   const sql = readFileSync(schemaFile(file), "utf8");
   for (const stmt of sql.split(";").map((s) => s.trim()).filter(Boolean)) {
@@ -102,7 +103,6 @@ export async function migrate() {
   await execSql(`ALTER TABLE services ADD COLUMN IF NOT EXISTS price_cents integer`).catch(ignoreExists);
   await execSql(`ALTER TABLE tenants ADD COLUMN IF NOT EXISTS logo_url text`).catch(ignoreExists);
   await execSql(`ALTER TABLE staff ADD COLUMN IF NOT EXISTS photo_url text`).catch(ignoreExists);
-  await execSql(`ALTER TABLE staff ADD COLUMN IF NOT EXISTS color text`).catch(ignoreExists);
   await execSql(`ALTER TABLE bookings ALTER COLUMN staff_id DROP NOT NULL`).catch(ignoreExists);
   if (isPg) {
     await requirePg(`ALTER TABLE staff ADD CONSTRAINT staff_id_tenant UNIQUE (id, tenant_id)`);
@@ -122,6 +122,7 @@ function requirePg(sql: string) {
   return execSql(sql).catch((e: unknown) => {
     const msg = e instanceof Error ? e.message : String(e);
     if (/already exists|duplicate/i.test(msg)) return;
-    throw e;
+    // ponytail: pooler DDL (gist) must not take the app down; re-apply from the log if this prints
+    console.error("migrate constraint", msg);
   });
 }

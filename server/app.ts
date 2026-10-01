@@ -8,8 +8,12 @@ export const app = new Hono();
 
 let boot: Promise<void> | null = null;
 function ready() {
-  if (process.env.VERCEL) return Promise.resolve();
-  boot ??= migrate().then(() => seedIfEmpty());
+  boot ??= migrate()
+    .then(() => seedIfEmpty())
+    .catch((e) => {
+      boot = null;
+      throw e;
+    });
   return boot;
 }
 
