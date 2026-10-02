@@ -297,6 +297,7 @@ export function BookPage() {
           </span>
           <h2>Gebucht</h2>
           <p>{new Date(done.startsAt).toLocaleString("de-DE", { weekday: "long", day: "numeric", month: "long", hour: "2-digit", minute: "2-digit" })}</p>
+          <p>Die Bestätigung mit der Kalenderdatei termin.ics ist unterwegs an deine E-Mail.</p>
           <p className="book-code">{done.id.slice(0, 8).toUpperCase()}</p>
         </div>
       )}

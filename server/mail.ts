@@ -25,6 +25,101 @@ export function dotStuff(s: string) {
   return s.replace(/^\./gm, "..");
 }
 
+export function icsUtc(d: Date) {
+  return d.toISOString().replace(/[-:]/g, "").replace(/\.\d{3}/, "");
+}
+
+export function icsEscape(s: string) {
+  return s.replace(/\\/g, "\\\\").replace(/\r?\n/g, "\\n").replace(/[,;]/g, (c) => `\\${c}`);
+}
+
+export function icsFold(s: string) {
+  return s.split("\r\n").map((line) => {
+    const bytes = Buffer.from(line, "utf8");
+    if (bytes.length <= 75) return line;
+    const parts: string[] = [];
+    let i = 0;
+    let limit = 75;
+    while (i < bytes.length) {
+      let end = Math.min(i + limit, bytes.length);
+      while (end > i && (bytes[end]! & 0xc0) === 0x80) end--;
+      if (end === i) end = Math.min(i + limit, bytes.length);
+      parts.push(bytes.subarray(i, end).toString("utf8"));
+      i = end;
+      limit = 74;
+    }
+    return parts.join("\r\n ");
+  }).join("\r\n");
+}
+
+export function confirmIcs(opts: { uid: string; start: Date; end: Date; summary: string; description: string }) {
+  return icsFold([
+    "BEGIN:VCALENDAR",
+    "VERSION:2.0",
+    "PRODID:-//FLH DIGITAL//Buchung//DE",
+    "CALSCALE:GREGORIAN",
+    "METHOD:PUBLISH",
+    "BEGIN:VEVENT",
+    `UID:${icsEscape(opts.uid)}`,
+    `DTSTAMP:${icsUtc(new Date())}`,
+    `DTSTART:${icsUtc(opts.start)}`,
+    `DTEND:${icsUtc(opts.end)}`,
+    `SUMMARY:${icsEscape(opts.summary)}`,
+    `DESCRIPTION:${icsEscape(opts.description)}`,
+    "END:VEVENT",
+    "END:VCALENDAR",
+    "",
+  ].join("\r\n"));
+}
+
+function b64Lines(s: string) {
+  return Buffer.from(s, "utf8").toString("base64").match(/.{1,76}/g)!.join("\r\n");
+}
+
+export function mimeBody(opts: { from: string; to: string; subject: string; text: string; html: string; ics?: string }) {
+  const alt = `a${Date.now().toString(16)}`;
+  const inner = [
+    `--${alt}`,
+    'Content-Type: text/plain; charset="utf-8"',
+    "",
+    opts.text,
+    `--${alt}`,
+    'Content-Type: text/html; charset="utf-8"',
+    "",
+    opts.html,
+    `--${alt}--`,
+    "",
+  ].join("\r\n");
+  const head = [
+    `From: ${opts.from}`,
+    `To: ${opts.to}`,
+    `Subject: ${encodeSubject(opts.subject)}`,
+    `Date: ${new Date().toUTCString()}`,
+    "MIME-Version: 1.0",
+  ];
+  if (!opts.ics) {
+    return dotStuff([...head, `Content-Type: multipart/alternative; boundary="${alt}"`, "", inner].join("\r\n"));
+  }
+  const mixed = `m${Date.now().toString(16)}`;
+  return dotStuff([
+    ...head,
+    `Content-Type: multipart/mixed; boundary="${mixed}"`,
+    "",
+    `--${mixed}`,
+    `Content-Type: multipart/alternative; boundary="${alt}"`,
+    "",
+    inner,
+    `--${mixed}`,
+    'Content-Type: text/calendar; charset="utf-8"; method=PUBLISH; name="termin.ics"',
+    'Content-Disposition: attachment; filename="termin.ics"',
+    "Content-Transfer-Encoding: base64",
+    "",
+    b64Lines(opts.ics),
+    `--${mixed}--`,
+    "",
+  ].join("\r\n"));
+}
+
 function smtpConf() {
   const host = process.env.SMTP_HOST?.trim();
   const user = process.env.SMTP_USER?.trim();
@@ -95,33 +190,12 @@ function tlsSmtp(host: string, port: number) {
   };
 }
 
-async function smtpSend(opts: { from: string; to: string; subject: string; text: string; html: string }) {
+async function smtpSend(opts: { from: string; to: string; subject: string; text: string; html: string; ics?: string }) {
   const conf = smtpConf();
   if (!conf) throw new Error("Mail ist nicht konfiguriert.");
   const from = mailboxAddr(opts.from);
   const to = mailboxAddr(opts.to);
-  const bound = `b${Date.now().toString(16)}`;
-  const body = dotStuff(
-    [
-      `From: ${opts.from}`,
-      `To: ${opts.to}`,
-      `Subject: ${encodeSubject(opts.subject)}`,
-      `Date: ${new Date().toUTCString()}`,
-      "MIME-Version: 1.0",
-      `Content-Type: multipart/alternative; boundary="${bound}"`,
-      "",
-      `--${bound}`,
-      'Content-Type: text/plain; charset="utf-8"',
-      "",
-      opts.text,
-      `--${bound}`,
-      'Content-Type: text/html; charset="utf-8"',
-      "",
-      opts.html,
-      `--${bound}--`,
-      "",
-    ].join("\r\n"),
-  );
+  const body = mimeBody(opts);
   const s = tlsSmtp(conf.host, conf.port);
   try {
     const banner = await s.cmd();
@@ -161,6 +235,48 @@ export async function sendPinMail(opts: { to: string; pin: string; tenantName: s
       subject: `Dein Code für ${opts.tenantName}`,
       text: `Dein Bestätigungscode: ${opts.pin}\nTermin: ${opts.when}\nGültig 15 Minuten.`,
       html: `<p>Dein Bestätigungscode für ${name}: <strong>${pin}</strong></p><p>Termin: ${when}</p><p>Gültig 15 Minuten.</p>`,
+    });
+  } catch (e) {
+    console.error("smtp failed", e instanceof Error ? e.message : e);
+    throw new Error("Mailversand fehlgeschlagen.");
+  }
+}
+
+export async function sendConfirmMail(opts: {
+  to: string;
+  guestName: string;
+  tenantName: string;
+  serviceName: string;
+  staffName: string;
+  when: string;
+  uid: string;
+  start: Date;
+  end: Date;
+}) {
+  const from = mailFromAddr(process.env.MAIL_FROM);
+  if (!from) throw new Error("MAIL_FROM muss eine eigene Domain sein.");
+  const name = escHtml(opts.guestName);
+  const tenant = escHtml(opts.tenantName);
+  const service = escHtml(opts.serviceName);
+  const who = escHtml(opts.staffName);
+  const when = escHtml(opts.when);
+  const withWhom = opts.staffName ? ` bei ${who}` : "";
+  const summary = opts.staffName ? `${opts.serviceName} bei ${opts.staffName}` : opts.serviceName;
+  const text = `Hallo ${opts.guestName},\n\ndein Termin ist bestätigt.\n\n${summary}\n${opts.when}\n${opts.tenantName}\n\nIm Anhang liegt termin.ics zum Speichern in deinem Kalender.`;
+  try {
+    await smtpSend({
+      from,
+      to: opts.to,
+      subject: `Termin bestätigt – ${opts.tenantName}`,
+      text,
+      html: `<p>Hallo ${name},</p><p>dein Termin ist bestätigt.</p><p><strong>${service}${withWhom}</strong><br>${when}<br>${tenant}</p><p>Im Anhang liegt <strong>termin.ics</strong> zum Speichern in deinem Kalender.</p>`,
+      ics: confirmIcs({
+        uid: opts.uid,
+        start: opts.start,
+        end: opts.end,
+        summary,
+        description: `${opts.tenantName}. ${opts.when}.`,
+      }),
     });
   } catch (e) {
     console.error("smtp failed", e instanceof Error ? e.message : e);

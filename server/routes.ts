@@ -7,7 +7,7 @@ import { DateTime } from "luxon";
 import { actorFrom, actorFromEmail, actorFromUserId, createSession, destroySession, ensurePlatformAdmin, hashPassword, sbEnsureUser, sbPassword, sbRecover, sbSetPassword, sbUser, verifyLogin, verifyPassword, type Actor } from "./auth.ts";
 import { db } from "./db.ts";
 import { BOOK_MAX, LEN, LOGIN_MAX, PIN_MAX, WINDOW_MS, bookWindow, clip, clientIp, inIntRange, limited, logoKind, passwordOk, priceCents, readJson, sbConfigured, serviceMins, siteOrigin } from "./guard.ts";
-import { newPin, PIN_MS, sendPinMail } from "./mail.ts";
+import { newPin, PIN_MS, sendConfirmMail, sendPinMail } from "./mail.ts";
 import {
   bookings,
   memberships,
@@ -1243,6 +1243,29 @@ api.post("/public/:slug/bookings/:id/confirm", async (c) => {
   }
   if (row.status !== "pending" || !row.pinHash) return c.json({ error: "Buchung unbekannt oder abgelaufen." }, 404);
   if (!(await verifyPassword(pin, row.pinHash))) return c.json({ error: "Code stimmt nicht." }, 400);
+  const [service] = await db.select({ name: services.name }).from(services).where(eq(services.id, row.serviceId)).limit(1);
+  let staffName = "";
+  if (row.staffId) {
+    const [member] = await db.select({ name: staff.name }).from(staff).where(eq(staff.id, row.staffId)).limit(1);
+    staffName = member?.name ?? "";
+  }
+  const startAt = DateTime.fromJSDate(row.startsAt).setZone(tenant.timezone);
+  const endAt = DateTime.fromJSDate(row.endsAt).setZone(tenant.timezone);
+  try {
+    await sendConfirmMail({
+      to: row.guestEmail,
+      guestName: row.guestName,
+      tenantName: tenant.name,
+      serviceName: service?.name || "Termin",
+      staffName,
+      when: `${startAt.toFormat("dd.MM.yyyy HH:mm")}–${endAt.toFormat("HH:mm")}`,
+      uid: `${row.id}@flh-kalender`,
+      start: row.startsAt,
+      end: row.endsAt,
+    });
+  } catch {
+    return c.json({ error: "Bestätigung konnte nicht gesendet werden. Bitte den Code erneut eingeben." }, 502);
+  }
   const [ok] = await db
     .update(bookings)
     .set({ status: "confirmed", pinHash: "", pinExpiresAt: null })
