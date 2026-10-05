@@ -36,6 +36,7 @@ export function BookPage() {
   const [done, setDone] = useState<{ id: string; startsAt: string } | null>(null);
   const [hold, setHold] = useState<{ id: string; startsAt: string } | null>(null);
   const [pin, setPin] = useState("");
+  const [privacy, setPrivacy] = useState(false);
   const [pending, setPending] = useState(false);
 
   useEffect(() => {
@@ -264,6 +265,7 @@ export function BookPage() {
         <form
           onSubmit={(e) => {
             e.preventDefault();
+            if (!privacy) return;
             setPending(true);
             api.book(slug, {
               serviceId,
@@ -286,10 +288,13 @@ export function BookPage() {
           <label className="field"><span>E-Mail</span><input type="email" required value={guest.guestEmail} onChange={(e) => setGuest({ ...guest, guestEmail: e.target.value })} placeholder="max@mustermann.de" /></label>
           <label className="field"><span>Telefon</span><input value={guest.guestPhone} onChange={(e) => setGuest({ ...guest, guestPhone: e.target.value })} placeholder="0151 12345678" /></label>
           <label className="field"><span>Notiz</span><textarea value={guest.note} onChange={(e) => setGuest({ ...guest, note: e.target.value })} /></label>
-          <p className="agree">
-            Name und E-Mail speichert {pub.tenant.name} für diesen Termin. Mehr dazu in der <a href={`/b/${slug}/datenschutz`} target="_blank" rel="noreferrer">Datenschutzerklärung</a>.
-          </p>
-          <button className="btn" disabled={pending} type="submit">{pending ? "Sendet Code…" : "Code per Mail"}</button>
+          <label className="check agree">
+            <input type="checkbox" checked={privacy} onChange={(e) => setPrivacy(e.target.checked)} required />
+            <span>
+              Ich habe die <a href={`/b/${slug}/datenschutz`} target="_blank" rel="noreferrer">Datenschutzerklärung</a> gelesen. {pub.tenant.name} darf Name und E-Mail für diesen Termin speichern.
+            </span>
+          </label>
+          <button className={privacy ? "btn" : "btn is-hold"} disabled={pending || !privacy} type="submit">{pending ? "Sendet Code…" : "Code per Mail"}</button>
           <button className="btn quiet book-back" type="button" onClick={() => setStep(3)}>Zurück</button>
         </form>
       )}
