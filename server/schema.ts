@@ -8,6 +8,8 @@ export const tenants = pgTable("tenants", {
   active: boolean("active").notNull().default(true),
   minNoticeMin: integer("min_notice_min").notNull().default(120),
   logoUrl: text("logo_url"),
+  mailSign: text("mail_sign").notNull().default(""),
+  mailImageUrl: text("mail_image_url"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 

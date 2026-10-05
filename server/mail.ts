@@ -52,21 +52,31 @@ export function icsFold(s: string) {
   }).join("\r\n");
 }
 
-export function confirmIcs(opts: { uid: string; start: Date; end: Date; summary: string; description: string }) {
+export function confirmIcs(opts: {
+  uid: string;
+  start: Date;
+  end: Date;
+  summary: string;
+  description: string;
+  also?: { uid: string; start: Date; end: Date; summary: string; description: string }[];
+}) {
+  const events = [opts, ...(opts.also ?? [])];
   return icsFold([
     "BEGIN:VCALENDAR",
     "VERSION:2.0",
     "PRODID:-//FLH DIGITAL//Buchung//DE",
     "CALSCALE:GREGORIAN",
     "METHOD:PUBLISH",
-    "BEGIN:VEVENT",
-    `UID:${icsEscape(opts.uid)}`,
-    `DTSTAMP:${icsUtc(new Date())}`,
-    `DTSTART:${icsUtc(opts.start)}`,
-    `DTEND:${icsUtc(opts.end)}`,
-    `SUMMARY:${icsEscape(opts.summary)}`,
-    `DESCRIPTION:${icsEscape(opts.description)}`,
-    "END:VEVENT",
+    ...events.flatMap((ev) => [
+      "BEGIN:VEVENT",
+      `UID:${icsEscape(ev.uid)}`,
+      `DTSTAMP:${icsUtc(new Date())}`,
+      `DTSTART:${icsUtc(ev.start)}`,
+      `DTEND:${icsUtc(ev.end)}`,
+      `SUMMARY:${icsEscape(ev.summary)}`,
+      `DESCRIPTION:${icsEscape(ev.description)}`,
+      "END:VEVENT",
+    ]),
     "END:VCALENDAR",
     "",
   ].join("\r\n"));
@@ -222,19 +232,27 @@ async function smtpSend(opts: { from: string; to: string; subject: string; text:
   }
 }
 
-export async function sendPinMail(opts: { to: string; pin: string; tenantName: string; when: string }) {
+export function mailEnding(sign: string, imageUrl: string) {
+  const text = sign.trim() ? `\n\n${sign.trim()}` : "";
+  const safe = escHtml(sign.trim()).replace(/\n/g, "<br>");
+  const html = `${safe ? `<p style="margin:1.25rem 0 0">${safe}</p>` : ""}${imageUrl ? `<p style="margin:0.75rem 0 0"><img src="${escHtml(imageUrl)}" alt="" width="180" style="max-width:180px;height:auto"></p>` : ""}`;
+  return { text, html };
+}
+
+export async function sendPinMail(opts: { to: string; pin: string; tenantName: string; when: string; sign?: string; imageUrl?: string }) {
   const from = mailFromAddr(process.env.MAIL_FROM);
   if (!from) throw new Error("MAIL_FROM muss eine eigene Domain sein.");
   const when = escHtml(opts.when);
   const pin = escHtml(opts.pin);
   const name = escHtml(opts.tenantName);
+  const end = mailEnding(opts.sign ?? "", opts.imageUrl ?? "");
   try {
     await smtpSend({
       from,
       to: opts.to,
       subject: `Dein Code für ${opts.tenantName}`,
-      text: `Dein Bestätigungscode: ${opts.pin}\nTermin: ${opts.when}\nGültig 15 Minuten.`,
-      html: `<p>Dein Bestätigungscode für ${name}: <strong>${pin}</strong></p><p>Termin: ${when}</p><p>Gültig 15 Minuten.</p>`,
+      text: `Dein Bestätigungscode: ${opts.pin}\nTermin: ${opts.when}\nGültig 15 Minuten.${end.text}`,
+      html: `<p>Dein Bestätigungscode für ${name}: <strong>${pin}</strong></p><p>Termin: ${when}</p><p>Gültig 15 Minuten.</p>${end.html}`,
     });
   } catch (e) {
     console.error("smtp failed", e instanceof Error ? e.message : e);
@@ -252,30 +270,50 @@ export async function sendConfirmMail(opts: {
   uid: string;
   start: Date;
   end: Date;
+  also?: { uid: string; serviceName: string; staffName: string; when: string; start: Date; end: Date }[];
+  sign?: string;
+  imageUrl?: string;
 }) {
   const from = mailFromAddr(process.env.MAIL_FROM);
   if (!from) throw new Error("MAIL_FROM muss eine eigene Domain sein.");
   const name = escHtml(opts.guestName);
   const tenant = escHtml(opts.tenantName);
-  const service = escHtml(opts.serviceName);
-  const who = escHtml(opts.staffName);
-  const when = escHtml(opts.when);
-  const withWhom = opts.staffName ? ` bei ${who}` : "";
   const summary = opts.staffName ? `${opts.serviceName} bei ${opts.staffName}` : opts.serviceName;
-  const text = `Hallo ${opts.guestName},\n\ndein Termin ist bestätigt.\n\n${summary}\n${opts.when}\n${opts.tenantName}\n\nIm Anhang liegt termin.ics zum Speichern in deinem Kalender.`;
+  const lines = [
+    { serviceName: opts.serviceName, staffName: opts.staffName, when: opts.when, summary },
+    ...(opts.also ?? []).map((ev) => ({
+      serviceName: ev.serviceName,
+      staffName: ev.staffName,
+      when: ev.when,
+      summary: ev.staffName ? `${ev.serviceName} bei ${ev.staffName}` : ev.serviceName,
+    })),
+  ];
+  const block = lines.map((l) => `${l.summary}\n${l.when}`).join("\n\n");
+  const htmlBlock = lines
+    .map((l) => `<p><strong>${escHtml(l.summary)}</strong><br>${escHtml(l.when)}</p>`)
+    .join("");
+  const end = mailEnding(opts.sign ?? "", opts.imageUrl ?? "");
+  const text = `Hallo ${opts.guestName},\n\ndein Termin ist bestätigt.\n\n${block}\n${opts.tenantName}\n\nIm Anhang liegt termin.ics zum Speichern in deinem Kalender.${end.text}`;
   try {
     await smtpSend({
       from,
       to: opts.to,
       subject: `Termin bestätigt – ${opts.tenantName}`,
       text,
-      html: `<p>Hallo ${name},</p><p>dein Termin ist bestätigt.</p><p><strong>${service}${withWhom}</strong><br>${when}<br>${tenant}</p><p>Im Anhang liegt <strong>termin.ics</strong> zum Speichern in deinem Kalender.</p>`,
+      html: `<p>Hallo ${name},</p><p>dein Termin ist bestätigt.</p>${htmlBlock}<p>${tenant}</p><p>Im Anhang liegt <strong>termin.ics</strong> zum Speichern in deinem Kalender.</p>${end.html}`,
       ics: confirmIcs({
         uid: opts.uid,
         start: opts.start,
         end: opts.end,
         summary,
         description: `${opts.tenantName}. ${opts.when}.`,
+        also: (opts.also ?? []).map((ev) => ({
+          uid: ev.uid,
+          start: ev.start,
+          end: ev.end,
+          summary: ev.staffName ? `${ev.serviceName} bei ${ev.staffName}` : ev.serviceName,
+          description: `${opts.tenantName}. ${ev.when}.`,
+        })),
       }),
     });
   } catch (e) {

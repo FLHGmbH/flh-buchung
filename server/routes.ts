@@ -21,7 +21,7 @@ import {
   timeOff,
   users,
 } from "./schema.ts";
-import { freeSlots, staffTaken } from "./slots.ts";
+import { freeSlots, planChain, staffTaken } from "./slots.ts";
 import { buildDashboard, buildFleet } from "./stats.ts";
 
 type Env = { Variables: { actor: Actor } };
@@ -579,6 +579,17 @@ function wipeLogoFiles(tenantId: string, keep?: string) {
   return wipeStored(tenantId, `${tenantId}/logo`, keep);
 }
 
+function storeMailImage(tenant: { id: string; slug: string }, mime: string, bytes: Buffer) {
+  return storeImage(`mail-${tenant.id}`, `${tenant.id}/mail`, `/api/public/${tenant.slug}/mail-image`, mime, bytes);
+}
+
+function mailFootOf(tenant: { mailSign: string; mailImageUrl: string | null; logoUrl: string | null }, reqUrl: string) {
+  const origin = siteOrigin(reqUrl);
+  const raw = tenant.mailImageUrl || tenant.logoUrl || "";
+  const imageUrl = !raw ? "" : /^https?:\/\//.test(raw) ? raw : origin ? `${origin}${raw.startsWith("/") ? raw : `/${raw}`}` : "";
+  return { sign: tenant.mailSign ?? "", imageUrl };
+}
+
 api.get("/app/bootstrap", async (c) => {
   const tid = tenantId(c);
   const [tenant] = await db.select().from(tenants).where(eq(tenants.id, tid)).limit(1);
@@ -889,6 +900,35 @@ api.delete("/app/logo", async (c) => {
   return c.json({ ok: true });
 });
 
+api.put("/app/mail-sign", async (c) => {
+  const tid = tenantId(c);
+  const body = await readJson<{ sign?: string }>(c);
+  if (!body) return c.json({ error: "Ungültige Anfrage." }, 400);
+  const mailSign = clip(body.sign ?? "", LEN.sign);
+  await db.update(tenants).set({ mailSign }).where(eq(tenants.id, tid));
+  return c.json({ mailSign });
+});
+
+api.post("/app/mail-image", async (c) => {
+  const tid = tenantId(c);
+  const [tenant] = await db.select().from(tenants).where(eq(tenants.id, tid)).limit(1);
+  if (!tenant) return c.json({ error: "Mandant fehlt." }, 404);
+  const body = await c.req.parseBody();
+  const file = body.file;
+  if (!file || typeof file === "string") return c.json({ error: "Datei fehlt." }, 400);
+  const saved = await storeMailImage(tenant, file.type, Buffer.from(await file.arrayBuffer()));
+  if (!saved.ok) return c.json({ error: saved.error }, 400);
+  await db.update(tenants).set({ mailImageUrl: saved.url }).where(eq(tenants.id, tid));
+  return c.json({ mailImageUrl: saved.url });
+});
+
+api.delete("/app/mail-image", async (c) => {
+  const tid = tenantId(c);
+  await wipeStored(`mail-${tid}`, `${tid}/mail`);
+  await db.update(tenants).set({ mailImageUrl: null }).where(eq(tenants.id, tid));
+  return c.json({ ok: true });
+});
+
 api.get("/app/time-off", async (c) => {
   const tid = tenantId(c);
   const rows = await db.select().from(timeOff).where(eq(timeOff.tenantId, tid)).orderBy(desc(timeOff.startsAt));
@@ -1079,6 +1119,12 @@ api.get("/public/:slug/logo", async (c) => {
   return readLocalImage(tenant.id) ?? c.json({ error: "Kein Logo." }, 404);
 });
 
+api.get("/public/:slug/mail-image", async (c) => {
+  const [tenant] = await db.select({ id: tenants.id }).from(tenants).where(eq(tenants.slug, c.req.param("slug"))).limit(1);
+  if (!tenant) return c.json({ error: "Unbekannt." }, 404);
+  return readLocalImage(`mail-${tenant.id}`) ?? c.json({ error: "Kein Bild." }, 404);
+});
+
 api.get("/public/:slug/staff/:id/photo", async (c) => {
   const [tenant] = await db.select({ id: tenants.id }).from(tenants).where(eq(tenants.slug, c.req.param("slug"))).limit(1);
   if (!tenant) return c.json({ error: "Unbekannt." }, 404);
@@ -1115,6 +1161,7 @@ api.get("/public/:slug", async (c) => {
       id: s.id,
       name: s.name,
       durationMin: s.durationMin,
+      bufferMin: s.bufferMin,
       categoryId: s.categoryId,
       priceCents: s.priceCents,
       staffIds: links.filter((l) => l.serviceId === s.id).map((l) => l.staffId),
@@ -1122,34 +1169,71 @@ api.get("/public/:slug", async (c) => {
   });
 });
 
+async function publicChain(tenantId: string, serviceId: string, extraIds: string[]) {
+  const ids = [serviceId, ...extraIds];
+  if (ids.length > 9 || new Set(ids).size !== ids.length) return null;
+  const rows = await db
+    .select()
+    .from(services)
+    .where(and(eq(services.tenantId, tenantId), eq(services.active, true), inArray(services.id, ids)));
+  if (rows.length !== ids.length) return null;
+  const links = await staffLinks(ids);
+  const byId = new Map(rows.map((s) => [s.id, s]));
+  return ids.map((id) => {
+    const s = byId.get(id)!;
+    return {
+      id: s.id,
+      name: s.name,
+      durationMin: s.durationMin,
+      bufferMin: s.bufferMin,
+      staffIds: links.filter((l) => l.serviceId === s.id).map((l) => l.staffId),
+    };
+  });
+}
+
 api.get("/public/:slug/slots", async (c) => {
   const [tenant] = await db.select().from(tenants).where(eq(tenants.slug, c.req.param("slug"))).limit(1);
   if (!tenant || !tenant.active) return c.json({ error: "Unbekannt." }, 404);
   const serviceId = c.req.query("serviceId") ?? "";
   const staffId = c.req.query("staffId") || null;
-  const [service] = await db
-    .select()
-    .from(services)
-    .where(and(eq(services.id, serviceId), eq(services.tenantId, tenant.id), eq(services.active, true)))
-    .limit(1);
-  if (!service) return c.json({ error: "Leistung unbekannt." }, 400);
-  const staffIds = await bookableStaffIds(tenant.id, service.id, staffId);
+  const extra = (c.req.query("extra") ?? "").split(",").map((s) => s.trim()).filter(Boolean);
+  const chain = await publicChain(tenant.id, serviceId, extra);
+  if (!chain) return c.json({ error: "Leistung unbekannt." }, 400);
+  const staffIds = await bookableStaffIds(tenant.id, chain[0].id, staffId);
   const { hours, staffHours: shifts } = await loadShifts(tenant.id);
   const { from, to } = bookWindow(tenant.timezone);
   const buffers = new Map((await db.select().from(services).where(eq(services.tenantId, tenant.id))).map((s) => [s.id, s.bufferMin]));
-  const busy = await busyFor(tenant.id, staffIds, buffers);
-  const slots = freeSlots({
+  const active = await db
+    .select({ id: staff.id })
+    .from(staff)
+    .where(and(eq(staff.tenantId, tenant.id), eq(staff.active, true)));
+  const allow = new Set(active.map((s) => s.id));
+  const involved = [...new Set(chain.flatMap((s) => s.staffIds))].filter((id) => allow.has(id));
+  const busy = await busyFor(tenant.id, involved, buffers);
+  const openChain = chain.map((s) => ({ ...s, staffIds: s.staffIds.filter((id) => allow.has(id)) }));
+  let slots = freeSlots({
     zone: tenant.timezone,
     hours,
     staffHours: shifts,
     busy,
     staffIds,
-    durationMin: service.durationMin,
+    durationMin: chain[0].durationMin,
     from: from.toJSDate(),
     to: to.toJSDate(),
     now: new Date(),
     minNoticeMin: tenant.minNoticeMin,
   });
+  if (openChain.length > 1) {
+    slots = slots.filter((s) => planChain({
+      zone: tenant.timezone,
+      hours,
+      staffHours: shifts,
+      busy,
+      start: s.start,
+      primaryStaffId: s.staffId,
+      chain: openChain,
+    }));
+  }
   return c.json({
     slots: slots.map((s) => ({ start: s.start.toISOString(), end: s.end.toISOString(), staffId: s.staffId })),
   });
@@ -1170,6 +1254,7 @@ api.post("/public/:slug/book", async (c) => {
     guestEmail?: string;
     guestPhone?: string;
     note?: string;
+    extraIds?: string[];
   } | null = await readJson(c);
   if (!body) return c.json({ error: "Ungültige Anfrage." }, 400);
   const [service] = await db
@@ -1223,49 +1308,76 @@ api.post("/public/:slug/book", async (c) => {
     minNoticeMin: tenant.minNoticeMin,
   }).some((s) => s.start.getTime() === start.getTime() && s.staffId === body.staffId);
   if (!ok) return c.json({ error: "Dieser Termin ist nicht mehr frei." }, 409);
+  const extraIds = Array.isArray(body.extraIds) ? body.extraIds.filter((id): id is string => typeof id === "string") : [];
+  let planned = [{ serviceId: service.id, staffId: body.staffId, start, end, name: service.name }];
+  if (extraIds.length) {
+    const chain = await publicChain(tenant.id, service.id, extraIds);
+    if (!chain) return c.json({ error: "Leistung unbekannt." }, 400);
+    const active = await db
+      .select({ id: staff.id })
+      .from(staff)
+      .where(and(eq(staff.tenantId, tenant.id), eq(staff.active, true)));
+    const allow = new Set(active.map((s) => s.id));
+    const involved = [...new Set(chain.flatMap((s) => s.staffIds))].filter((id) => allow.has(id));
+    const wide = await busyFor(tenant.id, involved, buffers);
+    const fit = planChain({
+      zone: tenant.timezone,
+      hours,
+      staffHours: shifts,
+      busy: wide,
+      start,
+      primaryStaffId: body.staffId,
+      chain: chain.map((s) => ({ ...s, staffIds: s.staffIds.filter((id) => allow.has(id)) })),
+    });
+    if (!fit) return c.json({ error: "Die weiteren Leistungen passen zeitlich nicht." }, 409);
+    const names = new Map(chain.map((s) => [s.id, s.name]));
+    planned = fit.map((s) => ({ ...s, name: names.get(s.serviceId) ?? "Termin" }));
+  }
   const pin = newPin();
+  const pinHash = await hashPassword(pin);
+  const pinExpiresAt = new Date(Date.now() + PIN_MS);
+  const phone = clip(body.guestPhone ?? "", LEN.phone);
+  const note = clip(body.note ?? "", LEN.note);
+  const made: { id: string; startsAt: Date; endsAt: Date; guestName: string }[] = [];
   try {
-    const [row] = await db
-      .insert(bookings)
-      .values({
-        tenantId: tenant.id,
-        staffId: body.staffId,
-        serviceId: service.id,
-        startsAt: start,
-        endsAt: end,
-        guestName,
-        guestEmail,
-        guestPhone: clip(body.guestPhone ?? "", LEN.phone),
-        note: clip(body.note ?? "", LEN.note),
-        status: "pending",
-        pinHash: await hashPassword(pin),
-        pinExpiresAt: new Date(Date.now() + PIN_MS),
-      })
-      .returning();
-    try {
-      await sendPinMail({
-        to: guestEmail,
-        pin,
-        tenantName: tenant.name,
-        when: DateTime.fromJSDate(start).setZone(tenant.timezone).toFormat("dd.MM.yyyy HH:mm"),
-      });
-    } catch {
-      await db.update(bookings).set({ status: "cancelled" }).where(eq(bookings.id, row.id));
-      return c.json({ error: "Code konnte nicht gesendet werden. Bitte später erneut buchen." }, 502);
+    for (const step of planned) {
+      const [row] = await db
+        .insert(bookings)
+        .values({
+          tenantId: tenant.id,
+          staffId: step.staffId,
+          serviceId: step.serviceId,
+          startsAt: step.start,
+          endsAt: step.end,
+          guestName,
+          guestEmail,
+          guestPhone: phone,
+          note,
+          status: "pending",
+          pinHash,
+          pinExpiresAt,
+        })
+        .returning();
+      made.push(row);
     }
-    return c.json({
-      booking: {
-        id: row.id,
-        startsAt: row.startsAt,
-        endsAt: row.endsAt,
-        guestName: row.guestName,
-        status: "pending",
-      },
-    }, 201);
   } catch (e) {
+    for (const row of made) await db.update(bookings).set({ status: "cancelled" }).where(eq(bookings.id, row.id));
     if (overlapError(e)) return c.json({ error: "Dieser Slot ist gerade vergeben. Bitte neu wählen." }, 409);
     throw e;
   }
+  const when = planned
+    .map((s) => `${s.name} ${DateTime.fromJSDate(s.start).setZone(tenant.timezone).toFormat("dd.MM.yyyy HH:mm")}`)
+    .join(" · ");
+  try {
+    await sendPinMail({ to: guestEmail, pin, tenantName: tenant.name, when, ...mailFootOf(tenant, c.req.url) });
+  } catch {
+    for (const row of made) await db.update(bookings).set({ status: "cancelled" }).where(eq(bookings.id, row.id));
+    return c.json({ error: "Code konnte nicht gesendet werden. Bitte später erneut buchen." }, 502);
+  }
+  const row = made[0];
+  return c.json({
+    booking: { id: row.id, startsAt: row.startsAt, endsAt: row.endsAt, guestName: row.guestName, status: "pending" },
+  }, 201);
 });
 
 api.post("/public/:slug/bookings/:id/confirm", async (c) => {
@@ -1289,34 +1401,62 @@ api.post("/public/:slug/bookings/:id/confirm", async (c) => {
   }
   if (row.status !== "pending" || !row.pinHash) return c.json({ error: "Buchung unbekannt oder abgelaufen." }, 404);
   if (!(await verifyPassword(pin, row.pinHash))) return c.json({ error: "Code stimmt nicht." }, 400);
-  const [service] = await db.select({ name: services.name }).from(services).where(eq(services.id, row.serviceId)).limit(1);
-  let staffName = "";
-  if (row.staffId) {
-    const [member] = await db.select({ name: staff.name }).from(staff).where(eq(staff.id, row.staffId)).limit(1);
-    staffName = member?.name ?? "";
-  }
-  const startAt = DateTime.fromJSDate(row.startsAt).setZone(tenant.timezone);
-  const endAt = DateTime.fromJSDate(row.endsAt).setZone(tenant.timezone);
+  const mates = (await db
+    .select()
+    .from(bookings)
+    .where(and(
+      eq(bookings.tenantId, tenant.id),
+      eq(bookings.guestEmail, row.guestEmail),
+      eq(bookings.pinHash, row.pinHash),
+      eq(bookings.status, "pending"),
+    )))
+    .sort((a, b) => a.startsAt.getTime() - b.startsAt.getTime());
+  const svcIds = [...new Set(mates.map((m) => m.serviceId).filter((id): id is string => Boolean(id)))];
+  const whoIds = [...new Set(mates.map((m) => m.staffId).filter((id): id is string => Boolean(id)))];
+  const svcRows = svcIds.length
+    ? await db.select({ id: services.id, name: services.name }).from(services).where(inArray(services.id, svcIds))
+    : [];
+  const whoRows = whoIds.length
+    ? await db.select({ id: staff.id, name: staff.name }).from(staff).where(inArray(staff.id, whoIds))
+    : [];
+  const svcName = new Map(svcRows.map((s) => [s.id, s.name]));
+  const whoName = new Map(whoRows.map((s) => [s.id, s.name]));
+  const line = (m: (typeof mates)[number]) => {
+    const a = DateTime.fromJSDate(m.startsAt).setZone(tenant.timezone);
+    const b = DateTime.fromJSDate(m.endsAt).setZone(tenant.timezone);
+    return {
+      serviceName: (m.serviceId && svcName.get(m.serviceId)) || "Termin",
+      staffName: (m.staffId && whoName.get(m.staffId)) || "",
+      when: `${a.toFormat("dd.MM.yyyy HH:mm")}–${b.toFormat("HH:mm")}`,
+      uid: `${m.id}@flh-kalender`,
+      start: m.startsAt,
+      end: m.endsAt,
+    };
+  };
+  const [head, ...rest] = mates.map(line);
+  if (!head) return c.json({ error: "Buchung unbekannt oder abgelaufen." }, 404);
   try {
     await sendConfirmMail({
       to: row.guestEmail,
       guestName: row.guestName,
       tenantName: tenant.name,
-      serviceName: service?.name || "Termin",
-      staffName,
-      when: `${startAt.toFormat("dd.MM.yyyy HH:mm")}–${endAt.toFormat("HH:mm")}`,
-      uid: `${row.id}@flh-kalender`,
-      start: row.startsAt,
-      end: row.endsAt,
+      ...head,
+      also: rest,
+      ...mailFootOf(tenant, c.req.url),
     });
   } catch {
     return c.json({ error: "Bestätigung konnte nicht gesendet werden. Bitte den Code erneut eingeben." }, 502);
   }
-  const [ok] = await db
+  const updated = await db
     .update(bookings)
     .set({ status: "confirmed", pinHash: "", pinExpiresAt: null })
-    .where(and(eq(bookings.id, row.id), eq(bookings.status, "pending")))
+    .where(and(
+      eq(bookings.tenantId, tenant.id),
+      eq(bookings.guestEmail, row.guestEmail),
+      eq(bookings.pinHash, row.pinHash),
+      eq(bookings.status, "pending"),
+    ))
     .returning();
-  if (!ok) return c.json({ error: "Buchung unbekannt oder abgelaufen." }, 404);
-  return c.json({ booking: { id: ok.id, startsAt: ok.startsAt, endsAt: ok.endsAt, guestName: ok.guestName } });
+  if (!updated.length) return c.json({ error: "Buchung unbekannt oder abgelaufen." }, 404);
+  return c.json({ booking: { id: row.id, startsAt: row.startsAt, endsAt: row.endsAt, guestName: row.guestName } });
 });

@@ -782,10 +782,12 @@ export function ServicesPage() {
 export function HoursPage() {
   const boot = useBoot();
   const [rows, setRows] = useState<{ weekday: number; startHm: string; endHm: string; open: boolean }[]>([]);
+  const [sign, setSign] = useState("");
   const [err, setErr] = useState("");
   const [pending, setPending] = useState(false);
   useEffect(() => {
     if (!boot || rows.length) return;
+    setSign(boot.tenant.mailSign ?? "");
     setRows([1, 2, 3, 4, 5, 6, 7].map((weekday) => {
       const h = boot.hours.find((x) => x.weekday === weekday);
       return { weekday, startHm: h?.startHm ?? "09:00", endHm: h?.endHm ?? (weekday === 6 ? "14:00" : "18:00"), open: Boolean(h) };
@@ -794,12 +796,30 @@ export function HoursPage() {
   if (!boot) return <div className="page" />;
   return (
     <div className="page slim">
-      <PageHead title="Unternehmen" lead="Logo auf der Buchungsseite. Geschlossene Tage erzeugen keine Slots." />
+      <PageHead title="Unternehmen" lead="Aufklappen, ändern, speichern." />
       {err ? <p className="err" role="alert">{err}</p> : null}
-      <article className="hours-card">
-        <div className="card-head">Logo</div>
+      <details className="set-fold" open>
+        <summary>Öffnungszeiten</summary>
+        {rows.map((r, i) => (
+          <div className="hours-row" key={r.weekday}>
+            <label className="check">
+              <input type="checkbox" checked={r.open} onChange={(e) => setRows(rows.map((x, j) => j === i ? { ...x, open: e.target.checked } : x))} />
+              {DAYS[r.weekday]}
+            </label>
+            <input type="time" value={r.startHm} disabled={!r.open} onChange={(e) => setRows(rows.map((x, j) => j === i ? { ...x, startHm: e.target.value } : x))} />
+            <input type="time" value={r.endHm} disabled={!r.open} onChange={(e) => setRows(rows.map((x, j) => j === i ? { ...x, endHm: e.target.value } : x))} />
+          </div>
+        ))}
+        <div className="hours-foot">
+          <button className="btn" type="button" onClick={() => api.putHours(rows.filter((r) => r.open).map(({ weekday, startHm, endHm }) => ({ weekday, startHm, endHm })))}>
+            Speichern
+          </button>
+        </div>
+      </details>
+      <details className="set-fold">
+        <summary>Logo</summary>
         <div className="card-body">
-          {boot.tenant.logoUrl ? <img className="logo-preview" src={boot.tenant.logoUrl} alt="" /> : <p className="hint-line">Noch kein Logo. Erscheint oben im Buchungs-iframe.</p>}
+          {boot.tenant.logoUrl ? <img className="logo-preview" src={boot.tenant.logoUrl} alt="" /> : <p className="hint-line">Noch kein Logo. Erscheint oben im Buchungs-iframe und unten in Mails, wenn dort kein eigenes Bild liegt.</p>}
           <ImageDrop
             label={boot.tenant.logoUrl ? "Logo ersetzen" : "Logo hochladen"}
             busy={pending}
@@ -830,25 +850,63 @@ export function HoursPage() {
             </button>
           ) : null}
         </div>
-      </article>
-      <div className="hours-card">
-        <div className="card-head">Öffnungszeiten</div>
-        {rows.map((r, i) => (
-          <div className="hours-row" key={r.weekday}>
-            <label className="check">
-              <input type="checkbox" checked={r.open} onChange={(e) => setRows(rows.map((x, j) => j === i ? { ...x, open: e.target.checked } : x))} />
-              {DAYS[r.weekday]}
-            </label>
-            <input type="time" value={r.startHm} disabled={!r.open} onChange={(e) => setRows(rows.map((x, j) => j === i ? { ...x, startHm: e.target.value } : x))} />
-            <input type="time" value={r.endHm} disabled={!r.open} onChange={(e) => setRows(rows.map((x, j) => j === i ? { ...x, endHm: e.target.value } : x))} />
+      </details>
+      <details className="set-fold">
+        <summary>E-Mail</summary>
+        <div className="card-body">
+          <label className="field">
+            <span>Text am Ende jeder Mail</span>
+            <textarea value={sign} onChange={(e) => setSign(e.target.value)} placeholder={"Viele Grüße\nSalon Demo"} />
+          </label>
+          <p className="hint-line">Ohne eigenes Bild steht das Logo unten in der Mail.</p>
+          {boot.tenant.mailImageUrl ? <img className="logo-preview" src={boot.tenant.mailImageUrl} alt="" /> : null}
+          <ImageDrop
+            label={boot.tenant.mailImageUrl ? "Bild ersetzen" : "Bild hochladen"}
+            busy={pending}
+            onFile={(file) => {
+              setErr("");
+              setPending(true);
+              const body = new FormData();
+              body.append("file", file);
+              api.putMailImage(body)
+                .catch((ex) => setErr(ex instanceof Error ? ex.message : "Upload fehlgeschlagen."))
+                .finally(() => setPending(false));
+            }}
+          />
+          {boot.tenant.mailImageUrl ? (
+            <button
+              className="linkish"
+              type="button"
+              disabled={pending}
+              onClick={() => {
+                setErr("");
+                setPending(true);
+                api.delMailImage()
+                  .catch((ex) => setErr(ex instanceof Error ? ex.message : "Löschen fehlgeschlagen."))
+                  .finally(() => setPending(false));
+              }}
+            >
+              Bild löschen
+            </button>
+          ) : null}
+          <div className="hours-foot">
+            <button
+              className="btn"
+              type="button"
+              disabled={pending}
+              onClick={() => {
+                setErr("");
+                setPending(true);
+                api.putMailSign(sign)
+                  .catch((ex) => setErr(ex instanceof Error ? ex.message : "Speichern fehlgeschlagen."))
+                  .finally(() => setPending(false));
+              }}
+            >
+              Speichern
+            </button>
           </div>
-        ))}
-        <div className="hours-foot">
-          <button className="btn" type="button" onClick={() => api.putHours(rows.filter((r) => r.open).map(({ weekday, startHm, endHm }) => ({ weekday, startHm, endHm })))}>
-            Speichern
-          </button>
         </div>
-      </div>
+      </details>
     </div>
   );
 }

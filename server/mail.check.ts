@@ -1,4 +1,4 @@
-import { confirmIcs, dotStuff, encodeSubject, escHtml, icsEscape, icsFold, icsUtc, mailboxAddr, mimeBody, newPin, PIN_MS } from "./mail.ts";
+import { confirmIcs, dotStuff, encodeSubject, escHtml, icsEscape, icsFold, icsUtc, mailboxAddr, mailEnding, mimeBody, newPin, PIN_MS } from "./mail.ts";
 
 function assert(cond: unknown, msg: string) {
   if (!cond) throw new Error(msg);
@@ -34,4 +34,7 @@ assert(ics.includes("BEGIN:VCALENDAR") && ics.includes("DTSTART:20261002T090000Z
 const mime = mimeBody({ from: "a@b.de", to: "c@d.de", subject: "ok", text: "t", html: "<p>t</p>", ics });
 assert(mime.includes('filename="termin.ics"') && mime.includes("text/calendar"), "ics attached");
 assert(!mimeBody({ from: "a@b.de", to: "c@d.de", subject: "ok", text: "t", html: "<p>t</p>" }).includes("termin.ics"), "pin mail plain");
+const end = mailEnding("Bis bald\nSalon", "https://cdn.example/logo.png");
+assert(end.text.includes("Bis bald") && end.html.includes("<br>Salon") && end.html.includes("https://cdn.example/logo.png"), "mail ending");
+assert(!mailEnding(`<b>`, "").html.includes("<b>"), "mail ending escapes");
 console.log("mail.check ok");

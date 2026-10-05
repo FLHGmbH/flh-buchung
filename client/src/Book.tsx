@@ -25,7 +25,9 @@ export function BookPage() {
   }, [slug]);
   const [catId, setCatId] = useState("");
   const [step, setStep] = useState(0);
-  const [serviceId, setServiceId] = useState("");
+  const [ids, setIds] = useState<string[]>([]);
+  const serviceId = ids[0] ?? "";
+  const extraKey = ids.slice(1).join(",");
   const [staffId, setStaffId] = useState("");
   const [slots, setSlots] = useState<{ start: string; end: string; staffId: string }[]>([]);
   const [day, setDay] = useState("");
@@ -40,12 +42,12 @@ export function BookPage() {
     if (!serviceId || !pub) return;
     let on = true;
     setPending(true);
-    api.slots(slug, serviceId)
+    api.slots(slug, serviceId, undefined, extraKey ? extraKey.split(",") : undefined)
       .then((r) => { if (on) setSlots(r.slots); })
       .catch((e) => { if (on) setErr(e.message); })
       .finally(() => { if (on) setPending(false); });
     return () => { on = false; };
-  }, [slug, serviceId, pub]);
+  }, [slug, serviceId, extraKey, pub]);
 
   const days = useMemo(() => {
     const map = new Map<string, boolean>();
@@ -91,16 +93,26 @@ export function BookPage() {
     ...cats.map((c) => ({ id: c.id, name: c.name, rows: pub.services.filter((s) => s.categoryId === c.id) })),
     ...(loose.length ? [{ id: "_", name: "Weitere Leistungen", rows: loose }] : []),
   ];
-  function pickService(id: string) {
-    setServiceId(id);
+  function toggleService(id: string) {
+    setIds((cur) => (cur.includes(id) ? cur.filter((x) => x !== id) : [...cur, id]));
     setStaffId("");
     setSlot(null);
-    setStep(1);
+  }
+  function svcRow(s: (typeof pub.services)[number]) {
+    const on = ids.includes(s.id);
+    const plus = ids.length > 0 && !on;
+    return (
+      <div key={s.id} className={"choice svc-pick" + (on ? " on" : "")}>
+        <button className="choice-hit" type="button" onClick={() => toggleService(s.id)}>{serviceLine(s)}</button>
+        {plus ? <button className="choice-plus" type="button" aria-label={`${s.name} hinzufügen`} onClick={() => toggleService(s.id)}>+</button> : null}
+      </div>
+    );
   }
   const who = staffId ? pub.staff.find((s) => s.id === staffId)?.name ?? "Egal" : "Egal";
   const pickedDay = days.find((d) => d.key === day);
+  const pickedNames = ids.map((id) => pub.services.find((s) => s.id === id)?.name).filter(Boolean).join(" + ");
   const recap = [
-    service?.name,
+    pickedNames,
     step > 1 ? who : "",
     step > 2 && pickedDay ? `${pickedDay.wd} ${pickedDay.num}. ${pickedDay.mon}` : "",
     step > 3 && slot ? new Date(slot.start).toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" }) : "",
@@ -135,7 +147,7 @@ export function BookPage() {
         pub.services.length ? (
           cats.length ? (
             blocks.map((b) => {
-              const on = catId === b.id;
+              const on = catId === b.id || b.rows.some((s) => ids.includes(s.id));
               return (
                 <div key={b.id} className={"cat-fold" + (on ? " open" : "")}>
                   <button type="button" className="cat-fold-h" aria-expanded={on} onClick={() => setCatId(on ? "" : b.id)}>
@@ -145,24 +157,17 @@ export function BookPage() {
                     </svg>
                   </button>
                   <Fold open={on}>
-                    {b.rows.map((s) => (
-                      <button key={s.id} className={"choice" + (serviceId === s.id ? " on" : "")} type="button" onClick={() => pickService(s.id)}>
-                        {serviceLine(s)}
-                      </button>
-                    ))}
+                    {b.rows.map(svcRow)}
                   </Fold>
                 </div>
               );
             })
-          ) : pub.services.map((s) => (
-            <button key={s.id} className={"choice" + (serviceId === s.id ? " on" : "")} type="button" onClick={() => pickService(s.id)}>
-              {serviceLine(s)}
-            </button>
-          ))
+          ) : pub.services.map(svcRow)
         ) : (
           <p className="err">Noch keine Leistung angelegt. Im Mandanten-Konto unter Leistungen eine anlegen.</p>
         )
       )}
+      {step === 0 && serviceId ? <button className="btn" type="button" onClick={() => setStep(1)}>Weiter</button> : null}
 
       {step === 1 && (
         <>
@@ -228,6 +233,7 @@ export function BookPage() {
             setPending(true);
             api.book(slug, {
               serviceId,
+              extraIds: ids.slice(1),
               staffId: slot.staffId,
               start: slot.start,
               ...guest,
@@ -241,7 +247,7 @@ export function BookPage() {
               .finally(() => setPending(false));
           }}
         >
-          <p className="book-when">{new Date(slot.start).toLocaleString("de-DE", { weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })} · {service?.name}</p>
+          <p className="book-when">{new Date(slot.start).toLocaleDateString("de-DE", { weekday: "short", day: "numeric", month: "short" })} · {chainClock(slot.start, ids, pub.services)}</p>
           <label className="field"><span>Name</span><input required value={guest.guestName} onChange={(e) => setGuest({ ...guest, guestName: e.target.value })} placeholder="Max Mustermann" /></label>
           <label className="field"><span>E-Mail</span><input type="email" required value={guest.guestEmail} onChange={(e) => setGuest({ ...guest, guestEmail: e.target.value })} placeholder="max@mustermann.de" /></label>
           <label className="field"><span>Telefon</span><input value={guest.guestPhone} onChange={(e) => setGuest({ ...guest, guestPhone: e.target.value })} placeholder="0151 12345678" /></label>
@@ -357,6 +363,16 @@ function BookShell({ children, slug }: { children: ReactNode; slug: string }) {
       {cookies ? <CookieBar privacyHref={`/b/${slug}/datenschutz`} onOk={() => setCookies(false)} /> : null}
     </div>
   );
+}
+
+function chainClock(start: string, ids: string[], services: { id: string; name: string; durationMin: number; bufferMin?: number }[]) {
+  let t = new Date(start).getTime();
+  return ids.map((id) => {
+    const s = services.find((x) => x.id === id);
+    const label = `${new Date(t).toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" })} ${s?.name ?? "Termin"}`;
+    t += ((s?.durationMin ?? 0) + (s?.bufferMin ?? 0)) * 60000;
+    return label;
+  }).join(" · ");
 }
 
 function uniqueStarts(slots: { start: string; end: string; staffId: string }[]) {

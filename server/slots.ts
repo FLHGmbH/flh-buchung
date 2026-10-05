@@ -33,6 +33,64 @@ export function staffTaken(start: Date, end: Date, ownBufferMin: number, busy: {
   return busy.some((b) => from < b.end.getTime() && until > b.start.getTime());
 }
 
+export function shiftCovers(opts: {
+  zone: string;
+  hours: Hours[];
+  staffHours?: StaffHours[];
+  staffId: string;
+  start: Date;
+  end: Date;
+}) {
+  const start = DateTime.fromJSDate(opts.start, { zone: opts.zone });
+  const end = DateTime.fromJSDate(opts.end, { zone: opts.zone });
+  const last = end.minus({ milliseconds: 1 });
+  if (!start.isValid || !end.isValid || end <= start || start.toISODate() !== last.toISODate()) return false;
+  const day = start.startOf("day");
+  const shop = opts.hours.filter((h) => h.weekday === day.weekday);
+  const marked = (opts.staffHours ?? []).some((h) => h.staffId === opts.staffId);
+  const own = (opts.staffHours ?? []).filter((h) => h.staffId === opts.staffId && h.weekday === day.weekday);
+  const windows = marked
+    ? shop.flatMap((w) => own.flatMap((o) => {
+        const hit = clipHm(w.startHm, w.endHm, o.startHm, o.endHm);
+        return hit ? [hit] : [];
+      }))
+    : shop;
+  return windows.some((w) => start >= atHm(day, w.startHm) && end <= atHm(day, w.endHm));
+}
+
+export function planChain(opts: {
+  zone: string;
+  hours: Hours[];
+  staffHours?: StaffHours[];
+  busy?: Busy[];
+  start: Date;
+  primaryStaffId: string;
+  chain: { id: string; durationMin: number; bufferMin: number; staffIds: string[] }[];
+}) {
+  const steps: { serviceId: string; staffId: string; start: Date; end: Date }[] = [];
+  const phantom: Busy[] = [];
+  let cursor = opts.start;
+  let prefer = opts.primaryStaffId;
+  for (let i = 0; i < opts.chain.length; i++) {
+    const svc = opts.chain[i];
+    if (!svc || svc.durationMin <= 0) return null;
+    const end = new Date(cursor.getTime() + svc.durationMin * 60_000);
+    const pool = i === 0 ? [opts.primaryStaffId] : [...new Set([prefer, ...svc.staffIds])];
+    const who = pool.find((id) => {
+      if (!svc.staffIds.includes(id)) return false;
+      if (!shiftCovers({ zone: opts.zone, hours: opts.hours, staffHours: opts.staffHours, staffId: id, start: cursor, end })) return false;
+      const mine = [...(opts.busy ?? []), ...phantom].filter((b) => b.staffId === id);
+      return !staffTaken(cursor, end, svc.bufferMin, mine);
+    });
+    if (!who) return null;
+    steps.push({ serviceId: svc.id, staffId: who, start: cursor, end });
+    phantom.push({ staffId: who, start: cursor, end: new Date(end.getTime() + svc.bufferMin * 60_000) });
+    prefer = who;
+    cursor = new Date(end.getTime() + svc.bufferMin * 60_000);
+  }
+  return steps;
+}
+
 export function freeSlots(opts: {
   zone: string;
   hours: Hours[];

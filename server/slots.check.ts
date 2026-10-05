@@ -1,5 +1,5 @@
 import { DateTime } from "luxon";
-import { freeSlots, staffTaken } from "./slots.ts";
+import { freeSlots, planChain, shiftCovers, staffTaken } from "./slots.ts";
 
 function assert(cond: unknown, msg: string) {
   if (!cond) throw new Error(msg);
@@ -92,5 +92,36 @@ assert(staffTaken(nine, nine45, 0, [{ start: nine, end: nine45 }]), "same window
 assert(!staffTaken(nine45, ten, 0, [{ start: nine, end: nine45 }]), "abutting the end is free");
 assert(staffTaken(nine45, ten, 0, [{ start: nine, end: ten15 }]), "their buffer blocks the next start");
 assert(staffTaken(nine, nine45, 30, [{ start: ten, end: ten45 }]), "own buffer reaches the next booking");
+
+const cover = { zone, hours, staffId: "anna", start: nine, end: nine45 };
+assert(shiftCovers(cover), "09:00–09:45 is inside 09–12");
+assert(!shiftCovers({ ...cover, end: monday.set({ hour: 12, minute: 1 }).toJSDate() }), "past closing is outside");
+
+const chain = planChain({
+  zone,
+  hours,
+  busy: [],
+  start: nine,
+  primaryStaffId: "anna",
+  chain: [
+    { id: "cut", durationMin: 45, bufferMin: 0, staffIds: ["anna", "ben"] },
+    { id: "color", durationMin: 45, bufferMin: 0, staffIds: ["ben"] },
+  ],
+});
+assert(chain?.length === 2 && chain[0].staffId === "anna" && chain[1].staffId === "ben", "extra goes to someone who does it");
+assert(
+  planChain({
+    zone,
+    hours,
+    busy: [],
+    start: monday.set({ hour: 11, minute: 15 }).toJSDate(),
+    primaryStaffId: "anna",
+    chain: [
+      { id: "cut", durationMin: 45, bufferMin: 0, staffIds: ["anna"] },
+      { id: "color", durationMin: 45, bufferMin: 0, staffIds: ["anna"] },
+    ],
+  }) === null,
+  "chain that runs past closing is refused",
+);
 
 console.log("slots.check ok");

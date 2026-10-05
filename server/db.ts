@@ -102,6 +102,8 @@ export async function migrate() {
   await execSql(`ALTER TABLE services ADD COLUMN IF NOT EXISTS category_id uuid REFERENCES service_categories(id) ON DELETE SET NULL`).catch(ignoreExists);
   await execSql(`ALTER TABLE services ADD COLUMN IF NOT EXISTS price_cents integer`).catch(ignoreExists);
   await execSql(`ALTER TABLE tenants ADD COLUMN IF NOT EXISTS logo_url text`).catch(ignoreExists);
+  await execSql(`ALTER TABLE tenants ADD COLUMN IF NOT EXISTS mail_sign text NOT NULL DEFAULT ''`).catch(ignoreExists);
+  await execSql(`ALTER TABLE tenants ADD COLUMN IF NOT EXISTS mail_image_url text`).catch(ignoreExists);
   await execSql(`ALTER TABLE staff ADD COLUMN IF NOT EXISTS photo_url text`).catch(ignoreExists);
   await execSql(`ALTER TABLE bookings ALTER COLUMN staff_id DROP NOT NULL`).catch(ignoreExists);
   await execSql(`ALTER TABLE bookings DROP CONSTRAINT IF EXISTS bookings_service_id_fkey`);

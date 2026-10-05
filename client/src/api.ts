@@ -218,6 +218,9 @@ export const api = {
     mutate(`/api/app/staff/${id}/hours`, { method: "PUT", body: JSON.stringify({ hours }) }),
   putLogo: (body: FormData) => mutate("/api/app/logo", { method: "POST", body }),
   delLogo: () => mutate("/api/app/logo", { method: "DELETE" }),
+  putMailSign: (sign: string) => mutate("/api/app/mail-sign", { method: "PUT", body: JSON.stringify({ sign }) }),
+  putMailImage: (body: FormData) => mutate("/api/app/mail-image", { method: "POST", body }),
+  delMailImage: () => mutate("/api/app/mail-image", { method: "DELETE" }),
   timeOff: () => inflight<{ timeOff: TimeOff[] }>("/api/app/time-off"),
   addTimeOff: (body: object) => mutate("/api/app/time-off", { method: "POST", body: JSON.stringify(body) }),
   delTimeOff: (id: string) => mutate(`/api/app/time-off/${id}`, { method: "DELETE" }),
@@ -235,9 +238,9 @@ export const api = {
   cancelBooking: (id: string) => mutate(`/api/app/bookings/${id}/cancel`, { method: "POST" }),
   sync: () => bust("/api/app"),
   pub: (slug: string) => inflight<Pub>(`/api/public/${slug}`),
-  slots: (slug: string, serviceId: string, staffId?: string) =>
+  slots: (slug: string, serviceId: string, staffId?: string, extraIds?: string[]) =>
     inflight<{ slots: { start: string; end: string; staffId: string }[] }>(
-      `/api/public/${slug}/slots?serviceId=${serviceId}${staffId ? `&staffId=${staffId}` : ""}`,
+      `/api/public/${slug}/slots?serviceId=${serviceId}${staffId ? `&staffId=${staffId}` : ""}${extraIds?.length ? `&extra=${extraIds.join(",")}` : ""}`,
     ),
   book: (slug: string, body: object) => req(`/api/public/${slug}/book`, { method: "POST", body: JSON.stringify(body) }),
   confirm: (slug: string, id: string, pin: string) =>
@@ -304,7 +307,7 @@ export type Booking = {
 };
 export type TimeOff = { id: string; staffId: string; startsAt: string; endsAt: string; reason: string };
 export type Bootstrap = {
-  tenant: { id: string; name: string; timezone: string; logoUrl?: string | null };
+  tenant: { id: string; name: string; timezone: string; logoUrl?: string | null; mailSign?: string | null; mailImageUrl?: string | null };
   staff: Staff[];
   staffHours: StaffShift[];
   categories: ServiceCategory[];
@@ -354,5 +357,5 @@ export type Pub = {
   tenant: { name: string; slug: string; timezone: string; logoUrl?: string | null };
   staff: { id: string; name: string; photoUrl?: string | null }[];
   categories: ServiceCategory[];
-  services: { id: string; name: string; durationMin: number; categoryId?: string | null; priceCents?: number | null; staffIds: string[] }[];
+  services: { id: string; name: string; durationMin: number; bufferMin?: number; categoryId?: string | null; priceCents?: number | null; staffIds: string[] }[];
 };
