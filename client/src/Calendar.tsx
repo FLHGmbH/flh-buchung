@@ -101,10 +101,17 @@ function lanes<T extends { start: number; end: number }>(items: T[]) {
   return placed;
 }
 
+const CHIP = 32;
+
+function chipHeight(durationPx: number, room: number) {
+  return Math.max(durationPx, Math.min(CHIP, room));
+}
+
 function checkLanes() {
   const same = lanes([{ start: 0, end: 60 }, { start: 0, end: 30 }]);
   const touch = lanes([{ start: 0, end: 30 }, { start: 30, end: 60 }]);
   if (same[0].cols !== 2 || same[0].col === same[1].col || touch.some((e) => e.cols !== 1)) throw new Error("lanes");
+  if (chipHeight(16, 64) !== 32 || chipHeight(16, 16) !== 16 || chipHeight(48, 48) !== 48 || chipHeight(10, 40) !== 32) throw new Error("chip");
 }
 checkLanes();
 
@@ -298,7 +305,18 @@ export function CalendarPage() {
             <div className={"week-grid" + (view === "day" ? " is-day" : "")}>
               <div className="week-head" />
               {dates.map((d) => (
-                <div className="week-head" key={d}>{DAYS[weekdayIndex(d)]} {dm(d)}</div>
+                <button
+                  key={d}
+                  type="button"
+                  className={"week-head" + (d === today ? " today" : "")}
+                  onClick={() => {
+                    setAnchor(d);
+                    setView("day");
+                  }}
+                  title={view === "day" ? undefined : `${DAYS[weekdayIndex(d)]} ${dm(d)} – Zur Tagesansicht`}
+                >
+                  {DAYS[weekdayIndex(d)]} {dm(d)}
+                </button>
               ))}
               <div className="week-times">
                 {rows.map((h) => (
@@ -335,13 +353,20 @@ export function CalendarPage() {
                       const t = staffTone(member ? staffColor(member) : null);
                       const svc = boot.services.find((s) => s.id === b.serviceId)?.name ?? "Termin";
                       const who = member?.name;
+                      const name = shortName(b.guestName);
+                      const ma = who ? shortName(who) : "";
                       const top = ((start - first * 60) / 60) * ROW;
-                      const height = ((end - start) / 60) * ROW;
+                      const px = ((end - start) / 60) * ROW;
+                      const next = placed.find((o) => o.col === col && o.start >= end);
+                      const room = next ? ((next.start - start) / 60) * ROW : CHIP;
+                      const height = chipHeight(px, room);
+                      const tight = height < CHIP - 2;
+                      const facts = [name, ma, svc].filter(Boolean).join(" · ");
                       return (
                         <button
                           key={b.id}
                           type="button"
-                          className="ev"
+                          className={"ev" + (tight ? " is-tight" : "")}
                           style={{
                             background: t.bg,
                             borderLeftColor: t.edge,
@@ -356,8 +381,12 @@ export function CalendarPage() {
                             setPick(b);
                           }}
                         >
-                          <strong style={{ color: t.title }}>{svc}</strong>
-                          <span style={{ color: t.sub }}>{who ? `${shortName(who)} · ` : ""}{shortName(b.guestName)}</span>
+                          {tight ? <strong style={{ color: t.title }}>{facts}</strong> : (
+                            <>
+                              <strong style={{ color: t.title }}>{svc}</strong>
+                              <span style={{ color: t.sub }}>{[name, ma].filter(Boolean).join(" · ")}</span>
+                            </>
+                          )}
                         </button>
                       );
                     })}

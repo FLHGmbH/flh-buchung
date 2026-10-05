@@ -426,130 +426,180 @@ export function StaffPage() {
             }}
           >
             {err ? <p className="err" role="alert">{err}</p> : null}
-            {edit.photoUrl ? <img className="staff-photo" src={edit.photoUrl} alt="" /> : <Avatar name={edit.name} size={96} />}
-            <ImageDrop
-              label={edit.photoUrl ? "Profilbild ersetzen" : "Profilbild hochladen"}
-              busy={pending}
-              onFile={(file) => {
-                if (!edit) return;
-                setErr("");
-                setPending(true);
-                const body = new FormData();
-                body.append("file", file);
-                api.putStaffPhoto(edit.id, body)
-                  .then((r) => setEdit((cur) => cur ? { ...cur, photoUrl: r.photoUrl } : cur))
-                  .catch((ex) => setErr(ex instanceof Error ? ex.message : "Upload fehlgeschlagen."))
-                  .finally(() => setPending(false));
-              }}
-            />
-            {edit.photoUrl ? (
-              <button
-                className="linkish"
-                type="button"
-                disabled={pending}
-                onClick={() => {
-                  setErr("");
-                  setPending(true);
-                  api.delStaffPhoto(edit.id)
-                    .then(() => setEdit((cur) => cur ? { ...cur, photoUrl: null } : cur))
-                    .catch((ex) => setErr(ex instanceof Error ? ex.message : "Löschen fehlgeschlagen."))
-                    .finally(() => setPending(false));
-                }}
-              >
-                Profilbild entfernen
-              </button>
-            ) : null}
-            <label className="field">
-              <span>Name</span>
-              <input value={edit.name} onChange={(e) => setEdit({ ...edit, name: e.target.value })} required />
-            </label>
-            <ColorPick value={edit.color} onChange={(c) => setEdit({ ...edit, color: c })} />
-            <label className="check">
-              <input type="checkbox" checked={edit.active} onChange={(e) => setEdit({ ...edit, active: e.target.checked })} />
-              Aktiv
-            </label>
-            <label className="check">
-              <input type="checkbox" checked={edit.custom} onChange={(e) => setEdit({ ...edit, custom: e.target.checked })} />
-              Eigene Arbeitszeiten. Ohne Haken gelten die Öffnungszeiten.
-            </label>
-            {edit.custom ? (
-              <>
-              <p className="shift-hint">Tag oben anhaken. Zeiten im Balken per Doppelklick ändern. Grau: andere sind da.</p>
-              <div className="shift-week" role="group" aria-label="Arbeitszeiten">
-                <div className="shift-scale" aria-hidden="true">
-                  <ol>
-                    {["0", "6", "12", "18", "24"].map((h) => <li key={h}>{h}</li>)}
-                  </ol>
-                </div>
-                {edit.rows.map((r, i) => {
-                  const pos = r.open ? shiftBlock(r.startHm, r.endHm) : null;
-                  const set = (patch: { open?: boolean; startHm?: string; endHm?: string }) => setEdit({ ...edit, rows: edit.rows.map((x, j) => j === i ? { ...x, ...patch } : x) });
-                  const label = `${r.startHm.slice(0, 5)}–${r.endHm.slice(0, 5)}`;
-                  return (
-                    <div className={"shift-day" + (r.open ? " on" : "")} key={r.weekday}>
-                      <label className="shift-wd">
-                        <input type="checkbox" checked={r.open} aria-label={`${DAYS[r.weekday]} aktiv`} onChange={(e) => set({ open: e.target.checked })} />
-                        {WD[r.weekday]}
-                      </label>
-                      <div className="shift-track">
-                        {(cover?.[r.weekday] ?? []).map((g, n) => (
-                          <span className="shift-others" key={n} style={{ top: g.top, height: g.height }} title="Andere sind da" />
-                        ))}
-                        {pos ? (
-                          <i style={{ top: pos.top, height: pos.height, background: edit.color }} title="Doppelklick zum Ändern" onDoubleClick={() => setHmDay(r.weekday)}>
-                            {hmDay === r.weekday ? (
-                              <input
-                                className="shift-hm"
-                                autoFocus
-                                defaultValue={label}
-                                aria-label={`${DAYS[r.weekday]} von bis`}
-                                onFocus={(e) => e.target.select()}
-                                onKeyDown={(e) => {
-                                  if (e.key === "Enter") { e.preventDefault(); e.currentTarget.blur(); }
-                                  if (e.key === "Escape") { e.currentTarget.dataset.skip = "1"; e.currentTarget.blur(); }
-                                }}
-                                onBlur={(e) => {
-                                  if (!e.currentTarget.dataset.skip) {
-                                    const m = e.target.value.match(/(\d{1,2}:\d{2})\s*[–-]\s*(\d{1,2}:\d{2})/);
-                                    const startHm = m ? normHm(m[1]) : null;
-                                    const endHm = m ? normHm(m[2]) : null;
-                                    if (startHm && endHm && endHm > startHm) set({ startHm, endHm });
-                                  }
-                                  setHmDay(null);
-                                }}
-                              />
-                            ) : <span>{label}</span>}
-                          </i>
-                        ) : <span className="shift-free">frei</span>}
-                      </div>
-                      {r.open ? (
-                        <>
-                          <input aria-label={`${DAYS[r.weekday]} von`} type="time" value={r.startHm} onChange={(e) => set({ startHm: e.target.value })} />
-                          <input aria-label={`${DAYS[r.weekday]} bis`} type="time" value={r.endHm} onChange={(e) => set({ endHm: e.target.value })} />
-                        </>
-                      ) : null}
-                    </div>
-                  );
-                })}
+
+            <div className="staff-head-bar">
+              <div className="staff-avatar-box">
+                {edit.photoUrl ? (
+                  <img className="staff-photo" src={edit.photoUrl} alt="" />
+                ) : (
+                  <Avatar name={edit.name} size={76} />
+                )}
+                <label className="staff-photo-gear" title="Profilbild ändern" aria-label="Profilbild ändern">
+                  <input
+                    type="file"
+                    accept="image/png,image/jpeg,image/webp"
+                    disabled={pending}
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (!file || pending) return;
+                      const named = /\.(png|jpe?g|webp)$/i.test(file.name);
+                      if (!((/^image\/(png|jpeg|webp)$/.test(file.type) || (!file.type && named)) && file.size <= 5_000_000)) {
+                        setErr("PNG, JPG oder WebP, max. 5 MB.");
+                        return;
+                      }
+                      setErr("");
+                      setPending(true);
+                      const body = new FormData();
+                      body.append("file", file);
+                      api.putStaffPhoto(edit.id, body)
+                        .then((r) => setEdit((cur) => cur ? { ...cur, photoUrl: r.photoUrl } : cur))
+                        .catch((ex) => setErr(ex instanceof Error ? ex.message : "Upload fehlgeschlagen."))
+                        .finally(() => setPending(false));
+                      e.target.value = "";
+                    }}
+                  />
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                    <circle cx="12" cy="12" r="3" />
+                    <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
+                  </svg>
+                </label>
               </div>
-              </>
-            ) : null}
-            <button
-              type="button"
-              className="btn danger staff-del"
-              disabled={pending}
-              onClick={() => {
-                if (!window.confirm(`${edit.name} wirklich löschen?`)) return;
-                setErr("");
-                setPending(true);
-                api.delStaff(edit.id)
-                  .then(() => setEdit(null))
-                  .catch((ex) => setErr(ex instanceof Error ? ex.message : "Löschen fehlgeschlagen."))
-                  .finally(() => setPending(false));
-              }}
-            >
-              Löschen
-            </button>
+              <div className="staff-head-fields">
+                <label className="field" style={{ margin: 0 }}>
+                  <span>Name</span>
+                  <input value={edit.name} onChange={(e) => setEdit({ ...edit, name: e.target.value })} required />
+                </label>
+                {edit.photoUrl ? (
+                  <button
+                    className="linkish staff-photo-del"
+                    type="button"
+                    disabled={pending}
+                    onClick={() => {
+                      setErr("");
+                      setPending(true);
+                      api.delStaffPhoto(edit.id)
+                        .then(() => setEdit((cur) => cur ? { ...cur, photoUrl: null } : cur))
+                        .catch((ex) => setErr(ex instanceof Error ? ex.message : "Löschen fehlgeschlagen."))
+                        .finally(() => setPending(false));
+                    }}
+                  >
+                    Profilbild entfernen
+                  </button>
+                ) : null}
+              </div>
+            </div>
+
+            <details className="set-fold">
+              <summary>Farbe & Status</summary>
+              <div className="card-body">
+                <ColorPick value={edit.color} onChange={(c) => setEdit({ ...edit, color: c })} />
+                <label className="check">
+                  <input type="checkbox" checked={edit.active} onChange={(e) => setEdit({ ...edit, active: e.target.checked })} />
+                  Aktiv (im Kalender und bei Online-Buchungen verfügbar)
+                </label>
+              </div>
+            </details>
+
+            <details className="set-fold" open>
+              <summary>Arbeitszeiten</summary>
+              <div className="card-body">
+                <label className="check">
+                  <input type="checkbox" checked={edit.custom} onChange={(e) => setEdit({ ...edit, custom: e.target.checked })} />
+                  Eigene Arbeitszeiten. Ohne Haken gelten die Öffnungszeiten.
+                </label>
+                {edit.custom ? (
+                  <>
+                    <p className="shift-hint">Tag oben anhaken. Zeiten im Balken per Doppelklick ändern. Grau: andere sind da.</p>
+                    <div className="shift-week" role="group" aria-label="Arbeitszeiten">
+                      <div className="shift-scale" aria-hidden="true">
+                        <ol>
+                          {["0", "6", "12", "18", "24"].map((h) => <li key={h}>{h}</li>)}
+                        </ol>
+                      </div>
+                      {edit.rows.map((r, i) => {
+                        const pos = r.open ? shiftBlock(r.startHm, r.endHm) : null;
+                        const set = (patch: { open?: boolean; startHm?: string; endHm?: string }) => setEdit({ ...edit, rows: edit.rows.map((x, j) => j === i ? { ...x, ...patch } : x) });
+                        const label = `${r.startHm.slice(0, 5)}–${r.endHm.slice(0, 5)}`;
+                        return (
+                          <div className={"shift-day" + (r.open ? " on" : "")} key={r.weekday}>
+                            <label className="shift-wd">
+                              <input type="checkbox" checked={r.open} aria-label={`${DAYS[r.weekday]} aktiv`} onChange={(e) => set({ open: e.target.checked })} />
+                              {WD[r.weekday]}
+                            </label>
+                            <div className="shift-track">
+                              {(cover?.[r.weekday] ?? []).map((g, n) => (
+                                <span className="shift-others" key={n} style={{ top: g.top, height: g.height }} title="Andere sind da" />
+                              ))}
+                              {pos ? (
+                                <i style={{ top: pos.top, height: pos.height, background: edit.color }} title="Doppelklick zum Ändern" onDoubleClick={() => setHmDay(r.weekday)}>
+                                  {hmDay === r.weekday ? (
+                                    <input
+                                      className="shift-hm"
+                                      autoFocus
+                                      defaultValue={label}
+                                      aria-label={`${DAYS[r.weekday]} von bis`}
+                                      onFocus={(e) => e.target.select()}
+                                      onKeyDown={(e) => {
+                                        if (e.key === "Enter") { e.preventDefault(); e.currentTarget.blur(); }
+                                        if (e.key === "Escape") { e.currentTarget.dataset.skip = "1"; e.currentTarget.blur(); }
+                                      }}
+                                      onBlur={(e) => {
+                                        if (!e.currentTarget.dataset.skip) {
+                                          const m = e.target.value.match(/(\d{1,2}:\d{2})\s*[–-]\s*(\d{1,2}:\d{2})/);
+                                          const startHm = m ? normHm(m[1]) : null;
+                                          const endHm = m ? normHm(m[2]) : null;
+                                          if (startHm && endHm && endHm > startHm) set({ startHm, endHm });
+                                        }
+                                        setHmDay(null);
+                                      }}
+                                    />
+                                  ) : <span>{label}</span>}
+                                </i>
+                              ) : <span className="shift-free">frei</span>}
+                            </div>
+                            {r.open ? (
+                              <>
+                                <input aria-label={`${DAYS[r.weekday]} von`} type="time" value={r.startHm} onChange={(e) => set({ startHm: e.target.value })} />
+                                <input aria-label={`${DAYS[r.weekday]} bis`} type="time" value={r.endHm} onChange={(e) => set({ endHm: e.target.value })} />
+                              </>
+                            ) : null}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </>
+                ) : (
+                  <p className="shift-hint" style={{ margin: "0.25rem 0 0" }}>Für diesen Mitarbeiter gelten die allgemeinen Öffnungszeiten des Betriebs.</p>
+                )}
+              </div>
+            </details>
+
+            <details className="set-fold">
+              <summary>Mitarbeiter löschen</summary>
+              <div className="card-body">
+                <p className="shift-hint" style={{ margin: "0 0 0.85rem" }}>
+                  Entfernt diesen Mitarbeiter dauerhaft. Bereits bestehende Termine bleiben im Kalender erhalten.
+                </p>
+                <button
+                  type="button"
+                  className="btn danger"
+                  style={{ width: "auto" }}
+                  disabled={pending}
+                  onClick={() => {
+                    if (!window.confirm(`${edit.name} wirklich löschen?`)) return;
+                    setErr("");
+                    setPending(true);
+                    api.delStaff(edit.id)
+                      .then(() => setEdit(null))
+                      .catch((ex) => setErr(ex instanceof Error ? ex.message : "Löschen fehlgeschlagen."))
+                      .finally(() => setPending(false));
+                  }}
+                >
+                  Mitarbeiter löschen
+                </button>
+              </div>
+            </details>
+
             <div className="modal-foot">
               <button type="button" className="btn outline" onClick={() => setEdit(null)}>Abbrechen</button>
               <button className="btn" type="submit" disabled={pending}>Speichern</button>
