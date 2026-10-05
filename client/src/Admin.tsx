@@ -331,7 +331,6 @@ export function AdminDetail() {
               title="Buchungsvorschau"
               src={`/b/${encodeURIComponent(data.tenant.slug)}`}
               className={"preview-frame" + (frameOn ? "" : " is-wait")}
-              loading="lazy"
               onLoad={() => setFrameOn(true)}
             />
           </div>
