@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useParams } from "react-router-dom";
 import { api, type Pub } from "./api";
 import { Fold, gsap, reduced, StepPane, useGSAP } from "./motion";
-import { serviceLine } from "./ui";
+import { euro, serviceLine } from "./ui";
 
 function berlinDay(iso: string) {
   return new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Berlin", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date(iso));
@@ -100,14 +100,23 @@ export function BookPage() {
   }
   function svcRow(s: (typeof pub.services)[number]) {
     const on = ids.includes(s.id);
-    const plus = ids.length > 0 && !on;
     return (
       <div key={s.id} className={"choice svc-pick" + (on ? " on" : "")}>
         <button className="choice-hit" type="button" onClick={() => toggleService(s.id)}>{serviceLine(s)}</button>
-        {plus ? <button className="choice-plus" type="button" aria-label={`${s.name} hinzufügen`} onClick={() => toggleService(s.id)}>+</button> : null}
+        <button className={"choice-mark" + (on ? " is-minus" : "")} type="button" aria-label={on ? `${s.name} entfernen` : `${s.name} hinzufügen`} onClick={() => toggleService(s.id)}>
+          <Mark minus={on} />
+        </button>
       </div>
     );
   }
+  const picked = ids.flatMap((id) => {
+    const s = pub.services.find((x) => x.id === id);
+    return s ? [s] : [];
+  });
+  const mins = picked.reduce((n, s) => n + s.durationMin, 0);
+  const cents = picked.length && picked.every((s) => s.priceCents != null)
+    ? picked.reduce((n, s) => n + (s.priceCents ?? 0), 0)
+    : null;
   const who = staffId ? pub.staff.find((s) => s.id === staffId)?.name ?? "Egal" : "Egal";
   const pickedDay = days.find((d) => d.key === day);
   const pickedNames = ids.map((id) => pub.services.find((s) => s.id === id)?.name).filter(Boolean).join(" + ");
@@ -145,29 +154,54 @@ export function BookPage() {
       <StepPane id={step}>
       {step === 0 && (
         pub.services.length ? (
-          cats.length ? (
-            blocks.map((b) => {
-              const on = catId === b.id || b.rows.some((s) => ids.includes(s.id));
-              return (
-                <div key={b.id} className={"cat-fold" + (on ? " open" : "")}>
-                  <button type="button" className="cat-fold-h" aria-expanded={on} onClick={() => setCatId(on ? "" : b.id)}>
-                    <span>{b.name}</span>
-                    <svg className="chev" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
-                      <polyline points="6 9 12 15 18 9" />
-                    </svg>
-                  </button>
-                  <Fold open={on}>
-                    {b.rows.map(svcRow)}
-                  </Fold>
-                </div>
-              );
-            })
-          ) : pub.services.map(svcRow)
+          <div className="book-pick">
+            <div className="book-list">
+              {cats.length ? blocks.map((b) => {
+                const on = catId === b.id || b.rows.some((s) => ids.includes(s.id));
+                return (
+                  <div key={b.id} className={"cat-fold" + (on ? " open" : "")}>
+                    <button type="button" className="cat-fold-h" aria-expanded={on} onClick={() => setCatId(on ? "" : b.id)}>
+                      <span>{b.name}</span>
+                      <svg className="chev" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+                        <polyline points="6 9 12 15 18 9" />
+                      </svg>
+                    </button>
+                    <Fold open={on}>
+                      {b.rows.map(svcRow)}
+                    </Fold>
+                  </div>
+                );
+              }) : pub.services.map(svcRow)}
+            </div>
+            <aside className="book-cart" aria-label="Auswahl">
+              <div className="book-cart-h">
+                <strong>Auswahl</strong>
+                {picked.length ? <span>{picked.length}</span> : null}
+              </div>
+              {picked.length ? (
+                <ol>
+                  {picked.map((s, i) => (
+                    <li key={s.id}>
+                      <span className="book-cart-n">{i + 1}</span>
+                      <span className="book-cart-name">
+                        <strong>{s.name}</strong>
+                        <small>{s.durationMin} Min.{s.priceCents != null ? ` · ${euro(s.priceCents)}` : ""}</small>
+                      </span>
+                      <button className="choice-mark is-minus" type="button" aria-label={`${s.name} entfernen`} onClick={() => toggleService(s.id)}>
+                        <Mark minus />
+                      </button>
+                    </li>
+                  ))}
+                </ol>
+              ) : <p>Noch keine Leistung.</p>}
+              {picked.length ? <p className="book-cart-sum">{mins} Min.{cents != null ? ` · ${euro(cents)}` : ""}</p> : null}
+              {serviceId ? <button className="btn" type="button" onClick={() => setStep(1)}>Weiter</button> : null}
+            </aside>
+          </div>
         ) : (
           <p className="err">Noch keine Leistung angelegt. Im Mandanten-Konto unter Leistungen eine anlegen.</p>
         )
       )}
-      {step === 0 && serviceId ? <button className="btn" type="button" onClick={() => setStep(1)}>Weiter</button> : null}
 
       {step === 1 && (
         <>
@@ -362,6 +396,14 @@ function BookShell({ children, slug }: { children: ReactNode; slug: string }) {
       <div className="book" ref={ref}>{children}</div>
       {cookies ? <CookieBar privacyHref={`/b/${slug}/datenschutz`} onOk={() => setCookies(false)} /> : null}
     </div>
+  );
+}
+
+function Mark({ minus }: { minus?: boolean }) {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.25" strokeLinecap="round" aria-hidden="true">
+      {minus ? <path d="M5 12h14" /> : <path d="M12 5v14M5 12h14" />}
+    </svg>
   );
 }
 
