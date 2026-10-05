@@ -34,23 +34,22 @@ export function BookPage() {
   const [done, setDone] = useState<{ id: string; startsAt: string } | null>(null);
   const [hold, setHold] = useState<{ id: string; startsAt: string } | null>(null);
   const [pin, setPin] = useState("");
-  const [agree, setAgree] = useState(false);
   const [pending, setPending] = useState(false);
 
   useEffect(() => {
     if (!serviceId || !pub) return;
     let on = true;
     setPending(true);
-    api.slots(slug, serviceId, staffId || undefined)
+    api.slots(slug, serviceId)
       .then((r) => { if (on) setSlots(r.slots); })
       .catch((e) => { if (on) setErr(e.message); })
       .finally(() => { if (on) setPending(false); });
     return () => { on = false; };
-  }, [slug, serviceId, staffId, pub]);
+  }, [slug, serviceId, pub]);
 
   const days = useMemo(() => {
     const map = new Map<string, boolean>();
-    for (const s of slots) {
+    for (const s of (staffId ? slots.filter((x) => x.staffId === staffId) : slots)) {
       const key = berlinDay(s.start);
       map.set(key, true);
     }
@@ -69,13 +68,14 @@ export function BookPage() {
       });
     }
     return out;
-  }, [slots]);
+  }, [slots, staffId]);
 
-  const daySlots = slots.filter((s) => berlinDay(s.start) === day).sort((a, b) => a.start.localeCompare(b.start));
+  const mine = staffId ? slots.filter((s) => s.staffId === staffId) : slots;
+  const daySlots = mine.filter((s) => berlinDay(s.start) === day).sort((a, b) => a.start.localeCompare(b.start));
 
   if (!pub) {
     return (
-      <BookShell>
+      <BookShell slug={slug}>
         {err ? <p className="err" role="alert">{err}</p> : <p className="lead wait">Laden…</p>}
       </BookShell>
     );
@@ -83,6 +83,8 @@ export function BookPage() {
 
   const service = pub.services.find((s) => s.id === serviceId);
   const staffForService = pub.staff.filter((s) => !service || service.staffIds.includes(s.id));
+  const openIds = new Set(slots.map((s) => s.staffId));
+  const offered = pending && !slots.length ? staffForService : staffForService.filter((s) => openIds.has(s.id));
   const cats = (pub.categories ?? []).filter((c) => pub.services.some((s) => s.categoryId === c.id));
   const loose = pub.services.filter((s) => !s.categoryId);
   const blocks = [
@@ -105,7 +107,7 @@ export function BookPage() {
   ].filter(Boolean).join(" · ");
 
   return (
-    <BookShell>
+    <BookShell slug={slug}>
       {pub.tenant.logoUrl ? <img className="book-logo" src={pub.tenant.logoUrl} alt="" /> : null}
       <h1>{pub.tenant.name}</h1>
       <p className="lead">Leistung, Zeit, dann der Code aus der Mail.</p>
@@ -173,12 +175,13 @@ export function BookPage() {
             </span>
             Egal
           </button>
-          {staffForService.map((s) => (
+          {offered.map((s) => (
             <button key={s.id} className={"choice person" + (staffId === s.id ? " on" : "")} type="button" onClick={() => { setStaffId(s.id); setStep(2); }}>
               {s.photoUrl ? <img src={s.photoUrl} alt="" /> : <span className="ph">{s.name.slice(0, 1)}</span>}
               {s.name}
             </button>
           ))}
+          {!pending && !offered.length ? <p>In den nächsten 14 Tagen ist niemand frei.</p> : null}
           <button className="btn quiet book-back" type="button" onClick={() => setStep(0)}>Zurück</button>
         </>
       )}
@@ -222,7 +225,6 @@ export function BookPage() {
         <form
           onSubmit={(e) => {
             e.preventDefault();
-            if (!agree) return;
             setPending(true);
             api.book(slug, {
               serviceId,
@@ -244,13 +246,10 @@ export function BookPage() {
           <label className="field"><span>E-Mail</span><input type="email" required value={guest.guestEmail} onChange={(e) => setGuest({ ...guest, guestEmail: e.target.value })} /></label>
           <label className="field"><span>Telefon</span><input value={guest.guestPhone} onChange={(e) => setGuest({ ...guest, guestPhone: e.target.value })} /></label>
           <label className="field"><span>Notiz</span><textarea value={guest.note} onChange={(e) => setGuest({ ...guest, note: e.target.value })} /></label>
-          <label className="check agree">
-            <input type="checkbox" checked={agree} onChange={(e) => setAgree(e.target.checked)} required />
-            <span>
-              Ich habe die <a href="/agb" target="_blank" rel="noreferrer">AGB</a> und die <a href="/datenschutz" target="_blank" rel="noreferrer">Datenschutzerklärung</a> gelesen und bin einverstanden.
-            </span>
-          </label>
-          <button className={agree ? "btn" : "btn is-hold"} disabled={pending || !agree} type="submit">{pending ? "Sendet Code…" : "Code per Mail"}</button>
+          <p className="agree">
+            Name und E-Mail speichert {pub.tenant.name} für diesen Termin. Mehr dazu in der <a href={`/b/${slug}/datenschutz`} target="_blank" rel="noreferrer">Datenschutzerklärung</a>.
+          </p>
+          <button className="btn" disabled={pending} type="submit">{pending ? "Sendet Code…" : "Code per Mail"}</button>
           <button className="btn quiet book-back" type="button" onClick={() => setStep(3)}>Zurück</button>
         </form>
       )}
@@ -303,17 +302,24 @@ export function BookPage() {
       )}
       </StepPane>
 
-      <footer className="book-foot">Buchung von FLH DIGITAL</footer>
+      <footer className="book-foot">
+        Buchung von FLH DIGITAL
+        {" · "}
+        <a href={`/b/${slug}/datenschutz`}>Datenschutz</a>
+      </footer>
     </BookShell>
   );
 }
 
 const COOKIE_KEY = "flh-book-ok";
 
-function CookieBar({ onOk }: { onOk: () => void }) {
+function CookieBar({ onOk, privacyHref }: { onOk: () => void; privacyHref: string }) {
   return (
     <div className="cookie-bar" role="dialog" aria-label="Cookies">
-      <p>Nur technisch nötige Daten für die Buchung. Keine Werbe-Cookies.</p>
+      <p>
+        Nur technisch nötige Daten für die Buchung. Keine Werbe-Cookies.{" "}
+        <a href={privacyHref} target="_blank" rel="noreferrer">Datenschutzerklärung</a>
+      </p>
       <button
         className="btn"
         type="button"
@@ -332,7 +338,7 @@ function CookieBar({ onOk }: { onOk: () => void }) {
   );
 }
 
-function BookShell({ children }: { children: ReactNode }) {
+function BookShell({ children, slug }: { children: ReactNode; slug: string }) {
   const ref = useRef<HTMLDivElement>(null);
   const [cookies, setCookies] = useState(() => {
     try {
@@ -348,7 +354,7 @@ function BookShell({ children }: { children: ReactNode }) {
   return (
     <div className={"book-page" + (cookies ? " has-cookie" : "")}>
       <div className="book" ref={ref}>{children}</div>
-      {cookies ? <CookieBar onOk={() => setCookies(false)} /> : null}
+      {cookies ? <CookieBar privacyHref={`/b/${slug}/datenschutz`} onOk={() => setCookies(false)} /> : null}
     </div>
   );
 }

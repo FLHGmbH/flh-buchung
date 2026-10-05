@@ -7,6 +7,7 @@ import { CalendarPage } from "./Calendar";
 import { DashboardPage } from "./Dashboard";
 import { BookingsPage, HoursPage, ServicesPage, StaffPage, TimeOffPage } from "./Manage";
 import { LegalPage, LoginPage, ResetPage } from "./Login";
+import { GuestPrivacyPage } from "./privacy";
 import { Shell } from "./Shell";
 
 export function App() {
@@ -29,6 +30,7 @@ export function App() {
   if (publicBook) {
     return (
       <Routes>
+        <Route path="/b/:slug/datenschutz" element={<GuestPrivacyPage />} />
         <Route path="/b/:slug" element={<BookPage />} />
       </Routes>
     );

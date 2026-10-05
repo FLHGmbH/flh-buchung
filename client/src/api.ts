@@ -213,6 +213,8 @@ export const api = {
   patchCategory: (id: string, body: object) => mutate(`/api/app/categories/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
   delCategory: (id: string) => mutate(`/api/app/categories/${id}`, { method: "DELETE" }),
   putHours: (hours: object[]) => mutate("/api/app/hours", { method: "PUT", body: JSON.stringify({ hours }) }),
+  putStaffHours: (id: string, hours: { weekday: number; startHm: string; endHm: string }[]) =>
+    mutate(`/api/app/staff/${id}/hours`, { method: "PUT", body: JSON.stringify({ hours }) }),
   putLogo: (body: FormData) => mutate("/api/app/logo", { method: "POST", body }),
   delLogo: () => mutate("/api/app/logo", { method: "DELETE" }),
   timeOff: () => inflight<{ timeOff: TimeOff[] }>("/api/app/time-off"),
@@ -284,6 +286,7 @@ export type TenantRow = {
 };
 
 export type Staff = { id: string; name: string; active: boolean; photoUrl?: string | null; color?: string | null };
+export type StaffShift = { staffId: string; weekday: number; startHm: string; endHm: string };
 export type ServiceCategory = { id: string; name: string };
 export type Service = { id: string; name: string; durationMin: number; bufferMin: number; active: boolean; staffIds: string[]; categoryId?: string | null; priceCents?: number | null };
 export type Booking = {
@@ -302,6 +305,7 @@ export type TimeOff = { id: string; staffId: string; startsAt: string; endsAt: s
 export type Bootstrap = {
   tenant: { id: string; name: string; timezone: string; logoUrl?: string | null };
   staff: Staff[];
+  staffHours: StaffShift[];
   categories: ServiceCategory[];
   services: Service[];
   hours: { weekday: number; startHm: string; endHm: string }[];

@@ -66,6 +66,23 @@ const otherStaff = freeSlots({
 });
 assert(otherStaff.length === open.length, "other staff busy must not block anna");
 
+const clipped = freeSlots({
+  ...window,
+  staffHours: [{ staffId: "anna", weekday: 1, startHm: "10:00", endHm: "11:00" }],
+});
+assert(
+  clipped.map((s) => DateTime.fromJSDate(s.start, { zone }).toFormat("HH:mm")).join(",") === "10:00",
+  "staff hours clip the shop window",
+);
+assert(
+  freeSlots({ ...window, staffHours: [{ staffId: "anna", weekday: 2, startHm: "10:00", endHm: "18:00" }] }).length === 0,
+  "staff off that weekday has no slots",
+);
+assert(
+  freeSlots({ ...window, staffHours: [{ staffId: "anna", weekday: 1, startHm: "08:00", endHm: "20:00" }] }).length === open.length,
+  "staff hours cannot extend past the shop",
+);
+
 const nine = monday.set({ hour: 9 }).toJSDate();
 const nine45 = monday.set({ hour: 9, minute: 45 }).toJSDate();
 const ten = monday.set({ hour: 10 }).toJSDate();

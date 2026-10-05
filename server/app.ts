@@ -6,6 +6,9 @@ import { seedIfEmpty } from "./seed.ts";
 
 export const app = new Hono();
 
+const devUi = [...process.argv, ...process.execArgv].some((a) => a.includes("tsx")) || (process.env.npm_lifecycle_event ?? "").startsWith("dev");
+const devPage = /^\/(?:app(?:\/(?:dashboard|termine|mitarbeiter|sperren|leistungen|zeiten))?|admin(?:\/(?:dashboard|neu|[0-9a-f-]{36}))?|login|reset|agb|datenschutz|b\/[^/]+(?:\/datenschutz)?)\/?$/;
+
 let boot: Promise<void> | null = null;
 function ready() {
   boot ??= migrate()
@@ -23,6 +26,10 @@ function applySecurity(c: { req: { path: string; url: string }; header: (k: stri
 }
 
 app.use("*", async (c, next) => {
+  if (devUi && c.req.method === "GET" && devPage.test(c.req.path)) {
+    const url = new URL(c.req.url);
+    return c.redirect(`http://localhost:5173${url.pathname}${url.search}`);
+  }
   try {
     await ready();
   } catch (e) {

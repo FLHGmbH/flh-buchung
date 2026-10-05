@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { api, type Actor } from "./api";
+import { MandantPrivacy } from "./privacy";
 import { Mark } from "./Mark";
 import { gsap, reduced, useGSAP } from "./motion";
 
@@ -99,6 +100,7 @@ export function LoginPage({ onLogin }: { onLogin: (a: Actor) => void }) {
         >
           {forgot ? "Zurück zur Anmeldung" : "Passwort vergessen"}
         </button>
+        <p className="fine"><Link to="/datenschutz">Datenschutzerklärung</Link></p>
       </form>
     </div>
   );
@@ -207,9 +209,12 @@ export function ResetPage() {
         <label className="check agree">
           <input type="checkbox" checked={agree} onChange={(e) => setAgree(e.target.checked)} required />
           <span>
-            Ich habe die <Link to="/agb">AGB</Link> und die <Link to="/datenschutz">Datenschutzerklärung</Link> gelesen und bin einverstanden.
+            Ich habe die <Link to="/agb">AGB</Link> gelesen und bin einverstanden.
           </span>
         </label>
+        <p className="fine">
+          Hinweise zu deinen Kontodaten stehen in der <Link to="/datenschutz">Datenschutzerklärung</Link>.
+        </p>
         <button className={agree ? "btn" : "btn is-hold"} disabled={pending || !agree}>{pending ? "Speichern…" : "Passwort speichern"}</button>
       </form>
     </div>
@@ -223,7 +228,7 @@ export function LegalPage({ kind }: { kind: "agb" | "privacy" }) {
       <article className="panel legal">
         <Mark />
         <h1>{agb ? "Allgemeine Geschäftsbedingungen" : "Datenschutzerklärung"}</h1>
-        <p className="note">Platzhalter. Der endgültige Text folgt und ersetzt diese Seite.</p>
+        {agb ? <p className="note">Platzhalter. Der endgültige Text folgt und ersetzt diese Seite.</p> : null}
         {agb ? (
           <>
             <h2>Geltung</h2>
@@ -234,14 +239,7 @@ export function LegalPage({ kind }: { kind: "agb" | "privacy" }) {
             <p>Zugangsdaten sind geheim zu halten. Das Passwort wird beim ersten Aufruf des Links aus der Mail selbst festgelegt.</p>
           </>
         ) : (
-          <>
-            <h2>Verantwortlicher</h2>
-            <p>Verantwortlich für die Datenverarbeitung ist der Betreiber von Kalendaa. Kontaktdaten werden hier ergänzt.</p>
-            <h2>Welche Daten</h2>
-            <p>Für das Konto speichern wir Name, E-Mail und ein Passwort beim Authentifizierungsdienst. Buchungen enthalten die Angaben, die Gäste im Formular machen.</p>
-            <h2>Zweck</h2>
-            <p>Die Daten dienen dem Login, der Terminverwaltung und der Zustellung der Buchungsmails. Eine Weitergabe zu Werbezwecken findet nicht statt.</p>
-          </>
+          <MandantPrivacy />
         )}
         <p>
           <Link to={agb ? "/datenschutz" : "/agb"}>{agb ? "Zur Datenschutzerklärung" : "Zu den AGB"}</Link>

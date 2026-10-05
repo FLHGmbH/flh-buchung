@@ -1,6 +1,7 @@
 import { DateTime } from "luxon";
 
 export type Hours = { weekday: number; startHm: string; endHm: string };
+export type StaffHours = { staffId: string; weekday: number; startHm: string; endHm: string };
 export type Busy = { staffId: string; start: Date; end: Date };
 export type Slot = { start: Date; end: Date; staffId: string };
 
@@ -13,6 +14,19 @@ function overlaps(a0: DateTime, a1: DateTime, b0: DateTime, b1: DateTime) {
   return a0 < b1 && a1 > b0;
 }
 
+function hmMin(hm: string) {
+  const [h, m] = hm.split(":").map(Number);
+  return h * 60 + m;
+}
+
+function clipHm(a0: string, a1: string, b0: string, b1: string) {
+  const start = Math.max(hmMin(a0), hmMin(b0));
+  const end = Math.min(hmMin(a1), hmMin(b1));
+  if (end <= start) return null;
+  const pad = (n: number) => `${String(Math.floor(n / 60)).padStart(2, "0")}:${String(n % 60).padStart(2, "0")}`;
+  return { startHm: pad(start), endHm: pad(end) };
+}
+
 export function staffTaken(start: Date, end: Date, ownBufferMin: number, busy: { start: Date; end: Date }[]) {
   const until = end.getTime() + ownBufferMin * 60_000;
   const from = start.getTime();
@@ -23,6 +37,7 @@ export function freeSlots(opts: {
   zone: string;
   hours: Hours[];
   busy?: Busy[];
+  staffHours?: StaffHours[];
   staffIds: string[];
   durationMin: number;
   from: Date;
@@ -41,8 +56,16 @@ export function freeSlots(opts: {
   const out: Slot[] = [];
 
   for (let day = startDay; day <= endDay; day = day.plus({ days: 1 })) {
-    const windows = opts.hours.filter((h) => h.weekday === day.weekday);
+    const shop = opts.hours.filter((h) => h.weekday === day.weekday);
     for (const staffId of opts.staffIds) {
+      const marked = (opts.staffHours ?? []).some((h) => h.staffId === staffId);
+      const own = (opts.staffHours ?? []).filter((h) => h.staffId === staffId && h.weekday === day.weekday);
+      const windows = marked
+        ? shop.flatMap((w) => own.flatMap((o) => {
+            const hit = clipHm(w.startHm, w.endHm, o.startHm, o.endHm);
+            return hit ? [hit] : [];
+          }))
+        : shop;
       const occupied = (opts.busy ?? [])
         .filter((b) => b.staffId === staffId)
         .map((b) => ({

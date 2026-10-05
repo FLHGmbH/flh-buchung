@@ -63,6 +63,15 @@ export const serviceStaff = pgTable(
   (t) => [primaryKey({ columns: [t.serviceId, t.staffId] })],
 );
 
+export const staffHours = pgTable("staff_hours", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+  staffId: uuid("staff_id").notNull().references(() => staff.id, { onDelete: "cascade" }),
+  weekday: integer("weekday").notNull(),
+  startHm: text("start_hm").notNull(),
+  endHm: text("end_hm").notNull(),
+});
+
 export const openingHours = pgTable("opening_hours", {
   id: uuid("id").primaryKey().defaultRandom(),
   tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),

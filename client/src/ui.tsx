@@ -1,6 +1,6 @@
 import { useRef, useState, type FormEvent, type ReactNode } from "react";
 import { createPortal } from "react-dom";
-import { api, type Booking, type Service, type ServiceCategory, type Staff } from "./api";
+import { api, type Booking, type Service, type ServiceCategory, type Staff, type StaffShift } from "./api";
 import { gsap, reduced, useGSAP } from "./motion";
 
 const AV = ["#1b5561", "#348a8a", "#8359dd", "#b45309", "#0f766e", "#be185d"];
@@ -27,6 +27,43 @@ function hash(s: string, n: number) {
 
 export function initial(name: string) {
   return ((name ?? "").trim()[0] || "?").toUpperCase();
+}
+
+function imageOk(file: File) {
+  const named = /\.(png|jpe?g|webp)$/i.test(file.name);
+  return (/^image\/(png|jpeg|webp)$/.test(file.type) || (!file.type && named)) && file.size <= 5_000_000;
+}
+
+export function ImageDrop({ label, busy, onFile }: { label: string; busy?: boolean; onFile: (file: File) => void }) {
+  const [over, setOver] = useState(false);
+  const [note, setNote] = useState("");
+  function take(file?: File) {
+    if (!file || busy) return;
+    if (!imageOk(file)) {
+      setNote("PNG, JPG oder WebP, max. 5 MB.");
+      return;
+    }
+    setNote("");
+    onFile(file);
+  }
+  return (
+    <label
+      className={"drop" + (over ? " over" : "") + (busy ? " busy" : "")}
+      onDragOver={(e) => { e.preventDefault(); if (!busy) setOver(true); }}
+      onDragLeave={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node)) setOver(false); }}
+      onDrop={(e) => { e.preventDefault(); setOver(false); take(e.dataTransfer.files[0]); }}
+    >
+      <input
+        type="file"
+        accept="image/png,image/jpeg,image/webp"
+        disabled={!!busy}
+        onChange={(e) => { take(e.target.files?.[0]); e.target.value = ""; }}
+      />
+      <span className="drop-btn">{busy ? "Wird hochgeladen…" : over ? "Loslassen" : label}</span>
+      <span className="drop-sub">oder hierher ziehen · PNG, JPG, WebP, max. 5 MB</span>
+      {note ? <span className="drop-note" role="alert">{note}</span> : null}
+    </label>
+  );
 }
 
 export function Avatar({ name, size = 32 }: { name: string; size?: number }) {
@@ -83,7 +120,7 @@ export function serviceLine(s: { name: string; durationMin: number; priceCents?:
   return s.priceCents != null ? `${s.name} · ${s.durationMin} Min. · ${euro(s.priceCents)}` : `${s.name} · ${s.durationMin} Min.`;
 }
 
-export function Modal({ title, onClose, children }: { title: string; onClose: () => void; children: ReactNode }) {
+export function Modal({ title, onClose, wide, children }: { title: string; onClose: () => void; wide?: boolean; children: ReactNode }) {
   const root = useRef<HTMLDivElement>(null);
   const { contextSafe } = useGSAP(() => {
     const back = root.current;
@@ -105,7 +142,7 @@ export function Modal({ title, onClose, children }: { title: string; onClose: ()
   });
   return createPortal(
     <div className="modal-back" ref={root} onClick={close} role="presentation">
-      <div className="modal" role="dialog" aria-labelledby="modal-title" onClick={(e) => e.stopPropagation()}>
+      <div className={"modal" + (wide ? " is-wide" : "")} role="dialog" aria-labelledby="modal-title" onClick={(e) => e.stopPropagation()}>
         <div className="modal-head">
           <h2 id="modal-title">{title}</h2>
           <button type="button" className="modal-x" onClick={close} aria-label="Schließen">
@@ -161,6 +198,24 @@ export function staffBusy(
   return false;
 }
 
+export function onShift(shifts: StaffShift[] | undefined, staffId: string, date: string, time: string, durationMin: number) {
+  const own = (shifts ?? []).filter((h) => h.staffId === staffId);
+  if (!own.length || !date || !time) return true;
+  const [y, m, d] = date.split("-").map(Number);
+  if (!y || !m || !d) return true;
+  const js = new Date(y, m - 1, d).getDay();
+  const weekday = js === 0 ? 7 : js;
+  const [hh, mm] = time.split(":").map(Number);
+  if (!Number.isInteger(hh) || !Number.isInteger(mm)) return true;
+  const start = hh * 60 + mm;
+  const end = start + durationMin;
+  const mins = (hm: string) => {
+    const [h, min] = hm.split(":").map(Number);
+    return h * 60 + min;
+  };
+  return own.some((h) => h.weekday === weekday && mins(h.startHm) <= start && end <= mins(h.endHm));
+}
+
 export function firstOpen(
   staff: Staff[],
   services: Service[],
@@ -168,6 +223,7 @@ export function firstOpen(
   time: string,
   bookings: Booking[],
   timeOff: Off[],
+  shifts: StaffShift[] = [],
 ) {
   const start = new Date(`${date}T${time}`);
   const raw = services.filter((s) => s.active);
@@ -180,6 +236,7 @@ export function firstOpen(
       (s) =>
         s.active &&
         svc.staffIds.includes(s.id) &&
+        onShift(shifts, s.id, date, time, svc.durationMin) &&
         !staffBusy(s.id, start, svc.durationMin, svc.bufferMin, bookings, services, timeOff),
     );
     if (who) return { staffId: who.id, serviceId: svc.id };
@@ -209,6 +266,7 @@ export function BookingModal({
   timezone = "Europe/Berlin",
   initial,
   occupied,
+  shifts = [],
   onClose,
   onSaved,
 }: {
@@ -219,6 +277,7 @@ export function BookingModal({
   timezone?: string;
   initial?: { staffId?: string; serviceId?: string; date?: string; time?: string };
   occupied?: { bookings: Booking[]; timeOff: Off[] };
+  shifts?: StaffShift[];
   onClose: () => void;
   onSaved: (startsAt?: string) => void;
 }) {
@@ -237,7 +296,9 @@ export function BookingModal({
   const [err, setErr] = useState("");
   const [pending, setPending] = useState(false);
   const svc = services.find((s) => s.id === form.serviceId);
-  const choices = staff.filter((s) => (s.active && svc?.staffIds.includes(s.id)) || s.id === booking?.staffId);
+  const linked = staff.filter((s) => s.active && svc?.staffIds.includes(s.id));
+  const fits = (id: string, date = form.date, time = form.time, dur = svc?.durationMin ?? 0) => onShift(shifts, id, date, time, dur);
+  const choices = staff.filter((s) => s.id === booking?.staffId || (linked.some((x) => x.id === s.id) && fits(s.id)));
   const startAt = new Date(`${form.date}T${form.time}`);
   const busyId = (id: string) =>
     Boolean(
@@ -246,7 +307,17 @@ export function BookingModal({
         staffBusy(id, startAt, svc.durationMin, svc.bufferMin, occupied.bookings, services, occupied.timeOff, booking?.id),
     );
   const mineBusy = busyId(form.staffId);
+  const mineOff = Boolean(svc && !fits(form.staffId));
   const who = staff.find((s) => s.id === form.staffId);
+  function pickWho(date: string, time: string, serviceId: string) {
+    const next = services.find((s) => s.id === serviceId);
+    if (!next) return form.staffId;
+    const pool = staff.filter((s) => s.active && next.staffIds.includes(s.id));
+    const ok = (s: Staff) =>
+      onShift(shifts, s.id, date, time, next.durationMin) &&
+      !staffBusy(s.id, new Date(`${date}T${time}`), next.durationMin, next.bufferMin, occupied?.bookings ?? [], services, occupied?.timeOff ?? [], booking?.id);
+    return (pool.find((s) => s.id === form.staffId && ok(s)) ?? pool.find(ok) ?? pool[0])?.id ?? form.staffId;
+  }
   const payload = () => ({
     staffId: form.staffId,
     serviceId: form.serviceId,
@@ -260,6 +331,10 @@ export function BookingModal({
   async function submit(e: FormEvent) {
     e.preventDefault();
     if (gone) return;
+    if (!booking && mineOff) {
+      setErr(`${who?.name ?? "Mitarbeiter"} arbeitet zu der Zeit nicht.`);
+      return;
+    }
     setErr("");
     setPending(true);
     try {
@@ -289,18 +364,19 @@ export function BookingModal({
     <Modal title={booking ? "Termin" : "Neuer Termin"} onClose={onClose}>
       <form onSubmit={submit}>
         {err ? <p className="err">{err}</p> : null}
-        {!err && mineBusy && who ? <p className="err">{who.name} ist zu der Zeit nicht frei.</p> : null}
-        {!choices.length ? <p className="err">Kein Mitarbeiter für diese Leistung.</p> : null}
+        {!err && mineOff && who ? <p className="err">{who.name} arbeitet zu der Zeit nicht.</p> : null}
+        {!err && !mineOff && mineBusy && who ? <p className="err">{who.name} ist zu der Zeit nicht frei.</p> : null}
+        {!choices.length ? <p className="err">{linked.length ? "Zu der Zeit arbeitet niemand." : "Kein Mitarbeiter für diese Leistung."}</p> : null}
         {gone ? <p className="err">Dieser Termin ist storniert.</p> : null}
         <fieldset disabled={gone || pending}>
           <div className="fields-2">
             <label className="field">
               <span>Datum</span>
-              <input type="date" required value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })} />
+              <input type="date" required value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value, staffId: pickWho(e.target.value, form.time, form.serviceId) })} />
             </label>
             <label className="field">
               <span>Uhrzeit</span>
-              <input type="time" required value={form.time} onChange={(e) => setForm({ ...form, time: e.target.value })} />
+              <input type="time" required value={form.time} onChange={(e) => setForm({ ...form, time: e.target.value, staffId: pickWho(form.date, e.target.value, form.serviceId) })} />
             </label>
           </div>
           <div className="fields-2">
@@ -308,8 +384,8 @@ export function BookingModal({
               <span>Mitarbeiter</span>
               <select value={form.staffId} onChange={(e) => setForm({ ...form, staffId: e.target.value })} required>
                 {choices.map((s) => (
-                  <option key={s.id} value={s.id} disabled={busyId(s.id)}>
-                    {s.name}{busyId(s.id) ? " · belegt" : ""}
+                  <option key={s.id} value={s.id} disabled={busyId(s.id) || !fits(s.id)}>
+                    {s.name}{!fits(s.id) ? " · arbeitet nicht" : busyId(s.id) ? " · belegt" : ""}
                   </option>
                 ))}
               </select>
@@ -320,38 +396,7 @@ export function BookingModal({
                 value={form.serviceId}
                 onChange={(e) => {
                   const serviceId = e.target.value;
-                  const next = services.find((s) => s.id === serviceId);
-                  const at = new Date(`${form.date}T${form.time}`);
-                  const pool = staff.filter((s) => s.active && next?.staffIds.includes(s.id));
-                  const keep = pool.find((s) => s.id === form.staffId);
-                  const free = pool.find(
-                    (s) =>
-                      next &&
-                      !staffBusy(
-                        s.id,
-                        at,
-                        next.durationMin,
-                        next.bufferMin,
-                        occupied?.bookings ?? [],
-                        services,
-                        occupied?.timeOff ?? [],
-                        booking?.id,
-                      ),
-                  );
-                  const keepFree =
-                    keep &&
-                    next &&
-                    !staffBusy(
-                      keep.id,
-                      at,
-                      next.durationMin,
-                      next.bufferMin,
-                      occupied?.bookings ?? [],
-                      services,
-                      occupied?.timeOff ?? [],
-                      booking?.id,
-                    );
-                  setForm({ ...form, serviceId, staffId: (keepFree ? keep : free ?? pool[0])?.id ?? form.staffId });
+                  setForm({ ...form, serviceId, staffId: pickWho(form.date, form.time, serviceId) });
                 }}
                 required
               >

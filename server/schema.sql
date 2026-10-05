@@ -62,6 +62,15 @@ CREATE TABLE IF NOT EXISTS service_staff (
   PRIMARY KEY (service_id, staff_id)
 );
 
+CREATE TABLE IF NOT EXISTS staff_hours (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  tenant_id uuid NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+  staff_id uuid NOT NULL REFERENCES staff(id) ON DELETE CASCADE,
+  weekday integer NOT NULL,
+  start_hm text NOT NULL,
+  end_hm text NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS opening_hours (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   tenant_id uuid NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,

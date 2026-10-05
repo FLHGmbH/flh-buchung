@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, type FormEvent } from "react";
-import { api, useApi, type Bootstrap, type Booking, type TimeOff } from "./api";
-import { Avatar, BookingModal, centsFromEuro, euro, euroInput, firstOpen, Modal, PageHead, STAFF_COLORS, staffColor, svcTone } from "./ui";
+import { api, useApi, type Bootstrap, type Booking, type StaffShift, type TimeOff } from "./api";
+import { Avatar, BookingModal, centsFromEuro, euro, euroInput, firstOpen, ImageDrop, Modal, PageHead, STAFF_COLORS, staffColor, svcTone } from "./ui";
 
 function useBoot() {
   return useApi<Bootstrap>("/api/app/bootstrap");
@@ -29,6 +29,86 @@ function ColorPick({ value, onChange }: { value: string; onChange: (c: string) =
 }
 
 const DAYS = ["", "Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag", "Samstag", "Sonntag"];
+const WD = ["", "Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"];
+
+function shiftLine(rows: { weekday: number; startHm: string; endHm: string }[]) {
+  if (!rows.length) return "Wie der Betrieb";
+  return [...rows].sort((a, b) => a.weekday - b.weekday).map((r) => `${WD[r.weekday]} ${r.startHm}–${r.endHm}`).join(" · ");
+}
+
+const TRACK_FROM = 0;
+const TRACK_TO = 24 * 60;
+
+function hmMins(hm: string) {
+  const [h, m] = hm.split(":").map(Number);
+  return (h || 0) * 60 + (m || 0);
+}
+
+function normHm(raw: string) {
+  const m = raw.trim().match(/^(\d{1,2}):(\d{2})$/);
+  if (!m) return null;
+  const h = Number(m[1]);
+  const min = Number(m[2]);
+  if (h > 23 || min > 59) return null;
+  return `${String(h).padStart(2, "0")}:${m[2]}`;
+}
+
+function shiftBlock(startHm: string, endHm: string) {
+  const a = hmMins(startHm);
+  const b = hmMins(endHm);
+  if (b <= a) return null;
+  const span = TRACK_TO - TRACK_FROM;
+  const top = Math.max(0, Math.min(span, a - TRACK_FROM));
+  const bot = Math.max(0, Math.min(span, b - TRACK_FROM));
+  if (bot <= top) return null;
+  return { top: `${(top / span) * 100}%`, height: `${((bot - top) / span) * 100}%` };
+}
+
+function hm(mins: number) {
+  return `${String(Math.floor(mins / 60)).padStart(2, "0")}:${String(mins % 60).padStart(2, "0")}`;
+}
+
+function otherBlocks(
+  staffId: string,
+  staff: { id: string; active: boolean }[],
+  shop: { weekday: number; startHm: string; endHm: string }[],
+  shifts: StaffShift[],
+) {
+  const out: Record<number, { top: string; height: string }[]> = {};
+  for (const weekday of [1, 2, 3, 4, 5, 6, 7]) {
+    const windows: { start: number; end: number }[] = [];
+    for (const s of staff) {
+      if (s.id === staffId || !s.active) continue;
+      const own = shifts.filter((h) => h.staffId === s.id);
+      const rows = own.length ? own.filter((h) => h.weekday === weekday) : shop.filter((h) => h.weekday === weekday);
+      for (const r of rows) {
+        const start = hmMins(r.startHm);
+        const end = hmMins(r.endHm);
+        if (end > start) windows.push({ start, end });
+      }
+    }
+    windows.sort((a, b) => a.start - b.start);
+    const merged: { start: number; end: number }[] = [];
+    for (const w of windows) {
+      const last = merged.at(-1);
+      if (last && w.start <= last.end) last.end = Math.max(last.end, w.end);
+      else merged.push({ ...w });
+    }
+    out[weekday] = merged.flatMap((w) => {
+      const block = shiftBlock(hm(w.start), hm(w.end));
+      return block ? [block] : [];
+    });
+  }
+  return out;
+}
+
+function shiftRows(saved: StaffShift[], shop: { weekday: number; startHm: string; endHm: string }[]) {
+  return [1, 2, 3, 4, 5, 6, 7].map((weekday) => {
+    const h = saved.find((x) => x.weekday === weekday);
+    const shopDay = shop.find((x) => x.weekday === weekday);
+    return { weekday, open: Boolean(h), startHm: h?.startHm ?? shopDay?.startHm ?? "09:00", endHm: h?.endHm ?? shopDay?.endHm ?? "18:00" };
+  });
+}
 const REASONS = ["Urlaub", "Krankheit", "Fortbildung", "Privat"];
 
 function when(iso: string) {
@@ -145,6 +225,7 @@ export function BookingsPage() {
           booking={pick}
           timezone={boot.tenant.timezone}
           occupied={{ bookings: rows, timeOff: off?.timeOff ?? [] }}
+          shifts={boot.staffHours ?? []}
           onClose={() => setPick(null)}
           onSaved={() => setPick(null)}
         />
@@ -155,10 +236,11 @@ export function BookingsPage() {
           categories={boot.categories}
           timezone={boot.tenant.timezone}
           occupied={{ bookings: rows, timeOff: off?.timeOff ?? [] }}
+          shifts={boot.staffHours ?? []}
           initial={(() => {
             const date = new Date().toISOString().slice(0, 10);
             const time = "09:00";
-            const hit = firstOpen(boot.staff, boot.services, date, time, rows, off?.timeOff ?? []);
+            const hit = firstOpen(boot.staff, boot.services, date, time, rows, off?.timeOff ?? [], boot.staffHours ?? []);
             return hit ? { date, time, ...hit } : { date, time, staffId: boot.staff[0]?.id, serviceId: boot.services[0]?.id };
           })()}
           onClose={() => setOpen(false)}
@@ -178,7 +260,8 @@ export function StaffPage() {
   const [open, setOpen] = useState(false);
   const [sel, setSel] = useState<string | null>(null);
   const [pick, setPick] = useState<Booking | null>(null);
-  const [edit, setEdit] = useState<{ id: string; name: string; active: boolean; photoUrl?: string | null; color: string } | null>(null);
+  const [edit, setEdit] = useState<{ id: string; name: string; active: boolean; photoUrl?: string | null; color: string; custom: boolean; rows: { weekday: number; open: boolean; startHm: string; endHm: string }[] } | null>(null);
+  const [hmDay, setHmDay] = useState<number | null>(null);
   const [err, setErr] = useState("");
   const [pending, setPending] = useState(false);
   const who = boot?.staff.find((s) => s.id === sel) ?? null;
@@ -190,6 +273,7 @@ export function StaffPage() {
       .sort((a, b) => new Date(a.startsAt).getTime() - new Date(b.startsAt).getTime());
   }, [who, list]);
   if (!boot) return <div className="page" />;
+  const cover = edit ? otherBlocks(edit.id, boot.staff, boot.hours, boot.staffHours ?? []) : null;
   return (
     <div className="page">
       <PageHead
@@ -202,7 +286,7 @@ export function StaffPage() {
           const sick = /krank/i.test(abs?.reason ?? "");
           return (
             <article className={"staff-card" + (sel === s.id ? " on" : "")} key={s.id}>
-              <button className="gear" type="button" aria-label="Einstellungen" onClick={() => { setErr(""); setEdit({ id: s.id, name: s.name, active: s.active, photoUrl: s.photoUrl, color: staffColor(s) }); }}>
+              <button className="gear" type="button" aria-label="Einstellungen" onClick={() => { setErr(""); setHmDay(null); const saved = (boot.staffHours ?? []).filter((h) => h.staffId === s.id); setEdit({ id: s.id, name: s.name, active: s.active, photoUrl: s.photoUrl, color: staffColor(s), custom: saved.length > 0, rows: shiftRows(saved, boot.hours) }); }}>
                 ⚙
               </button>
               <button
@@ -214,6 +298,7 @@ export function StaffPage() {
                 {s.photoUrl ? <img className="staff-photo" src={s.photoUrl} alt="" /> : <Avatar name={s.name} size={96} />}
                 <strong className="staff-name"><i className="staff-dot" style={{ background: staffColor(s) }} />{s.name}</strong>
                 <span className={"tag" + (s.active ? "" : " mute")}>{s.active ? "Aktiv" : "Inaktiv"}</span>
+                <span className="shift-line">{shiftLine((boot.staffHours ?? []).filter((h) => h.staffId === s.id))}</span>
                 <div className={"abs" + (sick ? " sick" : "")}>
                   {abs ? (
                     <>
@@ -296,6 +381,7 @@ export function StaffPage() {
           booking={pick}
           timezone={boot.tenant.timezone}
           occupied={{ bookings: list?.bookings ?? [], timeOff: off?.timeOff ?? [] }}
+          shifts={boot.staffHours ?? []}
           onClose={() => setPick(null)}
           onSaved={() => setPick(null)}
         />
@@ -321,37 +407,40 @@ export function StaffPage() {
         </Modal>
       ) : null}
       {edit ? (
-        <Modal title="Mitarbeiter-Einstellungen" onClose={() => setEdit(null)}>
+        <Modal title="Mitarbeiter-Einstellungen" wide onClose={() => setEdit(null)}>
           <form
             onSubmit={(e) => {
               e.preventDefault();
               setErr("");
-              api.patchStaff(edit.id, { name: edit.name, active: edit.active, color: edit.color }).then(() => setEdit(null)).catch((ex) => setErr(ex instanceof Error ? ex.message : "Speichern fehlgeschlagen."));
+              const hours = edit.custom ? edit.rows.filter((r) => r.open).map(({ weekday, startHm, endHm }) => ({ weekday, startHm, endHm })) : [];
+              if (edit.custom && !hours.length) {
+                setErr("Mindestens ein Tag, oder die eigenen Zeiten aus.");
+                return;
+              }
+              setPending(true);
+              Promise.all([
+                api.patchStaff(edit.id, { name: edit.name, active: edit.active, color: edit.color }),
+                api.putStaffHours(edit.id, hours),
+              ]).then(() => setEdit(null)).catch((ex) => setErr(ex instanceof Error ? ex.message : "Speichern fehlgeschlagen.")).finally(() => setPending(false));
             }}
           >
             {err ? <p className="err" role="alert">{err}</p> : null}
             {edit.photoUrl ? <img className="staff-photo" src={edit.photoUrl} alt="" /> : <Avatar name={edit.name} size={96} />}
-            <label className="field">
-              <span>{edit.photoUrl ? "Profilbild ersetzen" : "Profilbild"} (optional, PNG, JPG oder WebP, max. 5 MB)</span>
-              <input
-                type="file"
-                accept="image/png,image/jpeg,image/webp"
-                disabled={pending}
-                onChange={(e) => {
-                  const file = e.target.files?.[0];
-                  e.target.value = "";
-                  if (!file || !edit) return;
-                  setErr("");
-                  setPending(true);
-                  const body = new FormData();
-                  body.append("file", file);
-                  api.putStaffPhoto(edit.id, body)
-                    .then((r) => setEdit((cur) => cur ? { ...cur, photoUrl: r.photoUrl } : cur))
-                    .catch((ex) => setErr(ex instanceof Error ? ex.message : "Upload fehlgeschlagen."))
-                    .finally(() => setPending(false));
-                }}
-              />
-            </label>
+            <ImageDrop
+              label={edit.photoUrl ? "Profilbild ersetzen" : "Profilbild hochladen"}
+              busy={pending}
+              onFile={(file) => {
+                if (!edit) return;
+                setErr("");
+                setPending(true);
+                const body = new FormData();
+                body.append("file", file);
+                api.putStaffPhoto(edit.id, body)
+                  .then((r) => setEdit((cur) => cur ? { ...cur, photoUrl: r.photoUrl } : cur))
+                  .catch((ex) => setErr(ex instanceof Error ? ex.message : "Upload fehlgeschlagen."))
+                  .finally(() => setPending(false));
+              }}
+            />
             {edit.photoUrl ? (
               <button
                 className="linkish"
@@ -378,6 +467,72 @@ export function StaffPage() {
               <input type="checkbox" checked={edit.active} onChange={(e) => setEdit({ ...edit, active: e.target.checked })} />
               Aktiv
             </label>
+            <label className="check">
+              <input type="checkbox" checked={edit.custom} onChange={(e) => setEdit({ ...edit, custom: e.target.checked })} />
+              Eigene Arbeitszeiten. Ohne Haken gelten die Öffnungszeiten.
+            </label>
+            {edit.custom ? (
+              <>
+              <p className="shift-hint">Tag oben anhaken. Zeiten im Balken per Doppelklick ändern. Grau: andere sind da.</p>
+              <div className="shift-week" role="group" aria-label="Arbeitszeiten">
+                <div className="shift-scale" aria-hidden="true">
+                  <ol>
+                    {["0", "6", "12", "18", "24"].map((h) => <li key={h}>{h}</li>)}
+                  </ol>
+                </div>
+                {edit.rows.map((r, i) => {
+                  const pos = r.open ? shiftBlock(r.startHm, r.endHm) : null;
+                  const set = (patch: { open?: boolean; startHm?: string; endHm?: string }) => setEdit({ ...edit, rows: edit.rows.map((x, j) => j === i ? { ...x, ...patch } : x) });
+                  const label = `${r.startHm.slice(0, 5)}–${r.endHm.slice(0, 5)}`;
+                  return (
+                    <div className={"shift-day" + (r.open ? " on" : "")} key={r.weekday}>
+                      <label className="shift-wd">
+                        <input type="checkbox" checked={r.open} aria-label={`${DAYS[r.weekday]} aktiv`} onChange={(e) => set({ open: e.target.checked })} />
+                        {WD[r.weekday]}
+                      </label>
+                      <div className="shift-track">
+                        {(cover?.[r.weekday] ?? []).map((g, n) => (
+                          <span className="shift-others" key={n} style={{ top: g.top, height: g.height }} title="Andere sind da" />
+                        ))}
+                        {pos ? (
+                          <i style={{ top: pos.top, height: pos.height, background: edit.color }} title="Doppelklick zum Ändern" onDoubleClick={() => setHmDay(r.weekday)}>
+                            {hmDay === r.weekday ? (
+                              <input
+                                className="shift-hm"
+                                autoFocus
+                                defaultValue={label}
+                                aria-label={`${DAYS[r.weekday]} von bis`}
+                                onFocus={(e) => e.target.select()}
+                                onKeyDown={(e) => {
+                                  if (e.key === "Enter") { e.preventDefault(); e.currentTarget.blur(); }
+                                  if (e.key === "Escape") { e.currentTarget.dataset.skip = "1"; e.currentTarget.blur(); }
+                                }}
+                                onBlur={(e) => {
+                                  if (!e.currentTarget.dataset.skip) {
+                                    const m = e.target.value.match(/(\d{1,2}:\d{2})\s*[–-]\s*(\d{1,2}:\d{2})/);
+                                    const startHm = m ? normHm(m[1]) : null;
+                                    const endHm = m ? normHm(m[2]) : null;
+                                    if (startHm && endHm && endHm > startHm) set({ startHm, endHm });
+                                  }
+                                  setHmDay(null);
+                                }}
+                              />
+                            ) : <span>{label}</span>}
+                          </i>
+                        ) : <span className="shift-free">frei</span>}
+                      </div>
+                      {r.open ? (
+                        <>
+                          <input aria-label={`${DAYS[r.weekday]} von`} type="time" value={r.startHm} onChange={(e) => set({ startHm: e.target.value })} />
+                          <input aria-label={`${DAYS[r.weekday]} bis`} type="time" value={r.endHm} onChange={(e) => set({ endHm: e.target.value })} />
+                        </>
+                      ) : null}
+                    </div>
+                  );
+                })}
+              </div>
+              </>
+            ) : null}
             <button
               type="button"
               className="btn danger staff-del"
@@ -626,26 +781,19 @@ export function HoursPage() {
         <div className="card-head">Logo</div>
         <div className="card-body">
           {boot.tenant.logoUrl ? <img className="logo-preview" src={boot.tenant.logoUrl} alt="" /> : <p className="hint-line">Noch kein Logo. Erscheint oben im Buchungs-iframe.</p>}
-          <label className="field">
-            <span>{boot.tenant.logoUrl ? "Ersetzen" : "Hochladen"} (PNG, JPG oder WebP, max. 5 MB)</span>
-            <input
-              type="file"
-              accept="image/png,image/jpeg,image/webp"
-              disabled={pending}
-              onChange={(e) => {
-                const file = e.target.files?.[0];
-                e.target.value = "";
-                if (!file) return;
-                setErr("");
-                setPending(true);
-                const body = new FormData();
-                body.append("file", file);
-                api.putLogo(body)
-                  .catch((ex) => setErr(ex instanceof Error ? ex.message : "Upload fehlgeschlagen."))
-                  .finally(() => setPending(false));
-              }}
-            />
-          </label>
+          <ImageDrop
+            label={boot.tenant.logoUrl ? "Logo ersetzen" : "Logo hochladen"}
+            busy={pending}
+            onFile={(file) => {
+              setErr("");
+              setPending(true);
+              const body = new FormData();
+              body.append("file", file);
+              api.putLogo(body)
+                .catch((ex) => setErr(ex instanceof Error ? ex.message : "Upload fehlgeschlagen."))
+                .finally(() => setPending(false));
+            }}
+          />
           {boot.tenant.logoUrl ? (
             <button
               className="linkish"

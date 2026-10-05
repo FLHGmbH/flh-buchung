@@ -192,7 +192,7 @@ export function CalendarPage() {
               type="button"
               onClick={() => {
                 const time = "09:00";
-                const hit = firstOpen(boot.staff, boot.services, today, time, books, week?.timeOff ?? []);
+                const hit = firstOpen(boot.staff, boot.services, today, time, books, week?.timeOff ?? [], boot.staffHours ?? []);
                 const svc = coverService(boot.services);
                 const who = boot.staff.find((s) => s.active && svc?.staffIds.includes(s.id)) ?? boot.staff.find((s) => s.active);
                 setDraft(hit ? { date: today, time, ...hit } : { date: today, time, staffId: who?.id, serviceId: svc?.id });
@@ -219,7 +219,7 @@ export function CalendarPage() {
                       className={"month-cell" + (d.slice(0, 7) === monthKey ? "" : " off") + (d === today ? " today" : "")}
                       onClick={() => {
                         const time = "09:00";
-                        const hit = firstOpen(boot.staff, boot.services, d, time, books, week?.timeOff ?? []);
+                        const hit = firstOpen(boot.staff, boot.services, d, time, books, week?.timeOff ?? [], boot.staffHours ?? []);
                         const svc = coverService(boot.services);
                         const who = boot.staff.find((s) => s.active && svc?.staffIds.includes(s.id)) ?? boot.staff.find((s) => s.active);
                         setDraft(hit ? { date: d, time, ...hit } : { date: d, time, staffId: who?.id, serviceId: svc?.id });
@@ -273,7 +273,7 @@ export function CalendarPage() {
                         data-slot={`${d}-${h}`}
                         key={d + h}
                         onClick={() => {
-                          const hit = firstOpen(boot.staff, boot.services, d, time, books, week?.timeOff ?? []);
+                          const hit = firstOpen(boot.staff, boot.services, d, time, books, week?.timeOff ?? [], boot.staffHours ?? []);
                           const svc = coverService(boot.services);
                           const who = boot.staff.find((s) => s.active && svc?.staffIds.includes(s.id)) ?? boot.staff.find((s) => s.active);
                           setDraft(hit ? { date: d, time, ...hit } : { date: d, time, staffId: who?.id, serviceId: svc?.id });
@@ -321,6 +321,7 @@ export function CalendarPage() {
           booking={pick}
           timezone={tz}
           occupied={{ bookings: books, timeOff: week?.timeOff ?? [] }}
+          shifts={boot.staffHours ?? []}
           onClose={() => setPick(null)}
           onSaved={showSaved}
         />
@@ -332,6 +333,7 @@ export function CalendarPage() {
           timezone={tz}
           initial={draft}
           occupied={{ bookings: books, timeOff: week?.timeOff ?? [] }}
+          shifts={boot.staffHours ?? []}
           onClose={() => setDraft(null)}
           onSaved={showSaved}
         />

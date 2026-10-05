@@ -16,6 +16,7 @@ import {
   serviceStaff,
   services,
   staff,
+  staffHours,
   tenants,
   timeOff,
   users,
@@ -137,6 +138,15 @@ async function expireHolds() {
     .update(bookings)
     .set({ status: "cancelled" })
     .where(and(eq(bookings.status, "pending"), lt(bookings.pinExpiresAt, new Date())));
+}
+
+async function loadShifts(tenantId: string) {
+  const hours = await db.select().from(openingHours).where(eq(openingHours.tenantId, tenantId));
+  const staffHourRows = await db.select().from(staffHours).where(eq(staffHours.tenantId, tenantId));
+  return {
+    hours,
+    staffHours: staffHourRows.map((h) => ({ staffId: h.staffId, weekday: h.weekday, startHm: h.startHm, endHm: h.endHm })),
+  };
 }
 
 async function busyFor(tenantId: string, staffIds: string[], bufferByService: Map<string, number>, exceptId?: string) {
@@ -576,10 +586,12 @@ api.get("/app/bootstrap", async (c) => {
   const serviceRows = await db.select().from(services).where(eq(services.tenantId, tid));
   const links = await staffLinks(serviceRows.map((s) => s.id));
   const hours = await db.select().from(openingHours).where(eq(openingHours.tenantId, tid));
+  const shifts = await db.select().from(staffHours).where(eq(staffHours.tenantId, tid));
   const categories = await db.select().from(serviceCategories).where(eq(serviceCategories.tenantId, tid)).orderBy(serviceCategories.sort);
   return c.json({
     tenant,
     staff: staffRows,
+    staffHours: shifts.map((h) => ({ staffId: h.staffId, weekday: h.weekday, startHm: h.startHm, endHm: h.endHm })),
     categories: categories.map((c) => ({ id: c.id, name: c.name })),
     services: serviceRows.map((s) => ({
       ...s,
@@ -813,6 +825,23 @@ api.delete("/app/categories/:id", async (c) => {
     .returning();
   if (!row) return c.json({ error: "Nicht gefunden." }, 404);
   return c.json({ ok: true });
+});
+
+function shiftOk(h: { weekday?: number; startHm?: string; endHm?: string }) {
+  return inIntRange(h.weekday, 1, 7) && !!h.startHm && !!h.endHm && /^\d{2}:\d{2}$/.test(h.startHm) && /^\d{2}:\d{2}$/.test(h.endHm) && h.startHm < h.endHm;
+}
+
+api.put("/app/staff/:id/hours", async (c) => {
+  const tid = tenantId(c);
+  const id = c.req.param("id");
+  const [who] = await db.select({ id: staff.id }).from(staff).where(and(eq(staff.id, id), eq(staff.tenantId, tid))).limit(1);
+  if (!who) return c.json({ error: "Nicht gefunden." }, 404);
+  const body = await readJson<{ hours?: { weekday: number; startHm: string; endHm: string }[] }>(c);
+  if (!body || (body.hours ?? []).some((h) => !shiftOk(h))) return c.json({ error: "Arbeitszeit ungültig." }, 400);
+  const hours = body.hours ?? [];
+  await db.delete(staffHours).where(and(eq(staffHours.staffId, id), eq(staffHours.tenantId, tid)));
+  if (hours.length) await db.insert(staffHours).values(hours.map((h) => ({ ...h, staffId: id, tenantId: tid })));
+  return c.json({ hours });
 });
 
 api.put("/app/hours", async (c) => {
@@ -1090,13 +1119,14 @@ api.get("/public/:slug/slots", async (c) => {
     .limit(1);
   if (!service) return c.json({ error: "Leistung unbekannt." }, 400);
   const staffIds = await bookableStaffIds(tenant.id, service.id, staffId);
-  const hours = await db.select().from(openingHours).where(eq(openingHours.tenantId, tenant.id));
+  const { hours, staffHours: shifts } = await loadShifts(tenant.id);
   const { from, to } = bookWindow(tenant.timezone);
   const buffers = new Map((await db.select().from(services).where(eq(services.tenantId, tenant.id))).map((s) => [s.id, s.bufferMin]));
   const busy = await busyFor(tenant.id, staffIds, buffers);
   const slots = freeSlots({
     zone: tenant.timezone,
     hours,
+    staffHours: shifts,
     busy,
     staffIds,
     durationMin: service.durationMin,
@@ -1149,7 +1179,7 @@ api.post("/public/:slug/book", async (c) => {
     return c.json({ error: "Dieser Termin ist nicht mehr frei." }, 409);
   }
   const end = new Date(start.getTime() + service.durationMin * 60_000);
-  const hours = await db.select().from(openingHours).where(eq(openingHours.tenantId, tenant.id));
+  const { hours, staffHours: shifts } = await loadShifts(tenant.id);
   const buffers = new Map((await db.select().from(services).where(eq(services.tenantId, tenant.id))).map((s) => [s.id, s.bufferMin]));
   const busy = await busyFor(tenant.id, allowed, buffers);
   const [openHold] = await db
@@ -1168,6 +1198,7 @@ api.post("/public/:slug/book", async (c) => {
   const ok = freeSlots({
     zone: tenant.timezone,
     hours,
+    staffHours: shifts,
     busy,
     staffIds: allowed,
     durationMin: service.durationMin,
