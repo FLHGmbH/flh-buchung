@@ -242,9 +242,9 @@ export function BookPage() {
           }}
         >
           <p className="book-when">{new Date(slot.start).toLocaleString("de-DE", { weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })} · {service?.name}</p>
-          <label className="field"><span>Name</span><input required value={guest.guestName} onChange={(e) => setGuest({ ...guest, guestName: e.target.value })} /></label>
-          <label className="field"><span>E-Mail</span><input type="email" required value={guest.guestEmail} onChange={(e) => setGuest({ ...guest, guestEmail: e.target.value })} /></label>
-          <label className="field"><span>Telefon</span><input value={guest.guestPhone} onChange={(e) => setGuest({ ...guest, guestPhone: e.target.value })} /></label>
+          <label className="field"><span>Name</span><input required value={guest.guestName} onChange={(e) => setGuest({ ...guest, guestName: e.target.value })} placeholder="Max Mustermann" /></label>
+          <label className="field"><span>E-Mail</span><input type="email" required value={guest.guestEmail} onChange={(e) => setGuest({ ...guest, guestEmail: e.target.value })} placeholder="max@mustermann.de" /></label>
+          <label className="field"><span>Telefon</span><input value={guest.guestPhone} onChange={(e) => setGuest({ ...guest, guestPhone: e.target.value })} placeholder="0151 12345678" /></label>
           <label className="field"><span>Notiz</span><textarea value={guest.note} onChange={(e) => setGuest({ ...guest, note: e.target.value })} /></label>
           <p className="agree">
             Name und E-Mail speichert {pub.tenant.name} für diesen Termin. Mehr dazu in der <a href={`/b/${slug}/datenschutz`} target="_blank" rel="noreferrer">Datenschutzerklärung</a>.

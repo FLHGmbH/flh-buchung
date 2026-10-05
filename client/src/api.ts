@@ -209,6 +209,7 @@ export const api = {
   delStaffPhoto: (id: string) => mutate(`/api/app/staff/${id}/photo`, { method: "DELETE" }),
   addService: (body: object) => mutate("/api/app/services", { method: "POST", body: JSON.stringify(body) }),
   patchService: (id: string, body: object) => mutate(`/api/app/services/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
+  delService: (id: string) => mutate(`/api/app/services/${id}`, { method: "DELETE" }),
   addCategory: (name: string) => mutate("/api/app/categories", { method: "POST", body: JSON.stringify({ name }) }),
   patchCategory: (id: string, body: object) => mutate(`/api/app/categories/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
   delCategory: (id: string) => mutate(`/api/app/categories/${id}`, { method: "DELETE" }),

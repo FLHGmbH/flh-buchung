@@ -4,6 +4,7 @@ import { BookingModal, coverService, firstOpen, PageHead, staffColor, staffTone 
 
 const START = 8;
 const END = 20;
+const ROW = 64;
 const DAYS = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"];
 
 function ymd(d: Date) {
@@ -65,10 +66,47 @@ function ymdTz(iso: string, tz: string) {
 }
 
 function hourOf(iso: string, tz: string) {
-  const parts = new Intl.DateTimeFormat("de-DE", { timeZone: tz, hour: "2-digit", hourCycle: "h23" }).formatToParts(new Date(iso));
-  const n = Number(parts.find((p) => p.type === "hour")?.value);
-  return n === 24 ? 0 : n;
+  return Math.floor(clockMins(iso, tz) / 60);
 }
+
+function clockMins(iso: string, tz: string) {
+  const parts = new Intl.DateTimeFormat("en-GB", { timeZone: tz, hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).formatToParts(new Date(iso));
+  let h = Number(parts.find((p) => p.type === "hour")?.value);
+  const m = Number(parts.find((p) => p.type === "minute")?.value ?? 0);
+  if (h === 24) h = 0;
+  return h * 60 + (Number.isFinite(m) ? m : 0);
+}
+
+function lanes<T extends { start: number; end: number }>(items: T[]) {
+  const sorted = [...items].sort((a, b) => a.start - b.start || a.end - b.end);
+  const colEnds: number[] = [];
+  const placed = sorted.map((ev) => {
+    let col = colEnds.findIndex((end) => end <= ev.start);
+    if (col < 0) {
+      col = colEnds.length;
+      colEnds.push(ev.end);
+    } else colEnds[col] = ev.end;
+    return { ...ev, col, cols: 1 };
+  });
+  const groups: (typeof placed)[] = [];
+  for (const ev of placed) {
+    const hit = groups.find((g) => g.some((o) => o.start < ev.end && ev.start < o.end));
+    if (hit) hit.push(ev);
+    else groups.push([ev]);
+  }
+  for (const g of groups) {
+    const n = Math.max(...g.map((e) => e.col)) + 1;
+    for (const e of g) e.cols = n;
+  }
+  return placed;
+}
+
+function checkLanes() {
+  const same = lanes([{ start: 0, end: 60 }, { start: 0, end: 30 }]);
+  const touch = lanes([{ start: 0, end: 30 }, { start: 30, end: 60 }]);
+  if (same[0].cols !== 2 || same[0].col === same[1].col || touch.some((e) => e.cols !== 1)) throw new Error("lanes");
+}
+checkLanes();
 
 function shortName(name: string) {
   const p = name.trim().split(/\s+/);
@@ -157,10 +195,13 @@ export function CalendarPage() {
   const prevLabel = view === "day" ? "Vorheriger Tag" : view === "month" ? "Vorheriger Monat" : "Vorherige Woche";
   const nextLabel = view === "day" ? "Nächster Tag" : view === "month" ? "Nächster Monat" : "Nächste Woche";
   const books = week?.bookings ?? [];
-  const used = books
-    .filter((b) => b.status !== "cancelled" && dates.includes(ymdTz(b.startsAt, tz)))
-    .map((b) => hourOf(b.startsAt, tz))
-    .filter((h) => Number.isFinite(h));
+  const visible = books.filter((b) => b.status !== "cancelled" && dates.includes(ymdTz(b.startsAt, tz)));
+  const used = visible.flatMap((b) => {
+    const start = clockMins(b.startsAt, tz);
+    const dur = Math.max(1, (new Date(b.endsAt).getTime() - new Date(b.startsAt).getTime()) / 60000);
+    const end = start + dur;
+    return [Math.floor(start / 60), end % 60 === 0 ? end / 60 - 1 : Math.floor(end / 60)];
+  }).filter((h) => Number.isFinite(h));
   const first = Math.min(START, ...used);
   const lastH = Math.max(END - 1, ...used);
   const rows = Array.from({ length: lastH - first + 1 }, (_, i) => first + i);
@@ -259,52 +300,70 @@ export function CalendarPage() {
               {dates.map((d) => (
                 <div className="week-head" key={d}>{DAYS[weekdayIndex(d)]} {dm(d)}</div>
               ))}
-              {rows.map((h) => (
-                <div className="week-row" key={h}>
-                  <div className="week-time" ref={nowMark?.h === h ? timeRef : undefined}>{String(h).padStart(2, "0")}:00</div>
-                  {dates.map((d) => {
-                    const time = `${String(h).padStart(2, "0")}:00`;
-                    const cellBooks = books.filter(
-                      (b) => b.status !== "cancelled" && ymdTz(b.startsAt, tz) === d && hourOf(b.startsAt, tz) === h,
-                    );
-                    return (
-                      <div
-                        className="week-cell"
-                        data-slot={`${d}-${h}`}
-                        key={d + h}
-                        onClick={() => {
-                          const hit = firstOpen(boot.staff, boot.services, d, time, books, week?.timeOff ?? [], boot.staffHours ?? []);
-                          const svc = coverService(boot.services);
-                          const who = boot.staff.find((s) => s.active && svc?.staffIds.includes(s.id)) ?? boot.staff.find((s) => s.active);
-                          setDraft(hit ? { date: d, time, ...hit } : { date: d, time, staffId: who?.id, serviceId: svc?.id });
-                        }}
-                      >
-                        {cellBooks.map((b) => {
-                          const member = boot.staff.find((s) => s.id === b.staffId);
-                          const t = staffTone(member ? staffColor(member) : null);
-                          const svc = boot.services.find((s) => s.id === b.serviceId)?.name ?? "Termin";
-                          const who = member?.name;
-                          return (
-                            <button
-                              key={b.id}
-                              type="button"
-                              className="ev"
-                              style={{ background: t.bg, borderLeftColor: t.edge, color: t.title }}
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setPick(b);
-                              }}
-                            >
-                              <strong style={{ color: t.title }}>{svc}</strong>
-                              <span style={{ color: t.sub }}>{who ? `${shortName(who)} · ` : ""}{shortName(b.guestName)}</span>
-                            </button>
-                          );
-                        })}
-                      </div>
-                    );
-                  })}
-                </div>
-              ))}
+              <div className="week-times">
+                {rows.map((h) => (
+                  <div className="week-time" key={h} ref={nowMark?.h === h ? timeRef : undefined}>{String(h).padStart(2, "0")}:00</div>
+                ))}
+              </div>
+              {dates.map((d) => {
+                const dayBooks = visible.filter((b) => ymdTz(b.startsAt, tz) === d);
+                const placed = lanes(dayBooks.map((b) => {
+                  const start = clockMins(b.startsAt, tz);
+                  const dur = Math.max(1, (new Date(b.endsAt).getTime() - new Date(b.startsAt).getTime()) / 60000);
+                  return { b, start, end: start + dur };
+                }));
+                return (
+                  <div className="day-col" key={d}>
+                    {rows.map((h) => {
+                      const time = `${String(h).padStart(2, "0")}:00`;
+                      return (
+                        <div
+                          className="week-cell"
+                          data-slot={`${d}-${h}`}
+                          key={h}
+                          onClick={() => {
+                            const hit = firstOpen(boot.staff, boot.services, d, time, books, week?.timeOff ?? [], boot.staffHours ?? []);
+                            const svc = coverService(boot.services);
+                            const who = boot.staff.find((s) => s.active && svc?.staffIds.includes(s.id)) ?? boot.staff.find((s) => s.active);
+                            setDraft(hit ? { date: d, time, ...hit } : { date: d, time, staffId: who?.id, serviceId: svc?.id });
+                          }}
+                        />
+                      );
+                    })}
+                    {placed.map(({ b, start, end, col, cols }) => {
+                      const member = boot.staff.find((s) => s.id === b.staffId);
+                      const t = staffTone(member ? staffColor(member) : null);
+                      const svc = boot.services.find((s) => s.id === b.serviceId)?.name ?? "Termin";
+                      const who = member?.name;
+                      const top = ((start - first * 60) / 60) * ROW;
+                      const height = ((end - start) / 60) * ROW;
+                      return (
+                        <button
+                          key={b.id}
+                          type="button"
+                          className="ev"
+                          style={{
+                            background: t.bg,
+                            borderLeftColor: t.edge,
+                            color: t.title,
+                            top,
+                            height,
+                            left: `calc(${(col / cols) * 100}% + 2px)`,
+                            width: `calc(${100 / cols}% - 4px)`,
+                          }}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setPick(b);
+                          }}
+                        >
+                          <strong style={{ color: t.title }}>{svc}</strong>
+                          <span style={{ color: t.sub }}>{who ? `${shortName(who)} · ` : ""}{shortName(b.guestName)}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                );
+              })}
             </div>
             ) : null}
           </div>

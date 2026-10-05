@@ -89,7 +89,7 @@ CREATE TABLE IF NOT EXISTS bookings (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   tenant_id uuid NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
   staff_id uuid REFERENCES staff(id),
-  service_id uuid NOT NULL REFERENCES services(id),
+  service_id uuid REFERENCES services(id) ON DELETE SET NULL,
   starts_at timestamptz NOT NULL,
   ends_at timestamptz NOT NULL,
   guest_name text NOT NULL,

@@ -136,26 +136,26 @@ export function AdminNew() {
           <div className="fields-2">
             <label className="field">
               <span>Betriebsname</span>
-              <input name="tenant-name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required autoComplete="organization" />
+              <input name="tenant-name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required autoComplete="organization" placeholder="Musterbetrieb" />
             </label>
             <label className="field">
               <span>Slug (URL)</span>
               <input name="tenant-slug" value={form.slug} onChange={(e) => setForm({ ...form, slug: e.target.value })} autoComplete="off" spellCheck={false} inputMode="url" />
             </label>
           </div>
-          <p className="hint-line">Slug leer lassen, dann wird er aus dem Namen gebaut — z. B. salon-mueller.</p>
+          <p className="hint-line">Slug leer lassen, dann wird er aus dem Namen gebaut — z. B. muster-salon.</p>
         </div>
         <div className="card-head">KD-Login</div>
         <div className="card-body">
           <label className="field">
             <span>Name</span>
-            <input name="admin-name" value={form.adminName} onChange={(e) => setForm({ ...form, adminName: e.target.value })} autoComplete="name" />
+            <input name="admin-name" value={form.adminName} onChange={(e) => setForm({ ...form, adminName: e.target.value })} autoComplete="name" placeholder="Max Mustermann" />
           </label>
           <p className="hint-line">Leer lassen, dann gilt der Betriebsname.</p>
           <div className="fields-2">
             <label className="field">
               <span>E-Mail</span>
-              <input type="email" name="admin-email" value={form.adminEmail} onChange={(e) => setForm({ ...form, adminEmail: e.target.value })} required autoComplete="off" />
+              <input type="email" name="admin-email" value={form.adminEmail} onChange={(e) => setForm({ ...form, adminEmail: e.target.value })} required autoComplete="off" placeholder="max@mustermann.de" />
             </label>
             <label className="field">
               <span>Passwort</span>

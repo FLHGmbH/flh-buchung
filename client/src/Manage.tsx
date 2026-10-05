@@ -396,7 +396,7 @@ export function StaffPage() {
           >
             <label className="field">
               <span>Name</span>
-              <input value={name} onChange={(e) => setName(e.target.value)} required placeholder="Jonas S." />
+              <input value={name} onChange={(e) => setName(e.target.value)} required placeholder="Max Mustermann" />
             </label>
             <ColorPick value={color} onChange={setColor} />
             <div className="modal-foot">
@@ -409,6 +409,7 @@ export function StaffPage() {
       {edit ? (
         <Modal title="Mitarbeiter-Einstellungen" wide onClose={() => setEdit(null)}>
           <form
+            className="staff-set"
             onSubmit={(e) => {
               e.preventDefault();
               setErr("");
@@ -748,6 +749,24 @@ export function ServicesPage() {
                 <input type="checkbox" checked={form.active} onChange={(e) => setForm({ ...form, active: e.target.checked })} />
                 Aktiv
               </label>
+            ) : null}
+            {form.id ? (
+              <button
+                type="button"
+                className="btn danger staff-del"
+                disabled={pending}
+                onClick={() => {
+                  if (!window.confirm(`${form.name} wirklich löschen?`)) return;
+                  setErr("");
+                  setPending(true);
+                  api.delService(form.id as string)
+                    .then(() => setForm(null))
+                    .catch((ex) => setErr(ex instanceof Error ? ex.message : "Löschen fehlgeschlagen."))
+                    .finally(() => setPending(false));
+                }}
+              >
+                Löschen
+              </button>
             ) : null}
             <div className="modal-foot">
               <button type="button" className="btn outline" onClick={() => setForm(null)}>Abbrechen</button>

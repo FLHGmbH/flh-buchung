@@ -141,8 +141,8 @@ export function Modal({ title, onClose, wide, children }: { title: string; onClo
       .to(back, { opacity: 0, duration: 0.16, ease: "power2.in" }, "<");
   });
   return createPortal(
-    <div className="modal-back" ref={root} onClick={close} role="presentation">
-      <div className={"modal" + (wide ? " is-wide" : "")} role="dialog" aria-labelledby="modal-title" onClick={(e) => e.stopPropagation()}>
+    <div className="modal-back" ref={root} role="presentation">
+      <div className={"modal" + (wide ? " is-wide" : "")} role="dialog" aria-labelledby="modal-title">
         <div className="modal-head">
           <h2 id="modal-title">{title}</h2>
           <button type="button" className="modal-x" onClick={close} aria-label="Schließen">
@@ -249,6 +249,25 @@ export function coverService(services: Service[]) {
   return [...(list.length ? list : services)].sort((a, b) => b.staffIds.length - a.staffIds.length)[0];
 }
 
+function localParts(d: Date) {
+  const p = (n: number) => String(n).padStart(2, "0");
+  return { date: `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`, time: `${p(d.getHours())}:${p(d.getMinutes())}` };
+}
+
+function ghost(id: string, staffId: string, serviceId: string, start: Date, durationMin: number): Booking {
+  return {
+    id,
+    staffId,
+    serviceId,
+    startsAt: start.toISOString(),
+    endsAt: new Date(start.getTime() + durationMin * 60_000).toISOString(),
+    guestName: "",
+    guestEmail: "",
+    guestPhone: "",
+    note: "",
+    status: "confirmed",
+  };
+}
 function clock(iso: string, tz: string) {
   const d = new Date(iso);
   const date = new Intl.DateTimeFormat("en-CA", { timeZone: tz, year: "numeric", month: "2-digit", day: "2-digit" }).format(d);
@@ -295,6 +314,7 @@ export function BookingModal({
   });
   const [err, setErr] = useState("");
   const [pending, setPending] = useState(false);
+  const [extras, setExtras] = useState<{ key: number; serviceId: string; staffId: string }[]>([]);
   const svc = services.find((s) => s.id === form.serviceId);
   const linked = staff.filter((s) => s.active && svc?.staffIds.includes(s.id));
   const fits = (id: string, date = form.date, time = form.time, dur = svc?.durationMin ?? 0) => onShift(shifts, id, date, time, dur);
@@ -309,6 +329,27 @@ export function BookingModal({
   const mineBusy = busyId(form.staffId);
   const mineOff = Boolean(svc && !fits(form.staffId));
   const who = staff.find((s) => s.id === form.staffId);
+  const steps = !booking && svc && !Number.isNaN(startAt.getTime()) ? (() => {
+    const drafts: Booking[] = [ghost("draft-0", form.staffId, svc.id, startAt, svc.durationMin)];
+    let cursor = new Date(startAt.getTime() + (svc.durationMin + svc.bufferMin) * 60_000);
+    return extras.flatMap((ex) => {
+      const next = services.find((s) => s.id === ex.serviceId);
+      if (!next) return [];
+      const parts = localParts(cursor);
+      const pool = staff.filter((s) => s.active && next.staffIds.includes(s.id));
+      const books = [...(occupied?.bookings ?? []), ...drafts];
+      const offOf = (id: string) => !onShift(shifts, id, parts.date, parts.time, next.durationMin);
+      const busyOf = (id: string) => staffBusy(id, cursor, next.durationMin, next.bufferMin, books, services, occupied?.timeOff ?? []);
+      const free = pool.find((s) => s.id === (ex.staffId || form.staffId) && !offOf(s.id) && !busyOf(s.id)) ?? pool.find((s) => !offOf(s.id) && !busyOf(s.id));
+      const staffId = ex.staffId && pool.some((s) => s.id === ex.staffId) ? ex.staffId : (free?.id ?? pool[0]?.id ?? "");
+      const end = new Date(cursor.getTime() + next.durationMin * 60_000);
+      if (staffId) drafts.push(ghost(`draft-${ex.key}`, staffId, next.id, cursor, next.durationMin));
+      const row = { key: ex.key, serviceId: next.id, staffId, start: cursor, end, off: !staffId || offOf(staffId), busy: Boolean(staffId) && busyOf(staffId), choices: pool };
+      cursor = new Date(end.getTime() + next.bufferMin * 60_000);
+      return [row];
+    });
+  })() : [];
+  const extraBad = steps.some((s) => s.off || s.busy);
   function pickWho(date: string, time: string, serviceId: string) {
     const next = services.find((s) => s.id === serviceId);
     if (!next) return form.staffId;
@@ -331,16 +372,33 @@ export function BookingModal({
   async function submit(e: FormEvent) {
     e.preventDefault();
     if (gone) return;
-    if (!booking && mineOff) {
-      setErr(`${who?.name ?? "Mitarbeiter"} arbeitet zu der Zeit nicht.`);
+    if (!booking && (mineOff || extraBad)) {
+      setErr(mineOff ? `${who?.name ?? "Mitarbeiter"} arbeitet zu der Zeit nicht.` : "Eine weitere Leistung passt zeitlich nicht.");
       return;
     }
     setErr("");
     setPending(true);
+    const made: string[] = [];
     try {
       const saved = booking ? await api.patchBooking(booking.id, payload()) : await api.addBooking(payload());
+      if (!booking) {
+        made.push(saved.booking.id);
+        for (const step of steps) {
+          const row = await api.addBooking({
+            staffId: step.staffId,
+            serviceId: step.serviceId,
+            startsAt: step.start.toISOString(),
+            guestName: form.guestName,
+            guestEmail: form.guestEmail,
+            guestPhone: form.guestPhone,
+            note: form.note,
+          });
+          made.push(row.booking.id);
+        }
+      }
       onSaved(saved.booking.startsAt);
     } catch (ex) {
+      await Promise.all(made.map((id) => api.cancelBooking(id).catch(() => undefined)));
       setErr(ex instanceof Error ? ex.message : "Termin konnte nicht gespeichert werden.");
     } finally {
       setPending(false);
@@ -429,22 +487,84 @@ export function BookingModal({
           </div>
           <label className="field">
             <span>Gast</span>
-            <input required value={form.guestName} onChange={(e) => setForm({ ...form, guestName: e.target.value })} placeholder="Name" />
+            <input required value={form.guestName} onChange={(e) => setForm({ ...form, guestName: e.target.value })} placeholder="Max Mustermann" />
           </label>
           <div className="fields-2">
             <label className="field">
               <span>E-Mail</span>
-              <input type="email" value={form.guestEmail} onChange={(e) => setForm({ ...form, guestEmail: e.target.value })} />
+              <input type="email" value={form.guestEmail} onChange={(e) => setForm({ ...form, guestEmail: e.target.value })} placeholder="max@mustermann.de" />
             </label>
             <label className="field">
               <span>Telefon</span>
-              <input type="tel" value={form.guestPhone} onChange={(e) => setForm({ ...form, guestPhone: e.target.value })} />
+              <input type="tel" value={form.guestPhone} onChange={(e) => setForm({ ...form, guestPhone: e.target.value })} placeholder="0151 12345678" />
             </label>
           </div>
           <label className="field">
             <span>Notizen</span>
             <textarea value={form.note} onChange={(e) => setForm({ ...form, note: e.target.value })} placeholder="Optionale Notizen…" />
           </label>
+          {!booking ? (
+            <>
+              {steps.map((step, i) => (
+                <div className="more-svc" key={step.key}>
+                  <p className="when">danach ab {step.start.toLocaleString("de-DE", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}</p>
+                  {step.off ? <p className="err">Zu der Zeit arbeitet niemand für diese Leistung.</p> : null}
+                  {!step.off && step.busy ? <p className="err">Zu der Zeit ist niemand frei.</p> : null}
+                  <div className="fields-2">
+                    <label className="field">
+                      <span>Weitere Leistung</span>
+                      <select
+                        value={step.serviceId}
+                        onChange={(e) => setExtras(extras.map((x, j) => j === i ? { ...x, serviceId: e.target.value, staffId: "" } : x))}
+                      >
+                        {categories.length ? (
+                          <>
+                            {categories.map((c) => {
+                              const rows = services.filter((s) => s.categoryId === c.id);
+                              if (!rows.length) return null;
+                              return (
+                                <optgroup key={c.id} label={c.name}>
+                                  {rows.map((s) => <option key={s.id} value={s.id}>{serviceLine(s)}</option>)}
+                                </optgroup>
+                              );
+                            })}
+                            {services.some((s) => !s.categoryId) ? (
+                              <optgroup label="Weitere">
+                                {services.filter((s) => !s.categoryId).map((s) => <option key={s.id} value={s.id}>{serviceLine(s)}</option>)}
+                              </optgroup>
+                            ) : null}
+                          </>
+                        ) : services.map((s) => <option key={s.id} value={s.id}>{serviceLine(s)}</option>)}
+                      </select>
+                    </label>
+                    <label className="field">
+                      <span>Mitarbeiter</span>
+                      <select
+                        value={step.staffId}
+                        onChange={(e) => setExtras(extras.map((x, j) => j === i ? { ...x, staffId: e.target.value } : x))}
+                      >
+                        {step.choices.map((s) => {
+                          const next = services.find((x) => x.id === step.serviceId);
+                          const parts = localParts(step.start);
+                          const off = !next || !onShift(shifts, s.id, parts.date, parts.time, next.durationMin);
+                          const busy = Boolean(next) && staffBusy(s.id, step.start, next?.durationMin ?? 0, next?.bufferMin ?? 0, [...(occupied?.bookings ?? []), ...steps.slice(0, i).map((prev) => ghost(`draft-${prev.key}`, prev.staffId, prev.serviceId, prev.start, services.find((x) => x.id === prev.serviceId)?.durationMin ?? 0)), ghost("draft-0", form.staffId, form.serviceId, startAt, svc?.durationMin ?? 0)], services, occupied?.timeOff ?? []);
+                          return <option key={s.id} value={s.id} disabled={off || busy}>{s.name}{off ? " · arbeitet nicht" : busy ? " · belegt" : ""}</option>;
+                        })}
+                      </select>
+                    </label>
+                  </div>
+                  <button type="button" className="btn quiet" onClick={() => setExtras(extras.filter((x) => x.key !== step.key))}>Entfernen</button>
+                </div>
+              ))}
+              <button
+                type="button"
+                className="btn outline more-add"
+                onClick={() => setExtras([...extras, { key: Date.now(), serviceId: services.find((s) => s.active)?.id ?? services[0]?.id ?? "", staffId: "" }])}
+              >
+                + weitere Leistung
+              </button>
+            </>
+          ) : null}
         </fieldset>
         <div className="modal-foot">
           {booking && !gone ? (
@@ -453,7 +573,7 @@ export function BookingModal({
             <button type="button" className="btn outline" onClick={onClose}>Schließen</button>
           )}
           {gone ? null : (
-            <button className="btn" disabled={pending || mineBusy || !choices.length}>{pending ? "Speichern…" : booking ? "Speichern" : "Termin erstellen"}</button>
+            <button className="btn" disabled={pending || mineBusy || extraBad || !choices.length}>{pending ? "Speichern…" : booking ? "Speichern" : "Termin erstellen"}</button>
           )}
         </div>
       </form>

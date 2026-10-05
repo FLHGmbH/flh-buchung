@@ -785,6 +785,21 @@ api.patch("/app/services/:id", async (c) => {
   return c.json({ service: { ...row, staffIds: body.staffIds } });
 });
 
+api.delete("/app/services/:id", async (c) => {
+  const tid = tenantId(c);
+  const id = c.req.param("id");
+  const [row] = await db.select({ id: services.id }).from(services).where(and(eq(services.id, id), eq(services.tenantId, tid))).limit(1);
+  if (!row) return c.json({ error: "Nicht gefunden." }, 404);
+  const [open] = await db
+    .select({ id: bookings.id })
+    .from(bookings)
+    .where(and(eq(bookings.serviceId, id), eq(bookings.tenantId, tid), gt(bookings.endsAt, new Date()), ne(bookings.status, "cancelled")))
+    .limit(1);
+  if (open) return c.json({ error: "Leistung hat noch offene Termine. Bitte deaktivieren." }, 409);
+  await db.delete(services).where(eq(services.id, id));
+  return c.json({ ok: true });
+});
+
 api.post("/app/categories", async (c) => {
   const tid = tenantId(c);
   const body = await readJson<{ name?: string }>(c);

@@ -104,6 +104,9 @@ export async function migrate() {
   await execSql(`ALTER TABLE tenants ADD COLUMN IF NOT EXISTS logo_url text`).catch(ignoreExists);
   await execSql(`ALTER TABLE staff ADD COLUMN IF NOT EXISTS photo_url text`).catch(ignoreExists);
   await execSql(`ALTER TABLE bookings ALTER COLUMN staff_id DROP NOT NULL`).catch(ignoreExists);
+  await execSql(`ALTER TABLE bookings DROP CONSTRAINT IF EXISTS bookings_service_id_fkey`);
+  await execSql(`ALTER TABLE bookings ALTER COLUMN service_id DROP NOT NULL`).catch(ignoreExists);
+  await execSql(`ALTER TABLE bookings ADD CONSTRAINT bookings_service_id_fkey FOREIGN KEY (service_id) REFERENCES services(id) ON DELETE SET NULL`).catch(ignoreExists);
   if (isPg) {
     await requirePg(`ALTER TABLE staff ADD CONSTRAINT staff_id_tenant UNIQUE (id, tenant_id)`);
     await requirePg(`ALTER TABLE bookings ADD CONSTRAINT bookings_staff_tenant FOREIGN KEY (staff_id, tenant_id) REFERENCES staff(id, tenant_id)`);
