@@ -218,23 +218,6 @@ export function CalendarPage() {
       <PageHead
         title="Kalender"
         aside={
-          <div className="week-nav">
-            <div className="view-switch" role="group" aria-label="Ansicht">
-              {([["day", "Tag"], ["week", "Woche"], ["month", "Monat"]] as const).map(([id, label]) => (
-                <button key={id} type="button" className={view === id ? "on" : ""} aria-pressed={view === id} onClick={() => setView(id)}>
-                  {label}
-                </button>
-              ))}
-            </div>
-            <div className="week-switch">
-              <button type="button" className="week-arrow" aria-label={prevLabel} onClick={() => step(-1)}>
-                ←
-              </button>
-              <span>{period}</span>
-              <button type="button" className="week-arrow" aria-label={nextLabel} onClick={() => step(1)}>
-                →
-              </button>
-            </div>
             <button
               className="btn"
               type="button"
@@ -248,13 +231,31 @@ export function CalendarPage() {
             >
               + Neuer Termin
             </button>
-          </div>
         }
       />
       {emptyStaff ? (
         <div className="empty">Noch keine Mitarbeiter. Lege unter Mitarbeiter Personen an, sonst bleibt das Raster leer.</div>
       ) : (
         <div className="cal-wrap">
+          <div className="cal-main">
+          <div className="cal-bar">
+            <div className="view-switch" role="group" aria-label="Ansicht">
+              {([["day", "Tag"], ["week", "Woche"], ["month", "Monat"]] as const).map(([id, label]) => (
+                <button key={id} type="button" className={view === id ? "on" : ""} aria-pressed={view === id} onClick={() => setView(id)}>
+                  {label}
+                </button>
+              ))}
+            </div>
+            <div className="week-switch">
+              <button type="button" className="week-arrow" aria-label={prevLabel} onClick={() => step(-1)}>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" aria-hidden="true"><polyline points="15 18 9 12 15 6" /></svg>
+              </button>
+              <span>{period}</span>
+              <button type="button" className="week-arrow" aria-label={nextLabel} onClick={() => step(1)}>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" aria-hidden="true"><polyline points="9 18 15 12 9 6" /></svg>
+              </button>
+            </div>
+          </div>
           <div className="week-cal">
             {view === "month" ? (
               <div className="month-grid">
@@ -395,6 +396,7 @@ export function CalendarPage() {
               })}
             </div>
             ) : null}
+          </div>
           </div>
           <aside className="hint">
             <p>Klick auf einen Termin oder eine freie Stunde. Der Termin geht an die nächste freie Person.</p>
