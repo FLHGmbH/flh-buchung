@@ -157,6 +157,10 @@ export async function destroySession(c: Context) {
   deleteCookie(c, COOKIE, { path: "/" });
 }
 
+export async function dropUserSessions(userId: string) {
+  await db.delete(sessions).where(eq(sessions.userId, userId));
+}
+
 export type Actor = {
   id: string;
   email: string;

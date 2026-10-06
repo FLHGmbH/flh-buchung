@@ -56,6 +56,7 @@ export function LoginPage({ onLogin }: { onLogin: (a: Actor) => void }) {
         return;
       }
       const r = await api.login(email, password);
+      dropToken();
       onLogin(r.actor);
     } catch (ex) {
       setErr(ex instanceof Error ? ex.message : "Anmeldung fehlgeschlagen.");

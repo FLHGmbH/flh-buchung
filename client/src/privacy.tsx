@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { api } from "./api";
 
-const STAND = "2. Oktober 2026";
+const STAND = "6. Oktober 2026";
 
 export function MandantPrivacy() {
   return (
@@ -35,10 +35,10 @@ export function MandantPrivacy() {
       <p>
         Die Anmeldung läuft über Supabase Auth. Nach erfolgreicher Anmeldung setzen wir ein Sitzungs-Cookie mit dem Namen <code>sid</code>.
         Es enthält einen zufälligen Sitzungsschlüssel, ist nur über HTTP lesbar (httpOnly), im Live-Betrieb nur über eine verschlüsselte Verbindung gültig (secure) und auf SameSite=Lax gesetzt.
-        In der Datenbank liegt nur ein Prüfwert dieses Schlüssels, zusammen mit der Ablaufzeit. Die Sitzung gilt sieben Tage oder bis zur Abmeldung.
+        In der Datenbank liegt nur ein Prüfwert dieses Schlüssels, zusammen mit der Ablaufzeit. Die Sitzung gilt sieben Tage, bis zur Abmeldung oder bis das Passwort neu gesetzt wird.
       </p>
       <p>
-        Beim Zurücksetzen des Passworts schickt der Anmeldedienst eine E-Mail mit einem einmaligen Link. Der darin enthaltene Zugriffsschlüssel wird im Sitzungsspeicher des Browsers unter dem Schlüssel <code>flh-recovery</code> gehalten, bis das neue Passwort gespeichert ist oder der Tab geschlossen wird.
+        Beim Zurücksetzen des Passworts schickt der Anmeldedienst eine E-Mail mit einem einmaligen Link. Der darin enthaltene Zugriffsschlüssel wird im Sitzungsspeicher des Browsers unter dem Schlüssel <code>flh-recovery</code> gehalten, bis das neue Passwort gespeichert ist, eine Anmeldung oder Abmeldung im selben Tab erfolgt oder der Tab geschlossen wird.
       </p>
       <p>
         Zum Schutz vor Fehlversuchen merken wir uns für 15 Minuten im Arbeitsspeicher des Servers, wie oft eine IP-Adresse Anmeldung, Passwort-Mail oder Passwort-Setzen aufgerufen hat.

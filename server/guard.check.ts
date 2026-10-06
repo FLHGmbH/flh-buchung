@@ -1,4 +1,4 @@
-import { bookWindow, clip, hashToken, inIntRange, limited, logoKind, mailFromAddr, passwordOk, platformAdminEmail, priceCents, resetLimits, sbConfigured, securityHeaders, seedAllowed, serviceMins, siteOrigin } from "./guard.ts";
+import { bookWindow, clientIp, clip, dbSsl, hashToken, hoursWithin, inIntRange, limited, logoKind, mailFromAddr, passwordOk, platformAdminEmail, priceCents, resetLimits, sbConfigured, securityHeaders, seedAllowed, serviceMins, siteOrigin, withinBytes, LOGO_MAX } from "./guard.ts";
 
 function assert(cond: unknown, msg: string) {
   if (!cond) throw new Error(msg);
@@ -33,6 +33,17 @@ assert(inIntRange(5, 5, 480) && !inIntRange(4, 5, 480), "range");
 const w = bookWindow("Europe/Berlin", new Date("2026-09-17T10:00:00+02:00"));
 assert(w.to.diff(w.from, "days").days > 13.9, "14 day horizon");
 
+assert(clientIp({ get: (n) => (n === "x-forwarded-for" ? "203.0.113.5, 198.51.100.8" : undefined) }) === "198.51.100.8", "last forwarded hop");
+assert(clientIp({ get: (n) => (n === "x-real-ip" ? "198.51.100.9" : undefined) }) === "198.51.100.9", "real ip fallback");
+assert(hoursWithin([{ weekday: 1 }, { weekday: 1 }]) && !hoursWithin([{ weekday: 1 }, { weekday: 1 }, { weekday: 1 }]), "two shifts a day");
+assert(withinBytes(0, LOGO_MAX) === LOGO_MAX && withinBytes(LOGO_MAX, 1) === null, "body cap");
+const supa = dbSsl("postgres://user:pass@db.supabase.co:6543/postgres", {});
+assert(!!supa && typeof supa === "object" && supa.rejectUnauthorized === true && "ca" in supa && supa.ca.includes("BEGIN CERTIFICATE"), "supabase ca pinned");
+const other = dbSsl("postgres://user:pass@db.example:5432/postgres", {});
+assert(!!other && typeof other === "object" && other.rejectUnauthorized === true && !("ca" in other), "other host verifies");
+assert(dbSsl("postgres://user:pass@db.supabase.co/db?sslmode=disable", {}) === false, "sslmode disable");
+const insecure = dbSsl("postgres://user:pass@db.supabase.co/db", { DATABASE_SSL: "insecure" });
+assert(!!insecure && typeof insecure === "object" && insecure.rejectUnauthorized === false, "explicit insecure");
 assert(clip("  ab  ", 80) === "ab", "clip trim");
 assert(clip("x".repeat(90), 80).length === 80, "clip max");
 assert(hashToken("a") === hashToken("a") && hashToken("a") !== hashToken("b"), "token hash");

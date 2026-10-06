@@ -1,4 +1,4 @@
-import { confirmIcs, dotStuff, encodeSubject, escHtml, icsEscape, icsFold, icsUtc, mailboxAddr, mailEnding, mimeBody, newPin, PIN_MS } from "./mail.ts";
+import { confirmIcs, dotStuff, encodeSubject, escHtml, icsEscape, icsFold, icsUtc, mailbox, mailboxAddr, mailEnding, mimeBody, newPin, PIN_MS } from "./mail.ts";
 
 function assert(cond: unknown, msg: string) {
   if (!cond) throw new Error(msg);
@@ -15,6 +15,9 @@ assert(escHtml(`<img src=x onerror=alert(1)>`) === "&lt;img src=x onerror=alert(
 assert(escHtml(`a&b"c'd`) === "a&amp;b&quot;c&#39;d", "esc entities");
 assert(mailboxAddr("FLH <kalender@flh-webdesign.de>") === "kalender@flh-webdesign.de", "from angle");
 assert(mailboxAddr("kalender@flh-webdesign.de") === "kalender@flh-webdesign.de", "from bare");
+assert(mailbox("FLH <kalender@flh-webdesign.de>")?.header === "FLH <kalender@flh-webdesign.de>", "from header");
+assert(mailboxAddr("a@b.de\r\nRCPT TO:<c@d.de>") === null, "no crlf");
+assert(mailboxAddr("a@b.de\ncc@d.de") === null, "no lf");
 assert(encodeSubject("Code") === "Code", "ascii subject");
 assert(encodeSubject("für").startsWith("=?UTF-8?B?"), "utf8 subject");
 assert(dotStuff("ok\n.\nhi") === "ok\n..\nhi", "dot stuff");

@@ -1,4 +1,7 @@
 import { createHash } from "node:crypto";
+import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { DateTime } from "luxon";
 
 export const BOOK_DAYS = 14;
@@ -26,7 +29,8 @@ export function limited(key: string, max: number, windowMs = WINDOW_MS, now = Da
 
 export function clientIp(headers: { get?: (n: string) => string | undefined; header?: (n: string) => string | undefined }) {
   const read = (n: string) => headers.header?.(n) ?? headers.get?.(n);
-  return read("x-forwarded-for")?.split(",")[0]?.trim() || read("x-real-ip") || "local";
+  const hop = read("x-forwarded-for")?.split(",").map((s) => s.trim()).filter(Boolean).pop();
+  return hop || read("x-real-ip") || "local";
 }
 
 export function serviceMins(durationMin: unknown, bufferMin: unknown) {
@@ -65,6 +69,34 @@ export const LEN = { name: 80, note: 500, email: 254, phone: 40, reason: 120, pa
 
 export function clip(s: string, max: number) {
   return s.trim().slice(0, max);
+}
+
+export function hoursWithin(hours: { weekday?: number }[], maxPerDay = 2) {
+  const n = new Map<number, number>();
+  for (const h of hours) {
+    const day = h.weekday;
+    if (typeof day !== "number") return false;
+    const c = (n.get(day) ?? 0) + 1;
+    if (c > maxPerDay) return false;
+    n.set(day, c);
+  }
+  return true;
+}
+
+export function withinBytes(size: number, next: number, max = LOGO_MAX) {
+  const total = size + next;
+  return total > max ? null : total;
+}
+
+const supabaseCa = readFileSync(join(dirname(fileURLToPath(import.meta.url)), "supabase-ca.crt"), "utf8");
+
+export function dbSsl(dbUrl: string, env: NodeJS.ProcessEnv = process.env) {
+  if (/sslmode=disable/i.test(dbUrl)) return false as const;
+  if (env.DATABASE_SSL === "insecure") return { rejectUnauthorized: false as const };
+  if (/supabase\.co|supabase\.com/.test(dbUrl)) return { rejectUnauthorized: true as const, ca: supabaseCa };
+  if (/localhost|127\.0\.0\.1/.test(dbUrl)) return undefined;
+  if (/^postgres/.test(dbUrl)) return { rejectUnauthorized: true as const };
+  return undefined;
 }
 
 export function hashToken(token: string) {

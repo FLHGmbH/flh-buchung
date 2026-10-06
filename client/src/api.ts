@@ -188,6 +188,7 @@ export const api = {
     wait.clear();
     try {
       sessionStorage.removeItem(ACTOR_KEY);
+      sessionStorage.removeItem("flh-recovery");
     } catch {
       /* */
     }

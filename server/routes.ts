@@ -4,10 +4,10 @@ import { fileURLToPath } from "node:url";
 import { and, desc, eq, gt, gte, inArray, lt, lte, ne, or } from "drizzle-orm";
 import { Hono } from "hono";
 import { DateTime } from "luxon";
-import { actorFrom, actorFromEmail, actorFromUserId, createSession, destroySession, ensurePlatformAdmin, hashPassword, sbEnsureUser, sbPassword, sbRecover, sbSetPassword, sbUser, verifyLogin, verifyPassword, type Actor } from "./auth.ts";
+import { actorFrom, actorFromEmail, actorFromUserId, createSession, destroySession, dropUserSessions, ensurePlatformAdmin, hashPassword, sbEnsureUser, sbPassword, sbRecover, sbSetPassword, sbUser, verifyLogin, verifyPassword, type Actor } from "./auth.ts";
 import { db } from "./db.ts";
-import { BOOK_MAX, LEN, LOGIN_MAX, PIN_MAX, WINDOW_MS, bookWindow, clip, clientIp, inIntRange, limited, logoKind, passwordOk, priceCents, readJson, sbConfigured, serviceMins, siteOrigin } from "./guard.ts";
-import { newPin, PIN_MS, sendConfirmMail, sendPinMail } from "./mail.ts";
+import { BOOK_MAX, LEN, LOGIN_MAX, PIN_MAX, WINDOW_MS, bookWindow, clip, clientIp, hoursWithin, inIntRange, limited, logoKind, passwordOk, priceCents, readJson, sbConfigured, serviceMins, siteOrigin } from "./guard.ts";
+import { mailboxAddr, newPin, PIN_MS, sendConfirmMail, sendPinMail } from "./mail.ts";
 import {
   bookings,
   memberships,
@@ -200,6 +200,9 @@ api.post("/auth/login", async (c) => {
   if (limited(`login:${clientIp(c.req)}`, LOGIN_MAX, WINDOW_MS)) {
     return c.json({ error: "Zu viele Versuche. Bitte später erneut." }, 429);
   }
+  if (!c.req.header("content-type")?.toLowerCase().startsWith("application/json")) {
+    return c.json({ error: "Ungültige Anfrage." }, 415);
+  }
   let body: { email?: string; password?: string } | null = await readJson(c);
   if (!body) return c.json({ error: "Ungültige Anfrage." }, 400);
   const email = clip(body.email?.toLowerCase() ?? "", LEN.email);
@@ -285,8 +288,13 @@ api.post("/auth/reset", async (c) => {
   if (!accessToken || accessToken.length > 4096) return c.json({ error: "Link ungültig oder abgelaufen." }, 400);
   if (!passwordOk(body.password ?? "")) return c.json({ error: "Passwort mindestens 8 Zeichen." }, 400);
   try {
+    const who = await sbUser(accessToken);
     const ok = await sbSetPassword(accessToken, body.password as string);
     if (!ok) return c.json({ error: "Link ungültig oder abgelaufen." }, 401);
+    if (who) {
+      const [user] = await db.select({ id: users.id }).from(users).where(eq(users.email, who.email)).limit(1);
+      if (user) await dropUserSessions(user.id);
+    }
   } catch (e) {
     console.error(e);
     return c.json({ error: "Passwort konnte nicht gesetzt werden." }, 503);
@@ -476,6 +484,7 @@ api.patch("/admin/tenants/:id/password", async (c) => {
   } else {
     await db.update(users).set({ passwordHash: await hashPassword(body.password as string) }).where(eq(users.id, user.id));
   }
+  await dropUserSessions(user.id);
   return c.json({ ok: true });
 });
 
@@ -857,13 +866,17 @@ function shiftOk(h: { weekday?: number; startHm?: string; endHm?: string }) {
   return inIntRange(h.weekday, 1, 7) && !!h.startHm && !!h.endHm && /^\d{2}:\d{2}$/.test(h.startHm) && /^\d{2}:\d{2}$/.test(h.endHm) && h.startHm < h.endHm;
 }
 
+function hoursFit(hours: { weekday?: number; startHm?: string; endHm?: string }[]) {
+  return hours.every((h) => shiftOk(h)) && hoursWithin(hours);
+}
+
 api.put("/app/staff/:id/hours", async (c) => {
   const tid = tenantId(c);
   const id = c.req.param("id");
   const [who] = await db.select({ id: staff.id }).from(staff).where(and(eq(staff.id, id), eq(staff.tenantId, tid))).limit(1);
   if (!who) return c.json({ error: "Nicht gefunden." }, 404);
   const body = await readJson<{ hours?: { weekday: number; startHm: string; endHm: string }[] }>(c);
-  if (!body || (body.hours ?? []).some((h) => !shiftOk(h))) return c.json({ error: "Arbeitszeit ungültig." }, 400);
+  if (!body || !hoursFit(body.hours ?? [])) return c.json({ error: "Arbeitszeit ungültig." }, 400);
   const hours = body.hours ?? [];
   await db.delete(staffHours).where(and(eq(staffHours.staffId, id), eq(staffHours.tenantId, tid)));
   if (hours.length) await db.insert(staffHours).values(hours.map((h) => ({ ...h, staffId: id, tenantId: tid })));
@@ -873,9 +886,9 @@ api.put("/app/staff/:id/hours", async (c) => {
 api.put("/app/hours", async (c) => {
   const tid = tenantId(c);
   const body = await readJson<{ hours?: { weekday: number; startHm: string; endHm: string }[] }>(c);
-  if (!body) return c.json({ error: "Ungültige Anfrage." }, 400);
+  if (!body || !hoursFit(body.hours ?? [])) return c.json({ error: "Öffnungszeiten ungültig." }, 400);
   await db.delete(openingHours).where(eq(openingHours.tenantId, tid));
-  const hours = (body.hours ?? []).filter((h) => h.startHm && h.endHm);
+  const hours = body.hours ?? [];
   if (hours.length) await db.insert(openingHours).values(hours.map((h) => ({ ...h, tenantId: tid })));
   return c.json({ hours });
 });
@@ -1137,7 +1150,6 @@ api.get("/public/:slug/staff/:id/photo", async (c) => {
 api.get("/public/:slug", async (c) => {
   const [tenant] = await db.select().from(tenants).where(eq(tenants.slug, c.req.param("slug"))).limit(1);
   if (!tenant || !tenant.active) return c.json({ error: "Unbekannt." }, 404);
-  await ensureTenantDefaults(tenant.id);
   const staffRows = await db
     .select()
     .from(staff)
@@ -1264,7 +1276,7 @@ api.post("/public/:slug/book", async (c) => {
     .limit(1);
   const guestEmail = clip(body.guestEmail?.toLowerCase() ?? "", LEN.email);
   const guestName = clip(body.guestName ?? "", LEN.name);
-  if (!service || !body.staffId || !body.start || !guestName || !guestEmail.includes("@")) {
+  if (!service || !body.staffId || !body.start || !guestName || mailboxAddr(guestEmail) !== guestEmail) {
     return c.json({ error: "Bitte alle Pflichtfelder ausfüllen (inkl. E-Mail)." }, 400);
   }
   if (limited(`bookmail:${tenant.id}:${guestEmail}`, BOOK_MAX, WINDOW_MS)) {

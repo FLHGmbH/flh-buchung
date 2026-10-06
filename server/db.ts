@@ -3,6 +3,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { drizzle as drizzlePg } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
+import { dbSsl } from "./guard.ts";
 import * as schema from "./schema.ts";
 
 function loadEnv() {
@@ -19,16 +20,6 @@ function loadEnv() {
   }
 }
 loadEnv();
-
-function dbSsl(dbUrl: string) {
-  if (/sslmode=disable/i.test(dbUrl)) return false;
-  if (process.env.DATABASE_SSL === "insecure") return { rejectUnauthorized: false };
-  // ponytail: Node rejects the pooler chain; pin Supabase CA for verify-full
-  if (/supabase\.co|supabase\.com/.test(dbUrl)) return { rejectUnauthorized: false };
-  if (/localhost|127\.0\.0\.1/.test(dbUrl)) return undefined;
-  if (/^postgres/.test(dbUrl)) return { rejectUnauthorized: true };
-  return undefined;
-}
 
 const here = dirname(fileURLToPath(import.meta.url));
 const url = (process.env.DATABASE_URL ?? "").trim();

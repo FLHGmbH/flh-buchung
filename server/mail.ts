@@ -12,8 +12,20 @@ export function escHtml(s: string) {
   return s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!);
 }
 
+export function mailbox(from: string): { addr: string; header: string } | null {
+  const raw = from.trim();
+  if (!raw || /[\0\r\n]/.test(raw)) return null;
+  const angled = raw.match(/^(.*)<([^<>]+)>$/);
+  const addr = (angled ? angled[2] : raw).trim();
+  if (!/^[^\s<>@]+@[^\s<>@]+$/.test(addr)) return null;
+  if (!angled) return { addr, header: addr };
+  const name = angled[1].trim();
+  if (/[<>"]/.test(name)) return null;
+  return { addr, header: name ? `${name} <${addr}>` : addr };
+}
+
 export function mailboxAddr(from: string) {
-  return (from.match(/<([^>]+)>/)?.[1] ?? from).trim();
+  return mailbox(from)?.addr ?? null;
 }
 
 export function encodeSubject(s: string) {
@@ -203,9 +215,10 @@ function tlsSmtp(host: string, port: number) {
 async function smtpSend(opts: { from: string; to: string; subject: string; text: string; html: string; ics?: string }) {
   const conf = smtpConf();
   if (!conf) throw new Error("Mail ist nicht konfiguriert.");
-  const from = mailboxAddr(opts.from);
-  const to = mailboxAddr(opts.to);
-  const body = mimeBody(opts);
+  const fromBox = mailbox(opts.from);
+  const toBox = mailbox(opts.to);
+  if (!fromBox || !toBox) throw new Error("Empfänger ungültig.");
+  const body = mimeBody({ ...opts, from: fromBox.header, to: toBox.header });
   const s = tlsSmtp(conf.host, conf.port);
   try {
     const banner = await s.cmd();
@@ -218,9 +231,9 @@ async function smtpSend(opts: { from: string; to: string; subject: string; text:
     if (u.code !== 334) throw new Error(`SMTP AUTH ${u.code}`);
     const p = await s.cmd(Buffer.from(conf.pass).toString("base64"));
     if (p.code !== 235) throw new Error(`SMTP AUTH ${p.code}`);
-    const mf = await s.cmd(`MAIL FROM:<${from}>`);
+    const mf = await s.cmd(`MAIL FROM:<${fromBox.addr}>`);
     if (mf.code !== 250) throw new Error(`SMTP ${mf.code}`);
-    const rt = await s.cmd(`RCPT TO:<${to}>`);
+    const rt = await s.cmd(`RCPT TO:<${toBox.addr}>`);
     if (rt.code !== 250) throw new Error(`SMTP ${rt.code}`);
     const data = await s.cmd("DATA");
     if (data.code !== 354) throw new Error(`SMTP ${data.code}`);
