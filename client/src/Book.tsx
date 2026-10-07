@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useParams } from "react-router-dom";
 import { api, type Pub } from "./api";
-import { guestMail, guestPhone } from "./guest";
+import { guestMail, guestPhone } from "../../server/guest.ts";
 import { Fold, gsap, reduced, StepPane, useGSAP } from "./motion";
 import { euro, serviceLine } from "./ui";
 

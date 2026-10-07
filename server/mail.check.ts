@@ -1,4 +1,4 @@
-import { guestMail, guestPhone } from "../client/src/guest.ts";
+import { guestMail, guestPhone } from "./guest.ts";
 import { confirmIcs, dotStuff, encodeSubject, escHtml, icsEscape, icsFold, icsUtc, mailbox, mailboxAddr, mailEnding, mimeBody, newPin, PIN_MS } from "./mail.ts";
 
 function assert(cond: unknown, msg: string) {

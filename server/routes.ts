@@ -7,7 +7,7 @@ import { DateTime } from "luxon";
 import { actorFrom, actorFromEmail, actorFromUserId, createSession, destroySession, dropUserSessions, ensurePlatformAdmin, hashPassword, sbEnsureUser, sbPassword, sbRecover, sbSetPassword, sbUser, verifyLogin, verifyPassword, type Actor } from "./auth.ts";
 import { db } from "./db.ts";
 import { BOOK_MAX, LEN, LOGIN_MAX, PIN_MAX, WINDOW_MS, bookWindow, clip, clientIp, hoursWithin, inIntRange, limited, logoKind, passwordOk, priceCents, readJson, sbConfigured, serviceMins, siteOrigin } from "./guard.ts";
-import { guestMail, guestPhone } from "../client/src/guest.ts";
+import { guestMail, guestPhone } from "./guest.ts";
 import { newPin, PIN_MS, sendConfirmMail, sendPinMail } from "./mail.ts";
 import {
   bookings,
