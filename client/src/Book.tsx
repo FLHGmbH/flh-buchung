@@ -44,6 +44,7 @@ export function BookPage() {
     if (!serviceId || !pub) return;
     let on = true;
     setPending(true);
+    setSlots([]);
     api.slots(slug, serviceId, undefined, extraKey ? extraKey.split(",") : undefined)
       .then((r) => { if (on) setSlots(r.slots); })
       .catch((e) => { if (on) setErr(e.message); })
@@ -100,7 +101,7 @@ export function BookPage() {
     const main = pub.services.find((s) => s.id === cur[0]);
     return (main?.crossIds ?? []).includes(id);
   }
-  function toggleService(id: string) {
+  function toggleService(id: string, keepStaff = false) {
     setIds((cur) => {
       if (!pairOk(cur, id)) return cur;
       if (!cur.includes(id)) return [...cur, id];
@@ -108,17 +109,17 @@ export function BookPage() {
       const allow = new Set(pub.services.find((s) => s.id === next[0])?.crossIds ?? []);
       return next.filter((x, i) => i === 0 || allow.has(x));
     });
-    setStaffId("");
+    if (!keepStaff) setStaffId("");
     setSlot(null);
   }
-  function svcRow(s: (typeof pub.services)[number]) {
+  function svcRow(s: (typeof pub.services)[number], keepStaff = false) {
     const on = ids.includes(s.id);
     const open = on || pairOk(ids, s.id);
     return (
       <div key={s.id} className={"choice svc-pick" + (on ? " on" : "")}>
-        <button className="choice-hit" type="button" disabled={!open} onClick={() => toggleService(s.id)}>{serviceLine(s)}</button>
+        <button className="choice-hit" type="button" disabled={!open} onClick={() => toggleService(s.id, keepStaff)}>{serviceLine(s)}</button>
         {open ? (
-          <button className={"choice-mark" + (on ? " is-minus" : "")} type="button" aria-label={on ? `${s.name} entfernen` : `${s.name} hinzufügen`} onClick={() => toggleService(s.id)}>
+          <button className={"choice-mark" + (on ? " is-minus" : "")} type="button" aria-label={on ? `${s.name} entfernen` : `${s.name} hinzufügen`} onClick={() => toggleService(s.id, keepStaff)}>
             <Mark minus={on} />
           </button>
         ) : null}
@@ -135,13 +136,49 @@ export function BookPage() {
     : null;
   const who = staffId ? pub.staff.find((s) => s.id === staffId)?.name ?? "Egal" : "Egal";
   const pickedDay = days.find((d) => d.key === day);
+  const offer = service ? pub.services.find((s) => s.id !== service.id && (service.crossIds ?? []).includes(s.id)) : undefined;
+  const hasOffer = Boolean(offer);
+  const labels = hasOffer
+    ? ["Leistung", "Person", "Tag", "Zusatz", "Uhrzeit", "Angaben", "Code", "Fertig"]
+    : STEPS;
+  const at = hasOffer || step < 3 ? step : step - 1;
   const pickedNames = ids.map((id) => pub.services.find((s) => s.id === id)?.name).filter(Boolean).join(" + ");
   const recap = [
     pickedNames,
     step > 1 ? who : "",
     step > 2 && pickedDay ? `${pickedDay.wd} ${pickedDay.num}. ${pickedDay.mon}` : "",
-    step > 3 && slot ? new Date(slot.start).toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" }) : "",
+    step > 4 && slot ? new Date(slot.start).toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" }) : "",
   ].filter(Boolean).join(" · ");
+  function cart(next: { go: () => void; on: boolean }, lockMain = false) {
+    return (
+      <aside className="book-cart" aria-label="Auswahl">
+        <div className="book-cart-h">
+          <strong>Auswahl</strong>
+          {picked.length ? <span>{picked.length}</span> : null}
+        </div>
+        {picked.length ? (
+          <ol>
+            {picked.map((s, i) => (
+              <li key={s.id}>
+                <span className="book-cart-n">{i + 1}</span>
+                <span className="book-cart-name">
+                  <strong>{s.name}</strong>
+                  <small>{s.durationMin} Min.{s.priceCents != null ? ` · ${euro(s.priceCents)}` : ""}</small>
+                </span>
+                {lockMain && s.id === serviceId ? null : (
+                  <button className="choice-mark is-minus" type="button" aria-label={`${s.name} entfernen`} onClick={() => toggleService(s.id, lockMain)}>
+                    <Mark minus />
+                  </button>
+                )}
+              </li>
+            ))}
+          </ol>
+        ) : <p>Noch keine Leistung.</p>}
+        {picked.length ? <p className="book-cart-sum">{mins} Min.{cents != null ? ` · ${euro(cents)}` : ""}</p> : null}
+        {next.on ? <button className="btn" type="button" onClick={next.go}>Weiter</button> : null}
+      </aside>
+    );
+  }
 
   return (
     <BookShell slug={slug}>
@@ -151,21 +188,21 @@ export function BookPage() {
       {err ? <p className="err" role="alert">{err}</p> : null}
       <div className="book-progress">
         <div className="book-progress-top">
-          <span>Schritt {step + 1} von {STEPS.length}</span>
-          <strong>{STEPS[step]}</strong>
+          <span>Schritt {at + 1} von {labels.length}</span>
+          <strong>{labels[at]}</strong>
         </div>
         <div
           className="book-bar"
           role="progressbar"
-          aria-valuenow={step + 1}
+          aria-valuenow={at + 1}
           aria-valuemin={1}
-          aria-valuemax={STEPS.length}
-          aria-label={STEPS[step]}
+          aria-valuemax={labels.length}
+          aria-label={labels[at]}
         >
-          <i style={{ transform: `scaleX(${(step + 1) / STEPS.length})` }} />
+          <i style={{ transform: `scaleX(${(at + 1) / labels.length})` }} />
         </div>
       </div>
-      {step > 0 && step < 6 && recap ? <p className="book-recap">{recap}</p> : null}
+      {step > 0 && step < 7 && recap ? <p className="book-recap">{recap}</p> : null}
 
       <StepPane id={step}>
       {step === 0 && (
@@ -189,30 +226,7 @@ export function BookPage() {
                 );
               }) : pub.services.map(svcRow)}
             </div>
-            <aside className="book-cart" aria-label="Auswahl">
-              <div className="book-cart-h">
-                <strong>Auswahl</strong>
-                {picked.length ? <span>{picked.length}</span> : null}
-              </div>
-              {picked.length ? (
-                <ol>
-                  {picked.map((s, i) => (
-                    <li key={s.id}>
-                      <span className="book-cart-n">{i + 1}</span>
-                      <span className="book-cart-name">
-                        <strong>{s.name}</strong>
-                        <small>{s.durationMin} Min.{s.priceCents != null ? ` · ${euro(s.priceCents)}` : ""}</small>
-                      </span>
-                      <button className="choice-mark is-minus" type="button" aria-label={`${s.name} entfernen`} onClick={() => toggleService(s.id)}>
-                        <Mark minus />
-                      </button>
-                    </li>
-                  ))}
-                </ol>
-              ) : <p>Noch keine Leistung.</p>}
-              {picked.length ? <p className="book-cart-sum">{mins} Min.{cents != null ? ` · ${euro(cents)}` : ""}</p> : null}
-              {serviceId ? <button className="btn" type="button" onClick={() => setStep(1)}>Weiter</button> : null}
-            </aside>
+            {cart({ go: () => setStep(1), on: Boolean(serviceId) })}
           </div>
         ) : (
           <p className="err">Noch keine Leistung angelegt. Im Mandanten-Konto unter Leistungen eine anlegen.</p>
@@ -246,7 +260,7 @@ export function BookPage() {
           {pending && !slots.length ? <p className="lead wait">Termine werden geladen…</p> : null}
           <div className="days">
             {days.map((d) => (
-              <button key={d.key} type="button" disabled={!d.open} className={day === d.key ? "on" : ""} onClick={() => { setDay(d.key); setStep(3); }}>
+              <button key={d.key} type="button" disabled={!d.open} className={day === d.key ? "on" : ""} onClick={() => { setDay(d.key); setStep(hasOffer && offer && !ids.includes(offer.id) ? 3 : 4); }}>
                 <small>{d.wd}</small>
                 <strong>{d.num}</strong>
                 <small>{d.mon}</small>
@@ -258,25 +272,40 @@ export function BookPage() {
         </>
       )}
 
-      {step === 3 && (
+      {step === 3 && offer && (
         <>
+          <div className="book-pick">
+            <div className="book-list">
+              <p className="lead">Optional dazu. Du kannst sie nehmen oder ohne sie weiter.</p>
+              {svcRow(offer, true)}
+            </div>
+            {cart({ go: () => setStep(4), on: true }, true)}
+          </div>
+          <button className="btn quiet book-back" type="button" onClick={() => setStep(2)}>Zurück</button>
+        </>
+      )}
+
+      {step === 4 && (
+        <>
+          {pending ? <p className="lead wait">Termine werden geladen…</p> : null}
           <div className="slots">
             {uniqueStarts(daySlots).map((s) => (
               <button
                 key={s.start}
                 className={"choice" + (slot?.start === s.start ? " amber" : "")}
                 type="button"
-                onClick={() => { setSlot(s); setStep(4); }}
+                onClick={() => { setSlot(s); setStep(5); }}
               >
                 {new Date(s.start).toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" })}
               </button>
             ))}
           </div>
-          <button className="btn quiet book-back" type="button" onClick={() => setStep(2)}>Zurück</button>
+          {!pending && !daySlots.length ? <p>An dem Tag ist dafür nichts frei.</p> : null}
+          <button className="btn quiet book-back" type="button" onClick={() => setStep(hasOffer ? 3 : 2)}>Zurück</button>
         </>
       )}
 
-      {step === 4 && slot && (
+      {step === 5 && slot && (
         <form
           onSubmit={(e) => {
             e.preventDefault();
@@ -301,7 +330,7 @@ export function BookPage() {
               .then((r) => {
                 setErr("");
                 setHold((r as { booking: { id: string; startsAt: string } }).booking);
-                setStep(5);
+                setStep(6);
               })
               .catch((ex) => setErr(ex.message))
               .finally(() => setPending(false));
@@ -344,11 +373,11 @@ export function BookPage() {
             </span>
           </label>
           <button className={privacy && guestMail(guest.guestEmail) && guestPhone(guest.guestPhone) ? "btn" : "btn is-hold"} disabled={pending || !privacy || !guestMail(guest.guestEmail) || !guestPhone(guest.guestPhone)} type="submit">{pending ? "Sendet Code…" : "Code per Mail"}</button>
-          <button className="btn quiet book-back" type="button" onClick={() => setStep(3)}>Zurück</button>
+          <button className="btn quiet book-back" type="button" onClick={() => setStep(4)}>Zurück</button>
         </form>
       )}
 
-      {step === 5 && hold && (
+      {step === 6 && hold && (
         <form
           onSubmit={(e) => {
             e.preventDefault();
@@ -357,7 +386,7 @@ export function BookPage() {
             api.confirm(slug, hold.id, pin)
               .then((r) => {
                 setDone(r.booking);
-                setStep(6);
+                setStep(7);
               })
               .catch((ex) => setErr(ex.message))
               .finally(() => setPending(false));
@@ -381,7 +410,7 @@ export function BookPage() {
         </form>
       )}
 
-      {step === 6 && done && (
+      {step === 7 && done && (
         <div className="book-done">
           <span className="book-check" aria-hidden="true">
             <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4">

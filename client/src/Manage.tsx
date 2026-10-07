@@ -268,6 +268,7 @@ export function StaffPage() {
   const [hmDay, setHmDay] = useState<number | null>(null);
   const [err, setErr] = useState("");
   const [pending, setPending] = useState(false);
+  const [askDel, setAskDel] = useState(false);
   const who = boot?.staff.find((s) => s.id === sel) ?? null;
   const upcoming = useMemo(() => {
     if (!who || !list) return [];
@@ -584,21 +585,7 @@ export function StaffPage() {
                 <p className="shift-hint" style={{ margin: "0 0 0.85rem" }}>
                   Entfernt diesen Mitarbeiter dauerhaft. Bereits bestehende Termine bleiben im Kalender erhalten.
                 </p>
-                <button
-                  type="button"
-                  className="btn danger"
-                  style={{ width: "auto" }}
-                  disabled={pending}
-                  onClick={() => {
-                    if (!window.confirm(`${edit.name} wirklich löschen?`)) return;
-                    setErr("");
-                    setPending(true);
-                    api.delStaff(edit.id)
-                      .then(() => setEdit(null))
-                      .catch((ex) => setErr(ex instanceof Error ? ex.message : "Löschen fehlgeschlagen."))
-                      .finally(() => setPending(false));
-                  }}
-                >
+                <button type="button" className="btn danger" style={{ width: "auto" }} disabled={pending} onClick={() => setAskDel(true)}>
                   Mitarbeiter löschen
                 </button>
               </div>
@@ -611,6 +598,30 @@ export function StaffPage() {
           </form>
         </Modal>
       ) : null}
+      {edit && askDel ? (
+        <Modal title="Mitarbeiter löschen" onClose={() => setAskDel(false)}>
+          <p className="shift-hint">{edit.name} wirklich löschen? Bestehende Termine bleiben im Kalender.</p>
+          {err ? <p className="err" role="alert">{err}</p> : null}
+          <div className="modal-foot is-split">
+            <button type="button" className="btn outline" onClick={() => setAskDel(false)}>Abbrechen</button>
+            <button
+              type="button"
+              className="btn danger"
+              disabled={pending}
+              onClick={() => {
+                setErr("");
+                setPending(true);
+                api.delStaff(edit.id)
+                  .then(() => { setAskDel(false); setEdit(null); })
+                  .catch((ex) => setErr(ex instanceof Error ? ex.message : "Löschen fehlgeschlagen."))
+                  .finally(() => setPending(false));
+              }}
+            >
+              Löschen
+            </button>
+          </div>
+        </Modal>
+      ) : null}
     </div>
   );
 }
@@ -620,6 +631,7 @@ export function ServicesPage() {
   const blank = { name: "", durationMin: 45, bufferMin: 0, staffIds: [] as string[], crossIds: [] as string[], active: true, categoryId: "", price: "" };
   const [form, setForm] = useState<(typeof blank & { id?: string }) | null>(null);
   const [slide, setSlide] = useState(0);
+  const [askDel, setAskDel] = useState(false);
   const [catForm, setCatForm] = useState<{ id?: string; name: string } | null>(null);
   const [err, setErr] = useState("");
   const [pending, setPending] = useState(false);
@@ -627,9 +639,6 @@ export function ServicesPage() {
   const cats = boot.categories ?? [];
   function toggle(id: string) {
     setForm((f) => f && ({ ...f, staffIds: f.staffIds.includes(id) ? f.staffIds.filter((x) => x !== id) : [...f.staffIds, id] }));
-  }
-  function toggleCross(id: string) {
-    setForm((f) => f && ({ ...f, crossIds: f.crossIds.includes(id) ? f.crossIds.filter((x) => x !== id) : [...f.crossIds, id] }));
   }
   function go(next: number) {
     if (!form) return;
@@ -656,7 +665,7 @@ export function ServicesPage() {
       return;
     }
     setPending(true);
-    const body = { name: form.name, durationMin: form.durationMin, bufferMin: form.bufferMin, staffIds: form.staffIds, crossIds: form.crossIds, active: form.active, categoryId: form.categoryId, priceCents };
+    const body = { name: form.name, durationMin: form.durationMin, bufferMin: form.bufferMin, staffIds: form.staffIds, crossIds: form.crossIds.slice(0, 1), active: form.active, categoryId: form.categoryId, priceCents };
     const done = form.id ? api.patchService(form.id, body) : api.addService(body);
     done
       .then(() => setForm(null))
@@ -777,14 +786,15 @@ export function ServicesPage() {
         </Modal>
       ) : null}
       {form ? (
-        <Modal title={form.id ? "Leistung" : "Neue Leistung"} wide={slide === 0} onClose={() => setForm(null)}>
-          <form
+        <Modal title={form.id ? "Leistung" : "Neue Leistung"} wide={slide === 0} onClose={() => { setAskDel(false); setForm(null); }}>
+          <form className="svc-form"
             onSubmit={(e) => {
               e.preventDefault();
               if (slide < 2) go(slide + 1);
               else save();
             }}
           >
+            <div className="svc-body">
             <p className="svc-step">Schritt {slide + 1} von 3 · {["Leistung", "Mitarbeiter", "Preis"][slide]}</p>
             {err ? <p className="err" role="alert">{err}</p> : null}
             {slide === 0 ? (
@@ -851,16 +861,16 @@ export function ServicesPage() {
                   <input inputMode="decimal" value={form.price} onChange={(e) => setForm({ ...form, price: e.target.value })} placeholder="z. B. 29,50" />
                 </label>
                 <p className="hint-line">Leer lassen, wenn kein Preis auf der Buchungsseite stehen soll.</p>
-                <div className="field">
+                <label className="field">
                   <span>Zusammen buchbar (optional)</span>
-                  {boot.services.filter((s) => s.id !== form.id).length ? boot.services.filter((s) => s.id !== form.id).map((s) => (
-                    <label className="check" key={s.id}>
-                      <input type="checkbox" checked={form.crossIds.includes(s.id)} onChange={() => toggleCross(s.id)} />
-                      {s.name}
-                    </label>
-                  )) : <p className="hint-line">Noch keine andere Leistung.</p>}
-                </div>
-                <p className="hint-line">Im Buchungsfenster kann man diese Leistungen zur ausgewählten dazubuchen.</p>
+                  <select value={form.crossIds[0] ?? ""} onChange={(e) => setForm({ ...form, crossIds: e.target.value ? [e.target.value] : [] })}>
+                    <option value="">Keine</option>
+                    {boot.services.filter((s) => s.id !== form.id).map((s) => (
+                      <option key={s.id} value={s.id}>{s.name}</option>
+                    ))}
+                  </select>
+                </label>
+                <p className="hint-line">Im Buchungsfenster kann man diese Leistung dazubuchen.</p>
                 {form.id ? (
                   <label className="check">
                     <input type="checkbox" checked={form.active} onChange={(e) => setForm({ ...form, active: e.target.checked })} />
@@ -868,26 +878,12 @@ export function ServicesPage() {
                   </label>
                 ) : null}
                 {form.id ? (
-                  <button
-                    type="button"
-                    className="btn danger staff-del"
-                    disabled={pending}
-                    onClick={() => {
-                      if (!window.confirm(`${form.name} wirklich löschen?`)) return;
-                      setErr("");
-                      setPending(true);
-                      api.delService(form.id as string)
-                        .then(() => setForm(null))
-                        .catch((ex) => setErr(ex instanceof Error ? ex.message : "Löschen fehlgeschlagen."))
-                        .finally(() => setPending(false));
-                    }}
-                  >
-                    Löschen
-                  </button>
+                  <button type="button" className="linkish is-danger" onClick={() => setAskDel(true)}>Leistung löschen</button>
                 ) : null}
               </>
             ) : null}
-            <div className="modal-foot">
+            </div>
+            <div className="modal-foot is-split">
               {slide === 0 ? (
                 <button type="button" className="btn outline" onClick={() => setForm(null)}>Abbrechen</button>
               ) : (
@@ -898,6 +894,30 @@ export function ServicesPage() {
               </button>
             </div>
           </form>
+        </Modal>
+      ) : null}
+      {form?.id && askDel ? (
+        <Modal title="Leistung löschen" onClose={() => setAskDel(false)}>
+          <p className="shift-hint">{form.name} wirklich löschen?</p>
+          {err ? <p className="err" role="alert">{err}</p> : null}
+          <div className="modal-foot is-split">
+            <button type="button" className="btn outline" onClick={() => setAskDel(false)}>Abbrechen</button>
+            <button
+              type="button"
+              className="btn danger"
+              disabled={pending}
+              onClick={() => {
+                setErr("");
+                setPending(true);
+                api.delService(form.id as string)
+                  .then(() => { setAskDel(false); setForm(null); })
+                  .catch((ex) => { setAskDel(false); setErr(ex instanceof Error ? ex.message : "Löschen fehlgeschlagen."); })
+                  .finally(() => setPending(false));
+              }}
+            >
+              Löschen
+            </button>
+          </div>
         </Modal>
       ) : null}
     </div>

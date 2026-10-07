@@ -80,10 +80,20 @@ if (process.argv[1]?.endsWith("seed.ts")) {
     console.error("Seed nur lokal ohne Supabase-URL.");
     process.exit(1);
   }
-  const { migrate } = await import("./db.ts");
-  await migrate();
-  const [u] = await db.select().from(users).where(eq(users.email, "admin@flh.digital")).limit(1);
-  if (!u) await seed();
-  else console.log("Schon gesät.");
-  process.exit(0);
+  const { migrate, closeDb } = await import("./db.ts");
+  let code = 0;
+  try {
+    await migrate();
+    const [u] = await db.select().from(users).where(eq(users.email, "admin@flh.digital")).limit(1);
+    if (!u) {
+      await seed();
+      console.log("Seed: admin@flh.digital / Test1234!  ·  salon@demo.test / Test1234!");
+    } else console.log("Schon gesät.");
+  } catch (e) {
+    console.error(e);
+    code = 1;
+  } finally {
+    await closeDb();
+  }
+  process.exit(code);
 }

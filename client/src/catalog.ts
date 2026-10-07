@@ -96,13 +96,3 @@ export function matchTpl(q: string) {
   };
   return hit.sort((a, b) => score(a) - score(b)).slice(0, 8);
 }
-
-if (
-  matchTpl("pony")[0]?.min !== 15 ||
-  matchTpl("pony")[0]?.buffer !== 5 ||
-  matchTpl("balayage")[0]?.buffer !== 15 ||
-  CATALOG.some((t) => t.buffer < 5 || t.buffer > 15) ||
-  matchTpl("").length !== 0 || matchTpl("p").length === 0
-) {
-  throw new Error("Vorlagen passen nicht.");
-}

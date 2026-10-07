@@ -364,6 +364,7 @@ a { color: var(--petrol); }
   z-index: 80;
   padding: 1.5rem;
 }
+.modal-back ~ .modal-back { z-index: 90; }
 .modal {
   background: #fff;
   width: min(480px, 100%);
@@ -552,6 +553,25 @@ a { color: var(--petrol); }
 .more-svc .when { margin: 0 0 0.45rem; color: #64748b; font-size: 0.8rem; }
 .more-add { width: 100%; margin-top: 0.85rem; }
 .modal-foot .btn { width: 100%; }
+.modal-foot.is-split {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.6rem;
+}
+.modal:has(.svc-form) {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.svc-form { display: flex; flex-direction: column; min-height: 0; flex: 1; }
+.svc-body { overflow: auto; min-height: 0; }
+.svc-form .modal-foot {
+  flex-shrink: 0;
+  margin-top: 0.85rem;
+  padding-top: 0.85rem;
+  border-top: 1px solid #e6ebef;
+}
+.linkish.is-danger { color: #b42318; margin-top: 0.35rem; }
 
 .staff-grid {
   display: grid;

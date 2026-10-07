@@ -29,6 +29,7 @@ const onVercel = !!process.env.VERCEL;
 type Exec = (q: string) => Promise<unknown>;
 let execSql: Exec;
 let dbExport: ReturnType<typeof drizzlePg>;
+let closeDb: () => Promise<void> = async () => {};
 
 if (onVercel || isPg) {
   if (!isPg) throw new Error("DATABASE_URL muss die Supabase-Postgres-URL sein (Pooler, Port 6543).");
@@ -49,10 +50,12 @@ if (onVercel || isPg) {
   const lite = await PGlite.create({ dataDir: join(here, "../data/pg") });
   execSql = (q) => lite.exec(q);
   dbExport = drizzlePglite(lite, { schema }) as unknown as ReturnType<typeof drizzlePg>;
+  closeDb = () => lite.close();
   console.log("DB: PGlite unter data/pg");
 }
 
 export const db = dbExport;
+export { closeDb };
 
 function ignoreExists(e: unknown) {
   const msg = e instanceof Error ? e.message : String(e);
@@ -67,7 +70,6 @@ function schemaFile(name: string) {
 }
 
 export async function migrate() {
-  await execSql(`ALTER TABLE staff ADD COLUMN IF NOT EXISTS color text`).catch(ignoreExists);
   const file = isPg ? "schema.sql" : "schema.lite.sql";
   const sql = readFileSync(schemaFile(file), "utf8");
   for (const stmt of sql.split(";").map((s) => s.trim()).filter(Boolean)) {
@@ -95,6 +97,7 @@ export async function migrate() {
   await execSql(`ALTER TABLE tenants ADD COLUMN IF NOT EXISTS logo_url text`).catch(ignoreExists);
   await execSql(`ALTER TABLE tenants ADD COLUMN IF NOT EXISTS mail_sign text NOT NULL DEFAULT ''`).catch(ignoreExists);
   await execSql(`ALTER TABLE tenants ADD COLUMN IF NOT EXISTS mail_image_url text`).catch(ignoreExists);
+  await execSql(`ALTER TABLE staff ADD COLUMN IF NOT EXISTS color text`).catch(ignoreExists);
   await execSql(`ALTER TABLE staff ADD COLUMN IF NOT EXISTS photo_url text`).catch(ignoreExists);
   await execSql(`ALTER TABLE bookings ALTER COLUMN staff_id DROP NOT NULL`).catch(ignoreExists);
   await execSql(`ALTER TABLE bookings DROP CONSTRAINT IF EXISTS bookings_service_id_fkey`);
