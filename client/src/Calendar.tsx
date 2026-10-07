@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import { api, useApi, type Booking, type Bootstrap, type WeekPayload } from "./api";
-import { BookingModal, coverService, firstOpen, PageHead, staffColor, staffTone } from "./ui";
+import { BookingModal, coverService, firstOpen, PageHead, Skel, staffColor, staffTone } from "./ui";
 
 const START = 8;
 const END = 20;
@@ -276,7 +276,7 @@ export function CalendarPage() {
     else setAnchor(addMonth(anchor, dir));
   }
 
-  if (!boot) return <div className="page"><p className="lead wait">Laden…</p></div>;
+  if (!boot) return <Skel kind="cal" />;
 
   const emptyStaff = boot.staff.length === 0;
   const monthKey = anchor.slice(0, 7);

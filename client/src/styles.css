@@ -1789,6 +1789,32 @@ button.week-head.today {
   .login { padding: max(1.5rem, env(safe-area-inset-top)) max(1rem, env(safe-area-inset-right)) max(1.5rem, env(safe-area-inset-bottom)) max(1rem, env(safe-area-inset-left)); }
 }
 
+.bone {
+  display: block;
+  border-radius: 8px;
+  background: linear-gradient(90deg, #e7eef0 0%, #f7f9fa 42%, #e7eef0 84%);
+  background-size: 200% 100%;
+  animation: bone-shimmer 1.15s ease-in-out infinite;
+}
+.bone-h { height: 1.65rem; width: min(16rem, 62%); }
+.bone-lead { height: 0.85rem; width: min(18rem, 70%); margin: 0.35rem auto 1.25rem; }
+.bone-logo { width: 72px; height: 72px; border-radius: 50%; margin: 0.25rem auto 0.85rem; }
+.bone-line { height: 0.85rem; width: 100%; }
+.bone-choice { height: 52px; border-radius: 12px; margin-bottom: 0.5rem; }
+.bone-btn { height: 44px; margin-top: 0.65rem; }
+.bone-day { min-height: 72px; border-radius: 12px; }
+.bone-slot { height: 44px; }
+.bone-stat { height: 96px; border-radius: 10px; }
+.bone-panel { height: 220px; border-radius: 10px; }
+.bone-row { height: 42px; margin: 0.4rem 0.75rem; }
+.bone-card { height: 210px; border-radius: 12px; }
+.bone-hour { height: 44px; }
+.bone-col { height: 420px; border-radius: 10px; }
+.skel-week { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 0.45rem; }
+.skel-stack { display: flex; flex-direction: column; gap: 0.5rem; }
+.book-bones .bone-h { margin: 0.45rem auto 0; }
+.book-bones .book-list { display: flex; flex-direction: column; }
+@keyframes bone-shimmer { to { background-position: -200% 0; } }
 .lead.wait { animation: wait-pulse 1.15s ease-in-out infinite; }
 @keyframes wait-pulse {
   50% { opacity: 0.42; }
@@ -1797,5 +1823,5 @@ button.week-head.today {
 @media (prefers-reduced-motion: reduce) {
   .btn, .cat-fold-h .chev, .sidebar a, .table.click tbody tr, .staff-card, .choice, .choice-mark, .ev, .day-col .ev.is-drag, .drag-shade, .book-bar i, .days button { transition: none; animation: none; }
   .btn:hover, .staff-card:hover, .choice:active { transform: none; }
-  .btn:disabled, .lead.wait { animation: none; }
+  .btn:disabled, .lead.wait, .bone { animation: none; }
 }

@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { useApi, type AdminFleet, type TenantRow, api } from "./api";
 import { Bars, vsLast } from "./Dashboard";
-import { Avatar, PageHead, euro } from "./ui";
+import { Avatar, PageHead, Skel, euro } from "./ui";
 
 type TenantDetail = {
   tenant: TenantRow;
@@ -21,7 +21,7 @@ export function AdminList() {
     if (!s) return tenants;
     return tenants.filter((t) => `${t.name} ${t.slug}`.toLowerCase().includes(s));
   }, [tenants, q]);
-  if (!rows) return <div className="page"><p className="lead wait">Laden…</p></div>;
+  if (!rows) return <Skel kind="table" />;
   const active = tenants.filter((t) => t.active).length;
   return (
     <div className="page">
@@ -202,7 +202,7 @@ export function AdminDetail() {
       </div>
     );
   }
-  if (!data?.tenant) return <div className="page"><p className="lead wait">Laden…</p></div>;
+  if (!data?.tenant) return <Skel kind="hours" />;
   const admins = data.admins ?? [];
   const adminId = pw.userId || admins[0]?.id || "";
   const kd = admins[0];
@@ -343,7 +343,7 @@ export function AdminDetail() {
 export function AdminDashboard() {
   const data = useApi<AdminFleet>("/api/admin/dashboard");
   const nav = useNavigate();
-  if (!data) return <div className="page"><p className="lead wait">Laden…</p></div>;
+  if (!data) return <Skel kind="dash" />;
   const month = data.monthLabel.split(" ")[0];
   if (!data.tenants) {
     return (

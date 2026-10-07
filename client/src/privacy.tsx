@@ -237,7 +237,13 @@ export function GuestPrivacyPage() {
     <div className="book-page">
       <article className="book legal-doc">
         <h1>Datenschutzerklärung</h1>
-        {missing ? <p>Diese Buchung gibt es nicht.</p> : name ? <GuestPrivacy tenantName={name} /> : <p>Laden…</p>}
+        {missing ? <p>Diese Buchung gibt es nicht.</p> : name ? <GuestPrivacy tenantName={name} /> : (
+          <div className="skel-stack" role="status" aria-label="Laden">
+            <span className="bone bone-line" />
+            <span className="bone bone-line" />
+            <span className="bone bone-line" />
+          </div>
+        )}
         <p><Link to={`/b/${slug}`}>Zurück zur Buchung</Link></p>
       </article>
     </div>

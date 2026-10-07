@@ -1,5 +1,5 @@
 import { useApi, type Dashboard } from "./api";
-import { euro, PageHead } from "./ui";
+import { euro, PageHead, Skel } from "./ui";
 
 const SLICE = ["#006478", "#408b9a", "#ff9600", "#253239", "#80b1bb", "#ffb040"];
 
@@ -79,7 +79,7 @@ function Donut({ parts }: { parts: { name: string; count: number }[] }) {
 
 export function DashboardPage() {
   const data = useApi<Dashboard>("/api/app/dashboard");
-  if (!data) return <div className="page"><p className="lead wait">Laden…</p></div>;
+  if (!data) return <Skel kind="dash" />;
   const yearRevenue = data.months.reduce((n, m) => n + m.revenueCents, 0);
   return (
     <div className="page wide">

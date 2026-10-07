@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { api, useApi, type Bootstrap, type Booking, type StaffShift, type TimeOff } from "./api";
 import { matchTpl } from "./catalog";
-import { Avatar, BookingModal, centsFromEuro, euro, euroInput, firstOpen, ImageDrop, Modal, PageHead, STAFF_COLORS, staffColor, svcTone } from "./ui";
+import { Avatar, BookingModal, centsFromEuro, euro, euroInput, firstOpen, ImageDrop, Modal, PageHead, Skel, STAFF_COLORS, staffColor, svcTone } from "./ui";
 
 function useBoot() {
   return useApi<Bootstrap>("/api/app/bootstrap");
@@ -150,7 +150,7 @@ export function BookingsPage() {
     if (!s) return rows;
     return rows.filter((b) => `${b.guestName} ${b.guestEmail} ${b.guestPhone}`.toLowerCase().includes(s));
   }, [rows, q]);
-  if (!boot) return <div className="page" />;
+  if (!boot) return <Skel kind="table" />;
   return (
     <div className="page">
       <header className="page-head">
@@ -277,7 +277,7 @@ export function StaffPage() {
       .filter((b) => b.staffId === who.id && b.status !== "cancelled" && new Date(b.endsAt).getTime() > now)
       .sort((a, b) => new Date(a.startsAt).getTime() - new Date(b.startsAt).getTime());
   }, [who, list]);
-  if (!boot) return <div className="page" />;
+  if (!boot) return <Skel kind="staff" />;
   const cover = edit ? otherBlocks(edit.id, boot.staff, boot.hours, boot.staffHours ?? []) : null;
   return (
     <div className="page">
@@ -323,7 +323,7 @@ export function StaffPage() {
         <section className="hours-card staff-appts">
           <div className="card-head">Termine von {who.name}</div>
           {!list ? (
-            <p className="hint-line card-body">Laden…</p>
+            <Skel kind="lines" />
           ) : upcoming.length ? (
             <div className="card-table flat">
               <table className="table quiet click">
@@ -635,7 +635,7 @@ export function ServicesPage() {
   const [catForm, setCatForm] = useState<{ id?: string; name: string } | null>(null);
   const [err, setErr] = useState("");
   const [pending, setPending] = useState(false);
-  if (!boot) return <div className="page"><p className="lead wait">Laden…</p></div>;
+  if (!boot) return <Skel kind="table" />;
   const cats = boot.categories ?? [];
   function toggle(id: string) {
     setForm((f) => f && ({ ...f, staffIds: f.staffIds.includes(id) ? f.staffIds.filter((x) => x !== id) : [...f.staffIds, id] }));
@@ -938,7 +938,7 @@ export function HoursPage() {
       return { weekday, startHm: h?.startHm ?? "09:00", endHm: h?.endHm ?? (weekday === 6 ? "14:00" : "18:00"), open: Boolean(h) };
     }));
   }, [boot, rows.length]);
-  if (!boot) return <div className="page" />;
+  if (!boot) return <Skel kind="hours" />;
   return (
     <div className="page slim">
       <PageHead title="Unternehmen" lead="Aufklappen, ändern, speichern." />
@@ -1075,7 +1075,7 @@ export function TimeOffPage() {
   const [edits, setEdits] = useState<Record<string, Edit>>({});
   const [err, setErr] = useState("");
   const [pending, setPending] = useState(false);
-  if (!boot) return <div className="page" />;
+  if (!boot) return <Skel kind="table" />;
   const blank = { staffId: "", from: "", to: "", reason: "Urlaub" };
   function close() {
     setOpen(false);

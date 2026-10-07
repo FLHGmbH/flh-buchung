@@ -81,7 +81,7 @@ export function BookPage() {
   if (!pub) {
     return (
       <BookShell slug={slug}>
-        {err ? <p className="err" role="alert">{err}</p> : <p className="lead wait">Laden…</p>}
+        {err ? <p className="err" role="alert">{err}</p> : <BookBones />}
       </BookShell>
     );
   }
@@ -257,7 +257,7 @@ export function BookPage() {
 
       {step === 2 && (
         <>
-          {pending && !slots.length ? <p className="lead wait">Termine werden geladen…</p> : null}
+          {pending && !slots.length ? <DayBones /> : null}
           <div className="days">
             {days.map((d) => (
               <button key={d.key} type="button" disabled={!d.open} className={day === d.key ? "on" : ""} onClick={() => { setDay(d.key); setStep(hasOffer && offer && !ids.includes(offer.id) ? 3 : 4); }}>
@@ -290,7 +290,7 @@ export function BookPage() {
 
       {step === 4 && (
         <>
-          {pending ? <p className="lead wait">Termine werden geladen…</p> : null}
+          {pending ? <SlotBones /> : null}
           <div className="slots">
             {uniqueStarts(daySlots).map((s) => (
               <button
@@ -505,6 +505,45 @@ function UpsellOffer({ name, detail, line, on, onToggle }: { name: string; detai
           {on ? "Doch nicht" : "Dazunehmen"}
         </button>
       </div>
+    </div>
+  );
+}
+
+function BookBones() {
+  return (
+    <div className="book-bones" role="status" aria-label="Laden">
+      <span className="bone bone-logo" />
+      <span className="bone bone-h" />
+      <span className="bone bone-lead" />
+      <div className="book-pick">
+        <div className="book-list">
+          <span className="bone bone-choice" />
+          <span className="bone bone-choice" />
+          <span className="bone bone-choice" />
+          <span className="bone bone-choice" />
+        </div>
+        <aside className="book-cart" aria-hidden="true">
+          <span className="bone bone-line" />
+          <span className="bone bone-line" />
+          <span className="bone bone-btn" />
+        </aside>
+      </div>
+    </div>
+  );
+}
+
+function DayBones() {
+  return (
+    <div className="days" role="status" aria-label="Termine werden geladen">
+      {Array.from({ length: 14 }, (_, i) => <span key={i} className="bone bone-day" />)}
+    </div>
+  );
+}
+
+function SlotBones() {
+  return (
+    <div className="slots" role="status" aria-label="Termine werden geladen">
+      {Array.from({ length: 8 }, (_, i) => <span key={i} className="bone bone-slot" />)}
     </div>
   );
 }

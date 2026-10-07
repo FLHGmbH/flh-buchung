@@ -580,3 +580,38 @@ export function BookingModal({
     </Modal>
   );
 }
+
+export function Skel({ kind }: { kind: "cal" | "dash" | "table" | "staff" | "hours" | "lines" }) {
+  const n = (count: number, className: string) => Array.from({ length: count }, (_, i) => <span key={i} className={"bone " + className} />);
+  const body = kind === "dash" ? (
+    <>
+      <div className="page-head"><span className="bone bone-h" /></div>
+      <div className="stat-row four">{n(4, "bone-stat")}</div>
+      <div className="dash-grid">{n(2, "bone-panel")}</div>
+    </>
+  ) : kind === "cal" ? (
+    <>
+      <div className="page-head"><span className="bone bone-h" /></div>
+      <div className="skel-week">{n(7, "bone-col")}</div>
+    </>
+  ) : kind === "staff" ? (
+    <>
+      <div className="page-head"><span className="bone bone-h" /></div>
+      <div className="staff-grid">{n(3, "bone-card")}</div>
+    </>
+  ) : kind === "hours" ? (
+    <>
+      <div className="page-head"><span className="bone bone-h" /></div>
+      <div className="skel-stack">{n(7, "bone-hour")}</div>
+    </>
+  ) : kind === "lines" ? (
+    <div className="skel-stack">{n(4, "bone-line")}</div>
+  ) : (
+    <>
+      <div className="page-head"><span className="bone bone-h" /></div>
+      <div className="card-table">{n(6, "bone-row")}</div>
+    </>
+  );
+  if (kind === "lines") return <div role="status" aria-label="Laden">{body}</div>;
+  return <div className={"page" + (kind === "dash" ? " wide" : "")} role="status" aria-label="Laden">{body}</div>;
+}
