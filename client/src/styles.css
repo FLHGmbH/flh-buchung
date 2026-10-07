@@ -1047,6 +1047,14 @@ button.week-head.today {
   margin: 0;
   padding: 2px 6px;
   justify-content: flex-start;
+  cursor: grab;
+  touch-action: none;
+}
+.day-col .ev.is-drag {
+  z-index: 6;
+  cursor: grabbing;
+  box-shadow: 0 10px 24px rgba(15, 23, 32, 0.18);
+  transition: transform 0.16s cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 .day-col .ev.is-tight {
   min-height: 0;
@@ -1700,7 +1708,7 @@ button.week-head.today {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .btn, .cat-fold-h .chev, .sidebar a, .table.click tbody tr, .staff-card, .choice, .choice-mark, .ev, .book-bar i, .days button { transition: none; }
+  .btn, .cat-fold-h .chev, .sidebar a, .table.click tbody tr, .staff-card, .choice, .choice-mark, .ev, .day-col .ev.is-drag, .book-bar i, .days button { transition: none; }
   .btn:hover, .staff-card:hover, .choice:active { transform: none; }
   .btn:disabled, .lead.wait { animation: none; }
 }

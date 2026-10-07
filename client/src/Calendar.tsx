@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import { api, useApi, type Booking, type Bootstrap, type WeekPayload } from "./api";
 import { BookingModal, coverService, firstOpen, PageHead, staffColor, staffTone } from "./ui";
 
@@ -107,11 +107,19 @@ function chipHeight(durationPx: number, room: number) {
   return Math.max(durationPx, Math.min(CHIP, room));
 }
 
+function snapMins(topPx: number, firstHour: number, hours: number) {
+  const raw = firstHour * 60 + (topPx / ROW) * 60;
+  const last = (firstHour + hours) * 60 - 15;
+  const n = Math.round(raw / 15) * 15;
+  return Math.min(last, Math.max(firstHour * 60, n));
+}
+
 function checkLanes() {
   const same = lanes([{ start: 0, end: 60 }, { start: 0, end: 30 }]);
   const touch = lanes([{ start: 0, end: 30 }, { start: 30, end: 60 }]);
   if (same[0].cols !== 2 || same[0].col === same[1].col || touch.some((e) => e.cols !== 1)) throw new Error("lanes");
   if (chipHeight(16, 64) !== 32 || chipHeight(16, 16) !== 16 || chipHeight(48, 48) !== 48 || chipHeight(10, 40) !== 32) throw new Error("chip");
+  if (snapMins(0, 8, 12) !== 480 || snapMins(8, 8, 12) !== 495 || snapMins(64, 8, 12) !== 540) throw new Error("snap");
 }
 checkLanes();
 
@@ -140,6 +148,10 @@ export function CalendarPage() {
   const boot = useApi<Bootstrap>("/api/app/bootstrap");
   const week = useApi<WeekPayload>(span === 7 ? `/api/app/week?from=${from}` : `/api/app/week?from=${from}&days=${span}`);
   const [pick, setPick] = useState<Booking | null>(null);
+  const [drag, setDrag] = useState<{ id: string; day: string; mins: number; dx: number; dy: number } | null>(null);
+  const [dragErr, setDragErr] = useState("");
+  const gridRef = useRef<HTMLDivElement>(null);
+  const skipClick = useRef(false);
   const [draft, setDraft] = useState<{ staffId?: string; serviceId?: string; date?: string; time?: string } | null>(null);
   const [focus, setFocus] = useState<{ day: string; hour: number } | null>(null);
 
@@ -213,6 +225,62 @@ export function CalendarPage() {
   const lastH = Math.max(END - 1, ...used);
   const rows = Array.from({ length: lastH - first + 1 }, (_, i) => first + i);
 
+  function grab(e: ReactPointerEvent<HTMLButtonElement>, b: Booking, start: number, day: string) {
+    if (e.button !== 0 || !b.staffId) return;
+    const ox = e.clientX;
+    const oy = e.clientY;
+    const originTop = e.currentTarget.offsetTop;
+    const spot = { day, mins: start, dx: 0, dy: 0 };
+    let moved = false;
+    const onMove = (ev: PointerEvent) => {
+      if (!moved && Math.hypot(ev.clientX - ox, ev.clientY - oy) < 6) return;
+      moved = true;
+      skipClick.current = true;
+      const cols = [...(gridRef.current?.querySelectorAll<HTMLElement>(".day-col") ?? [])];
+      const hit = cols.find((c) => {
+        const r = c.getBoundingClientRect();
+        return ev.clientX >= r.left && ev.clientX < r.right;
+      }) ?? cols[0];
+      if (!hit) return;
+      const targetDay = hit.dataset.day ?? day;
+      const mins = snapMins(originTop + (ev.clientY - oy), first, rows.length);
+      const targetTop = ((mins - first * 60) / 60) * ROW;
+      const originCol = cols.find((c) => c.dataset.day === day);
+      const dx = originCol ? hit.getBoundingClientRect().left - originCol.getBoundingClientRect().left : 0;
+      const next = { day: targetDay, mins, dx, dy: targetTop - originTop };
+      if (next.day === spot.day && next.mins === spot.mins) return;
+      spot.day = next.day;
+      spot.mins = next.mins;
+      spot.dx = next.dx;
+      spot.dy = next.dy;
+      setDrag({ id: b.id, ...next });
+    };
+    const onUp = () => {
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+      if (!moved || (spot.day === day && spot.mins === start)) {
+        setDrag(null);
+        return;
+      }
+      const hh = String(Math.floor(spot.mins / 60)).padStart(2, "0");
+      const mm = String(spot.mins % 60).padStart(2, "0");
+      api.patchBooking(b.id, {
+        staffId: b.staffId,
+        serviceId: b.serviceId,
+        startsAt: new Date(`${spot.day}T${hh}:${mm}`).toISOString(),
+        guestName: b.guestName,
+        guestEmail: b.guestEmail,
+        guestPhone: b.guestPhone,
+        note: b.note,
+      }).then(() => setDrag(null)).catch((ex) => {
+        setDrag(null);
+        setDragErr(ex instanceof Error ? ex.message : "Verschieben fehlgeschlagen.");
+      });
+    };
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
+  }
+
   return (
     <div className="page wide">
       <PageHead
@@ -236,6 +304,8 @@ export function CalendarPage() {
       {emptyStaff ? (
         <div className="empty">Noch keine Mitarbeiter. Lege unter Mitarbeiter Personen an, sonst bleibt das Raster leer.</div>
       ) : (
+        <>
+        {dragErr ? <p className="err" role="alert">{dragErr}</p> : null}
         <div className="cal-wrap">
           <div className="cal-main">
           <div className="cal-bar">
@@ -303,7 +373,7 @@ export function CalendarPage() {
             ) : null}
             {view !== "month" ? nowMark ? <div className="now-line" ref={lineRef} /> : null : null}
             {view !== "month" ? (
-            <div className={"week-grid" + (view === "day" ? " is-day" : "")}>
+            <div className={"week-grid" + (view === "day" ? " is-day" : "")} ref={gridRef}>
               <div className="week-head" />
               {dates.map((d) => (
                 <button
@@ -332,7 +402,7 @@ export function CalendarPage() {
                   return { b, start, end: start + dur };
                 }));
                 return (
-                  <div className="day-col" key={d}>
+                  <div className="day-col" data-day={d} key={d}>
                     {rows.map((h) => {
                       const time = `${String(h).padStart(2, "0")}:00`;
                       return (
@@ -363,11 +433,12 @@ export function CalendarPage() {
                       const height = chipHeight(px, room);
                       const tight = height < CHIP - 2;
                       const facts = [name, ma, svc].filter(Boolean).join(" · ");
+                      const held = drag?.id === b.id && (drag.day !== d || drag.mins !== start);
                       return (
                         <button
                           key={b.id}
                           type="button"
-                          className={"ev" + (tight ? " is-tight" : "")}
+                          className={"ev" + (tight ? " is-tight" : "") + (held ? " is-drag" : "")}
                           style={{
                             background: t.bg,
                             borderLeftColor: t.edge,
@@ -376,9 +447,15 @@ export function CalendarPage() {
                             height,
                             left: `calc(${(col / cols) * 100}% + 2px)`,
                             width: `calc(${100 / cols}% - 4px)`,
+                            transform: held ? `translate(${drag.dx}px, ${drag.dy}px)` : undefined,
                           }}
+                          onPointerDown={(e) => grab(e, b, start, d)}
                           onClick={(e) => {
                             e.stopPropagation();
+                            if (skipClick.current) {
+                              skipClick.current = false;
+                              return;
+                            }
                             setPick(b);
                           }}
                         >
@@ -399,9 +476,10 @@ export function CalendarPage() {
           </div>
           </div>
           <aside className="hint">
-            <p>Klick auf einen Termin oder eine freie Stunde. Der Termin geht an die nächste freie Person.</p>
+            <p>Zieh einen Termin auf eine andere Zeit. Er rastet in 15-Minuten-Schritten ein. Klick öffnet ihn.</p>
           </aside>
         </div>
+        </>
       )}
       {pick ? (
         <BookingModal
