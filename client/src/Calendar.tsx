@@ -114,12 +114,86 @@ function snapMins(topPx: number, firstHour: number, hours: number) {
   return Math.min(last, Math.max(firstHour * 60, n));
 }
 
+type Span = { start: number; end: number };
+
+function hmMin(hm: string) {
+  const [h, m] = hm.split(":").map(Number);
+  return h * 60 + m;
+}
+
+function mergeSpans(spans: Span[]) {
+  const sorted = spans.filter((s) => s.end > s.start).sort((a, b) => a.start - b.start || a.end - b.end);
+  const out: Span[] = [];
+  for (const s of sorted) {
+    const last = out.at(-1);
+    if (last && s.start <= last.end) last.end = Math.max(last.end, s.end);
+    else out.push({ start: s.start, end: s.end });
+  }
+  return out;
+}
+
+function openWindows(
+  day: string,
+  hours: { weekday: number; startHm: string; endHm: string }[],
+  shifts: { staffId: string; weekday: number; startHm: string; endHm: string }[],
+  staffId: string,
+) {
+  const wd = weekdayIndex(day) + 1;
+  const shop = hours.filter((h) => h.weekday === wd);
+  const marked = shifts.some((h) => h.staffId === staffId);
+  const own = shifts.filter((h) => h.staffId === staffId && h.weekday === wd);
+  const windows = marked
+    ? shop.flatMap((w) => own.flatMap((o) => {
+        const start = Math.max(hmMin(w.startHm), hmMin(o.startHm));
+        const end = Math.min(hmMin(w.endHm), hmMin(o.endHm));
+        return end > start ? [{ start, end }] : [];
+      }))
+    : shop.map((w) => ({ start: hmMin(w.startHm), end: hmMin(w.endHm) }));
+  return mergeSpans(windows);
+}
+
+function daySpan(startIso: string, endIso: string, day: string, tz: string): Span | null {
+  const endAt = new Date(endIso).getTime();
+  if (!(endAt > new Date(startIso).getTime())) return null;
+  const a = ymdTz(startIso, tz);
+  const b = ymdTz(new Date(endAt - 1).toISOString(), tz);
+  if (a > day || b < day) return null;
+  const start = a < day ? 0 : clockMins(startIso, tz);
+  const endMins = clockMins(endIso, tz);
+  const end = b > day || endMins === 0 ? 24 * 60 : endMins;
+  if (end <= start) return null;
+  return { start, end };
+}
+
+function fits(mins: number, dur: number, buf: number, open: Span[], busy: Span[]) {
+  const end = mins + dur + buf;
+  if (!open.some((w) => mins >= w.start && end <= w.end)) return false;
+  return !busy.some((b) => mins < b.end && end > b.start);
+}
+
+function shadeBlocks(from: number, to: number, bad: (t: number) => boolean) {
+  const out: Span[] = [];
+  for (let t = from; t < to; t += 15) {
+    if (!bad(t)) continue;
+    const last = out.at(-1);
+    if (last && last.end === t) last.end = t + 15;
+    else out.push({ start: t, end: t + 15 });
+  }
+  return out;
+}
+
 function checkLanes() {
   const same = lanes([{ start: 0, end: 60 }, { start: 0, end: 30 }]);
   const touch = lanes([{ start: 0, end: 30 }, { start: 30, end: 60 }]);
   if (same[0].cols !== 2 || same[0].col === same[1].col || touch.some((e) => e.cols !== 1)) throw new Error("lanes");
   if (chipHeight(16, 64) !== 32 || chipHeight(16, 16) !== 16 || chipHeight(48, 48) !== 48 || chipHeight(10, 40) !== 32) throw new Error("chip");
   if (snapMins(0, 8, 12) !== 480 || snapMins(8, 8, 12) !== 495 || snapMins(64, 8, 12) !== 540) throw new Error("snap");
+  const closed = shadeBlocks(480, 1200, (t) => !fits(t, 45, 0, [{ start: 540, end: 1080 }], []));
+  const hit = shadeBlocks(600, 780, (t) => !fits(t, 45, 0, [{ start: 0, end: 1440 }], [{ start: 660, end: 705 }]));
+  if (closed.length !== 2 || closed[0].end !== 540 || closed[1].start !== 1050 || hit.length !== 1 || hit[0].start !== 630 || hit[0].end !== 705) throw new Error("shade");
+  const cut = daySpan("2026-10-07T09:00:00.000Z", "2026-10-07T09:45:00.000Z", "2026-10-07", "Europe/Berlin");
+  const midn = daySpan("2026-10-07T21:00:00.000Z", "2026-10-07T22:00:00.000Z", "2026-10-07", "Europe/Berlin");
+  if (!cut || cut.start !== 660 || cut.end !== 705 || !midn || midn.start !== 1380 || midn.end !== 1440) throw new Error("span");
 }
 checkLanes();
 
@@ -225,6 +299,28 @@ export function CalendarPage() {
   const lastH = Math.max(END - 1, ...used);
   const rows = Array.from({ length: lastH - first + 1 }, (_, i) => first + i);
 
+  function blocked(b: Booking, day: string) {
+    const dur = Math.max(15, Math.round((new Date(b.endsAt).getTime() - new Date(b.startsAt).getTime()) / 60000));
+    const buf = boot.services.find((s) => s.id === b.serviceId)?.bufferMin ?? 0;
+    const open = b.staffId ? openWindows(day, boot.hours, boot.staffHours ?? [], b.staffId) : [];
+    const busy: Span[] = [];
+    if (b.staffId) {
+      for (const o of books) {
+        if (o.id === b.id || o.staffId !== b.staffId) continue;
+        if (o.status !== "confirmed" && o.status !== "pending") continue;
+        const extra = boot.services.find((s) => s.id === o.serviceId)?.bufferMin ?? 0;
+        const span = daySpan(o.startsAt, new Date(new Date(o.endsAt).getTime() + extra * 60_000).toISOString(), day, tz);
+        if (span) busy.push(span);
+      }
+      for (const o of week?.timeOff ?? []) {
+        if (o.staffId !== b.staffId) continue;
+        const span = daySpan(o.startsAt, o.endsAt, day, tz);
+        if (span) busy.push(span);
+      }
+    }
+    return (mins: number) => !fits(mins, dur, buf, open, busy);
+  }
+
   function grab(e: ReactPointerEvent<HTMLButtonElement>, b: Booking, start: number, day: string) {
     if (e.button !== 0 || !b.staffId) return;
     const ox = e.clientX;
@@ -234,6 +330,7 @@ export function CalendarPage() {
     let moved = false;
     const onMove = (ev: PointerEvent) => {
       if (!moved && Math.hypot(ev.clientX - ox, ev.clientY - oy) < 6) return;
+      if (!moved) setDragErr("");
       moved = true;
       skipClick.current = true;
       const cols = [...(gridRef.current?.querySelectorAll<HTMLElement>(".day-col") ?? [])];
@@ -262,6 +359,11 @@ export function CalendarPage() {
         setDrag(null);
         return;
       }
+      if (blocked(b, spot.day)(spot.mins)) {
+        setDrag(null);
+        setDragErr("Da ist zu oder schon belegt.");
+        return;
+      }
       const hh = String(Math.floor(spot.mins / 60)).padStart(2, "0");
       const mm = String(spot.mins % 60).padStart(2, "0");
       api.patchBooking(b.id, {
@@ -272,7 +374,7 @@ export function CalendarPage() {
         guestEmail: b.guestEmail,
         guestPhone: b.guestPhone,
         note: b.note,
-      }).then(() => setDrag(null)).catch((ex) => {
+      }).then(() => { setDrag(null); setDragErr(""); }).catch((ex) => {
         setDrag(null);
         setDragErr(ex instanceof Error ? ex.message : "Verschieben fehlgeschlagen.");
       });
@@ -401,8 +503,13 @@ export function CalendarPage() {
                   const dur = Math.max(1, (new Date(b.endsAt).getTime() - new Date(b.startsAt).getTime()) / 60000);
                   return { b, start, end: start + dur };
                 }));
+                const moving = drag ? books.find((x) => x.id === drag.id) : undefined;
+                const shades = moving ? shadeBlocks(first * 60, (first + rows.length) * 60, blocked(moving, d)) : [];
                 return (
                   <div className="day-col" data-day={d} key={d}>
+                    {shades.map((s) => (
+                      <div key={s.start} className="drag-shade" style={{ top: ((s.start - first * 60) / 60) * ROW, height: ((s.end - s.start) / 60) * ROW }} />
+                    ))}
                     {rows.map((h) => {
                       const time = `${String(h).padStart(2, "0")}:00`;
                       return (
@@ -434,11 +541,12 @@ export function CalendarPage() {
                       const tight = height < CHIP - 2;
                       const facts = [name, ma, svc].filter(Boolean).join(" · ");
                       const held = drag?.id === b.id && (drag.day !== d || drag.mins !== start);
+                      const bad = held && drag ? blocked(b, drag.day)(drag.mins) : false;
                       return (
                         <button
                           key={b.id}
                           type="button"
-                          className={"ev" + (tight ? " is-tight" : "") + (held ? " is-drag" : "")}
+                          className={"ev" + (tight ? " is-tight" : "") + (held ? " is-drag" : "") + (bad ? " is-bad" : "")}
                           style={{
                             background: t.bg,
                             borderLeftColor: t.edge,
@@ -476,7 +584,7 @@ export function CalendarPage() {
           </div>
           </div>
           <aside className="hint">
-            <p>Zieh einen Termin auf eine andere Zeit. Er rastet in 15-Minuten-Schritten ein. Klick öffnet ihn.</p>
+            <p>Zieh einen Termin auf eine freie Zeit. Er rastet in 15-Minuten-Schritten ein. Graue Flächen sind zu oder belegt.</p>
           </aside>
         </div>
         </>

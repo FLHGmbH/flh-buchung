@@ -7,7 +7,8 @@ import { DateTime } from "luxon";
 import { actorFrom, actorFromEmail, actorFromUserId, createSession, destroySession, dropUserSessions, ensurePlatformAdmin, hashPassword, sbEnsureUser, sbPassword, sbRecover, sbSetPassword, sbUser, verifyLogin, verifyPassword, type Actor } from "./auth.ts";
 import { db } from "./db.ts";
 import { BOOK_MAX, LEN, LOGIN_MAX, PIN_MAX, WINDOW_MS, bookWindow, clip, clientIp, hoursWithin, inIntRange, limited, logoKind, passwordOk, priceCents, readJson, sbConfigured, serviceMins, siteOrigin } from "./guard.ts";
-import { mailboxAddr, newPin, PIN_MS, sendConfirmMail, sendPinMail } from "./mail.ts";
+import { guestMail, guestPhone } from "../client/src/guest.ts";
+import { newPin, PIN_MS, sendConfirmMail, sendPinMail } from "./mail.ts";
 import {
   bookings,
   memberships,
@@ -950,26 +951,81 @@ api.get("/app/time-off", async (c) => {
 
 api.post("/app/time-off", async (c) => {
   const tid = tenantId(c);
-  const body = await readJson<{ staffId?: string; startsAt?: string; endsAt?: string; reason?: string }>(c);
+  const body = await readJson<{
+    staffId?: string;
+    from?: string;
+    to?: string;
+    reason?: string;
+    preview?: boolean;
+    moves?: { bookingId?: string; staffId?: string }[];
+  }>(c);
   if (!body) return c.json({ error: "Ungültige Anfrage." }, 400);
-  if (!body.staffId || !body.startsAt || !body.endsAt) return c.json({ error: "Mitarbeiter und Zeitraum nötig." }, 400);
-  if (!(await staffInTenant(tid, body.staffId))) return c.json({ error: "Mitarbeiter ungültig." }, 400);
-  const startsAt = new Date(body.startsAt);
-  const endsAt = new Date(body.endsAt);
-  if (Number.isNaN(startsAt.getTime()) || Number.isNaN(endsAt.getTime()) || endsAt <= startsAt) {
-    return c.json({ error: "Zeitraum ungültig." }, 400);
+  if (!body.staffId || !/^\d{4}-\d{2}-\d{2}$/.test(body.from ?? "") || !/^\d{4}-\d{2}-\d{2}$/.test(body.to ?? "")) {
+    return c.json({ error: "Mitarbeiter und Zeitraum nötig." }, 400);
   }
-  const [row] = await db
-    .insert(timeOff)
-    .values({
-      tenantId: tid,
-      staffId: body.staffId,
-      startsAt,
-      endsAt,
-      reason: clip(body.reason ?? "", LEN.reason),
+  if (!(await staffInTenant(tid, body.staffId))) return c.json({ error: "Mitarbeiter ungültig." }, 400);
+  const [tenant] = await db.select({ timezone: tenants.timezone }).from(tenants).where(eq(tenants.id, tid)).limit(1);
+  const zone = tenant?.timezone || "Europe/Berlin";
+  const start = DateTime.fromISO(body.from!, { zone }).startOf("day");
+  const end = DateTime.fromISO(body.to!, { zone }).plus({ days: 1 }).startOf("day");
+  if (!start.isValid || !end.isValid || end <= start) return c.json({ error: "Zeitraum ungültig." }, 400);
+  const hits = await db
+    .select({
+      id: bookings.id,
+      serviceId: bookings.serviceId,
+      startsAt: bookings.startsAt,
+      endsAt: bookings.endsAt,
+      guestName: bookings.guestName,
     })
-    .returning();
-  return c.json({ timeOff: row }, 201);
+    .from(bookings)
+    .where(and(
+      eq(bookings.tenantId, tid),
+      eq(bookings.staffId, body.staffId),
+      or(eq(bookings.status, "confirmed"), eq(bookings.status, "pending")),
+      lt(bookings.startsAt, end.toJSDate()),
+      gt(bookings.endsAt, start.toJSDate()),
+    ))
+    .orderBy(bookings.startsAt);
+  if (body.preview) return c.json({ bookings: hits });
+  const moves = Array.isArray(body.moves) ? body.moves : [];
+  if (moves.length !== hits.length || hits.some((h) => !moves.some((m) => m.bookingId === h.id && m.staffId))) {
+    return c.json({ error: "Für jeden Termin eine Vertretung wählen." }, 400);
+  }
+  const done: { id: string }[] = [];
+  for (const hit of hits) {
+    const next = moves.find((m) => m.bookingId === hit.id)?.staffId ?? "";
+    if (next === body.staffId) return c.json({ error: "Die Vertretung muss eine andere Person sein." }, 400);
+    if (!hit.serviceId) return c.json({ error: "Termin ohne Leistung." }, 400);
+    const allowed = await bookableStaffIds(tid, hit.serviceId, next);
+    if (!allowed.includes(next)) return c.json({ error: "Diese Person macht die Leistung nicht." }, 400);
+    await db.update(bookings).set({ staffId: next }).where(and(eq(bookings.id, hit.id), eq(bookings.tenantId, tid)));
+    done.push({ id: hit.id });
+    const deny = await denyIfTaken(tid, { staffId: next, serviceId: hit.serviceId, startsAt: hit.startsAt, endsAt: hit.endsAt }, hit.id);
+    if (deny) {
+      for (const row of done) {
+        await db.update(bookings).set({ staffId: body.staffId }).where(and(eq(bookings.id, row.id), eq(bookings.tenantId, tid)));
+      }
+      return c.json({ error: deny }, 409);
+    }
+  }
+  try {
+    const [row] = await db
+      .insert(timeOff)
+      .values({
+        tenantId: tid,
+        staffId: body.staffId,
+        startsAt: start.toJSDate(),
+        endsAt: end.toJSDate(),
+        reason: clip(body.reason ?? "", LEN.reason),
+      })
+      .returning();
+    return c.json({ timeOff: row }, 201);
+  } catch (e) {
+    for (const row of done) {
+      await db.update(bookings).set({ staffId: body.staffId }).where(and(eq(bookings.id, row.id), eq(bookings.tenantId, tid)));
+    }
+    throw e;
+  }
 });
 
 api.delete("/app/time-off/:id", async (c) => {
@@ -1276,9 +1332,10 @@ api.post("/public/:slug/book", async (c) => {
     .limit(1);
   const guestEmail = clip(body.guestEmail?.toLowerCase() ?? "", LEN.email);
   const guestName = clip(body.guestName ?? "", LEN.name);
-  if (!service || !body.staffId || !body.start || !guestName || mailboxAddr(guestEmail) !== guestEmail) {
+  if (!service || !body.staffId || !body.start || !guestName) {
     return c.json({ error: "Bitte alle Pflichtfelder ausfüllen (inkl. E-Mail)." }, 400);
   }
+  if (!guestMail(guestEmail)) return c.json({ error: "Bitte eine gültige E-Mail angeben." }, 400);
   if (limited(`bookmail:${tenant.id}:${guestEmail}`, BOOK_MAX, WINDOW_MS)) {
     return c.json({ error: "Zu viele Buchungen. Bitte später erneut." }, 429);
   }
@@ -1349,6 +1406,7 @@ api.post("/public/:slug/book", async (c) => {
   const pinHash = await hashPassword(pin);
   const pinExpiresAt = new Date(Date.now() + PIN_MS);
   const phone = clip(body.guestPhone ?? "", LEN.phone);
+  if (!guestPhone(phone)) return c.json({ error: "Bitte eine gültige Telefonnummer angeben." }, 400);
   const note = clip(body.note ?? "", LEN.note);
   const made: { id: string; startsAt: Date; endsAt: Date; guestName: string }[] = [];
   try {

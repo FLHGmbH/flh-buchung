@@ -118,8 +118,15 @@ function when(iso: string) {
   return { day, time };
 }
 
-function span(a: string, b: string) {
-  return `${new Date(a).toLocaleString("de-DE")} – ${new Date(b).toLocaleString("de-DE")}`;
+function offLast(iso: string) {
+  const d = new Date(iso);
+  if (d.getHours() === 0 && d.getMinutes() === 0 && d.getSeconds() === 0 && d.getMilliseconds() === 0) d.setDate(d.getDate() - 1);
+  return d;
+}
+
+function offLabel(a: string, b: string) {
+  const fmt = new Intl.DateTimeFormat("de-DE", { day: "2-digit", month: "2-digit", year: "numeric" });
+  return `${fmt.format(new Date(a))} – ${fmt.format(offLast(b))}`;
 }
 
 function nextOff(staffId: string, rows: TimeOff[]) {
@@ -127,10 +134,6 @@ function nextOff(staffId: string, rows: TimeOff[]) {
   return rows
     .filter((o) => o.staffId === staffId && new Date(o.endsAt).getTime() > now)
     .sort((a, b) => new Date(a.startsAt).getTime() - new Date(b.startsAt).getTime())[0];
-}
-
-function dm(iso: string) {
-  return new Intl.DateTimeFormat("de-DE", { day: "2-digit", month: "2-digit", year: "2-digit" }).format(new Date(iso));
 }
 
 export function BookingsPage() {
@@ -303,7 +306,7 @@ export function StaffPage() {
                   {abs ? (
                     <>
                       <small>{abs.reason || "Abwesenheit"}</small>
-                      <strong>{dm(abs.startsAt)} – {dm(abs.endsAt)}</strong>
+                      <strong>{offLabel(abs.startsAt, abs.endsAt)}</strong>
                     </>
                   ) : (
                     <span>Keine Abwesenheit</span>
@@ -961,26 +964,70 @@ export function HoursPage() {
   );
 }
 
+type Hit = { id: string; serviceId: string | null; startsAt: string; endsAt: string; guestName: string };
+
 export function TimeOffPage() {
   const boot = useBoot();
   const off = useApi<{ timeOff: TimeOff[] }>("/api/app/time-off");
   const rows = off?.timeOff ?? [];
   const [open, setOpen] = useState(false);
-  const [form, setForm] = useState({ staffId: "", startsAt: "", endsAt: "", reason: "Urlaub" });
+  const [form, setForm] = useState({ staffId: "", from: "", to: "", reason: "Urlaub" });
+  const [hits, setHits] = useState<Hit[] | null>(null);
+  const [moves, setMoves] = useState<Record<string, string>>({});
+  const [err, setErr] = useState("");
+  const [pending, setPending] = useState(false);
   if (!boot) return <div className="page" />;
-  function submit(e: FormEvent) {
+  const blank = { staffId: "", from: "", to: "", reason: "Urlaub" };
+  function close() {
+    setOpen(false);
+    setHits(null);
+    setMoves({});
+    setErr("");
+    setForm(blank);
+  }
+  function candidates(serviceId: string | null) {
+    const svc = boot!.services.find((s) => s.id === serviceId);
+    return boot!.staff.filter((s) => s.active && s.id !== form.staffId && svc?.staffIds.includes(s.id));
+  }
+  function look(e: FormEvent) {
     e.preventDefault();
+    setErr("");
+    setPending(true);
+    api.previewTimeOff(form)
+      .then((r) => {
+        const next: Record<string, string> = {};
+        for (const hit of r.bookings) {
+          const who = candidates(hit.serviceId);
+          next[hit.id] = who.length === 1 ? who[0].id : "";
+        }
+        setMoves(next);
+        setHits(r.bookings);
+      })
+      .catch((ex) => setErr(ex instanceof Error ? ex.message : "Termine nicht geladen."))
+      .finally(() => setPending(false));
+  }
+  function save(e: FormEvent) {
+    e.preventDefault();
+    if (hits?.some((h) => !moves[h.id])) {
+      setErr("Für jeden Termin eine Vertretung wählen.");
+      return;
+    }
+    setErr("");
+    setPending(true);
     api.addTimeOff({
       ...form,
-      startsAt: new Date(form.startsAt).toISOString(),
-      endsAt: new Date(form.endsAt).toISOString(),
-    }).then(() => { setOpen(false); setForm({ staffId: "", startsAt: "", endsAt: "", reason: "Urlaub" }); });
+      moves: (hits ?? []).map((h) => ({ bookingId: h.id, staffId: moves[h.id] })),
+    })
+      .then(() => close())
+      .catch((ex) => setErr(ex instanceof Error ? ex.message : "Speichern fehlgeschlagen."))
+      .finally(() => setPending(false));
   }
+  const ready = !hits?.some((h) => !moves[h.id]);
   return (
     <div className="page">
       <PageHead
         title="Sperren"
-        aside={<button className="btn" type="button" onClick={() => setOpen(true)}>+ Sperre</button>}
+        aside={<button className="btn" type="button" onClick={() => { setErr(""); setHits(null); setOpen(true); }}>+ Sperre</button>}
       />
       <div className="card-table">
         <table className="table quiet">
@@ -996,7 +1043,7 @@ export function TimeOffPage() {
             {rows.map((r) => (
               <tr key={r.id}>
                 <td>{boot.staff.find((s) => s.id === r.staffId)?.name}</td>
-                <td>{span(r.startsAt, r.endsAt)}</td>
+                <td>{offLabel(r.startsAt, r.endsAt)}</td>
                 <td>{r.reason}</td>
                 <td><button className="linkish" type="button" onClick={() => api.delTimeOff(r.id)}>Löschen</button></td>
               </tr>
@@ -1005,36 +1052,78 @@ export function TimeOffPage() {
         </table>
       </div>
       {open ? (
-        <Modal title="Neue Sperre" onClose={() => setOpen(false)}>
-          <form onSubmit={submit}>
-            <label className="field">
-              <span>Mitarbeiter</span>
-              <select value={form.staffId} onChange={(e) => setForm({ ...form, staffId: e.target.value })} required>
-                <option value="">Bitte wählen</option>
-                {boot.staff.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
-              </select>
-            </label>
-            <div className="fields-2">
+        <Modal title={hits ? "Termine übernehmen" : "Neue Sperre"} wide={Boolean(hits?.length)} onClose={close}>
+          {hits ? (
+            <form onSubmit={save}>
+              <p className="lead">{form.from.split("-").reverse().join(".")} – {form.to.split("-").reverse().join(".")}. {hits.length ? "Wähle, wer die Termine übernimmt." : "Keine Termine in diesem Zeitraum."}</p>
+              {hits.length ? (
+                <table className="table quiet">
+                  <thead>
+                    <tr>
+                      <th>Termin</th>
+                      <th>Übernimmt</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {hits.map((h) => {
+                      const w = when(h.startsAt);
+                      const who = candidates(h.serviceId);
+                      return (
+                        <tr key={h.id}>
+                          <td>
+                            <strong>{w.day} · {w.time}</strong>
+                            <div>{h.guestName} · {boot.services.find((s) => s.id === h.serviceId)?.name ?? "Termin"}</div>
+                          </td>
+                          <td>
+                            <select aria-label={`Vertretung für ${h.guestName}`} value={moves[h.id] ?? ""} onChange={(e) => setMoves({ ...moves, [h.id]: e.target.value })} required>
+                              <option value="">{who.length ? "Bitte wählen" : "Keine Vertretung"}</option>
+                              {who.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+                            </select>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              ) : null}
+              {err ? <p className="err" role="alert">{err}</p> : null}
+              <div className="modal-foot">
+                <button type="button" className="btn outline" onClick={() => { setHits(null); setErr(""); }}>Zurück</button>
+                <button className={ready ? "btn" : "btn is-hold"} type="submit" disabled={pending || !ready}>Speichern</button>
+              </div>
+            </form>
+          ) : (
+            <form onSubmit={look}>
               <label className="field">
-                <span>Von</span>
-                <input type="datetime-local" value={form.startsAt} onChange={(e) => setForm({ ...form, startsAt: e.target.value })} required />
+                <span>Mitarbeiter</span>
+                <select value={form.staffId} onChange={(e) => setForm({ ...form, staffId: e.target.value })} required>
+                  <option value="">Bitte wählen</option>
+                  {boot.staff.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+                </select>
               </label>
+              <div className="fields-2">
+                <label className="field">
+                  <span>Von</span>
+                  <input type="date" value={form.from} onChange={(e) => setForm({ ...form, from: e.target.value })} required />
+                </label>
+                <label className="field">
+                  <span>Bis</span>
+                  <input type="date" value={form.to} min={form.from || undefined} onChange={(e) => setForm({ ...form, to: e.target.value })} required />
+                </label>
+              </div>
               <label className="field">
-                <span>Bis</span>
-                <input type="datetime-local" value={form.endsAt} onChange={(e) => setForm({ ...form, endsAt: e.target.value })} required />
+                <span>Grund</span>
+                <select value={form.reason} onChange={(e) => setForm({ ...form, reason: e.target.value })}>
+                  {REASONS.map((r) => <option key={r}>{r}</option>)}
+                </select>
               </label>
-            </div>
-            <label className="field">
-              <span>Grund</span>
-              <select value={form.reason} onChange={(e) => setForm({ ...form, reason: e.target.value })}>
-                {REASONS.map((r) => <option key={r}>{r}</option>)}
-              </select>
-            </label>
-            <div className="modal-foot">
-              <button type="button" className="btn outline" onClick={() => setOpen(false)}>Abbrechen</button>
-              <button className="btn" type="submit">Sperre erstellen</button>
-            </div>
-          </form>
+              {err ? <p className="err" role="alert">{err}</p> : null}
+              <div className="modal-foot">
+                <button type="button" className="btn outline" onClick={close}>Abbrechen</button>
+                <button className="btn" type="submit" disabled={pending}>{pending ? "Lädt…" : "Speichern"}</button>
+              </div>
+            </form>
+          )}
         </Modal>
       ) : null}
     </div>

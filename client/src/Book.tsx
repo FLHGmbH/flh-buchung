@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useParams } from "react-router-dom";
 import { api, type Pub } from "./api";
+import { guestMail, guestPhone } from "./guest";
 import { Fold, gsap, reduced, StepPane, useGSAP } from "./motion";
 import { euro, serviceLine } from "./ui";
 
@@ -266,6 +267,15 @@ export function BookPage() {
           onSubmit={(e) => {
             e.preventDefault();
             if (!privacy) return;
+            if (!guestMail(guest.guestEmail)) {
+              setErr("Bitte eine gültige E-Mail angeben.");
+              return;
+            }
+            if (!guestPhone(guest.guestPhone)) {
+              setErr("Bitte eine gültige Telefonnummer angeben.");
+              return;
+            }
+            setErr("");
             setPending(true);
             api.book(slug, {
               serviceId,
@@ -285,8 +295,33 @@ export function BookPage() {
         >
           <p className="book-when">{new Date(slot.start).toLocaleDateString("de-DE", { weekday: "short", day: "numeric", month: "short" })} · {chainClock(slot.start, ids, pub.services)}</p>
           <label className="field"><span>Name</span><input required value={guest.guestName} onChange={(e) => setGuest({ ...guest, guestName: e.target.value })} placeholder="Max Mustermann" /></label>
-          <label className="field"><span>E-Mail</span><input type="email" required value={guest.guestEmail} onChange={(e) => setGuest({ ...guest, guestEmail: e.target.value })} placeholder="max@mustermann.de" /></label>
-          <label className="field"><span>Telefon</span><input value={guest.guestPhone} onChange={(e) => setGuest({ ...guest, guestPhone: e.target.value })} placeholder="0151 12345678" /></label>
+          <label className="field">
+            <span>E-Mail</span>
+            <input
+              type="email"
+              required
+              inputMode="email"
+              autoComplete="email"
+              aria-invalid={guest.guestEmail.trim() !== "" && !guestMail(guest.guestEmail)}
+              value={guest.guestEmail}
+              onChange={(e) => setGuest({ ...guest, guestEmail: e.target.value })}
+              placeholder="max@mustermann.de"
+            />
+            {guest.guestEmail.trim() && !guestMail(guest.guestEmail) ? <small className="err">Bitte eine gültige E-Mail, zum Beispiel max@mustermann.de.</small> : null}
+          </label>
+          <label className="field">
+            <span>Telefon</span>
+            <input
+              type="tel"
+              inputMode="tel"
+              autoComplete="tel"
+              aria-invalid={guest.guestPhone.trim() !== "" && !guestPhone(guest.guestPhone)}
+              value={guest.guestPhone}
+              onChange={(e) => setGuest({ ...guest, guestPhone: e.target.value })}
+              placeholder="0151 12345678"
+            />
+            {guest.guestPhone.trim() && !guestPhone(guest.guestPhone) ? <small className="err">Bitte eine gültige Telefonnummer, zum Beispiel 0151 12345678.</small> : null}
+          </label>
           <label className="field"><span>Notiz</span><textarea value={guest.note} onChange={(e) => setGuest({ ...guest, note: e.target.value })} /></label>
           <label className="check agree">
             <input type="checkbox" checked={privacy} onChange={(e) => setPrivacy(e.target.checked)} required />
@@ -294,7 +329,7 @@ export function BookPage() {
               Ich habe die <a href={`/b/${slug}/datenschutz`} target="_blank" rel="noreferrer">Datenschutzerklärung</a> gelesen. {pub.tenant.name} darf Name und E-Mail für diesen Termin speichern.
             </span>
           </label>
-          <button className={privacy ? "btn" : "btn is-hold"} disabled={pending || !privacy} type="submit">{pending ? "Sendet Code…" : "Code per Mail"}</button>
+          <button className={privacy && guestMail(guest.guestEmail) && guestPhone(guest.guestPhone) ? "btn" : "btn is-hold"} disabled={pending || !privacy || !guestMail(guest.guestEmail) || !guestPhone(guest.guestPhone)} type="submit">{pending ? "Sendet Code…" : "Code per Mail"}</button>
           <button className="btn quiet book-back" type="button" onClick={() => setStep(3)}>Zurück</button>
         </form>
       )}

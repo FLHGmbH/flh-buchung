@@ -223,6 +223,7 @@ export const api = {
   putMailImage: (body: FormData) => mutate("/api/app/mail-image", { method: "POST", body }),
   delMailImage: () => mutate("/api/app/mail-image", { method: "DELETE" }),
   timeOff: () => inflight<{ timeOff: TimeOff[] }>("/api/app/time-off"),
+  previewTimeOff: (body: object) => req<{ bookings: { id: string; serviceId: string | null; startsAt: string; endsAt: string; guestName: string }[] }>("/api/app/time-off", { method: "POST", body: JSON.stringify({ ...body, preview: true }) }),
   addTimeOff: (body: object) => mutate("/api/app/time-off", { method: "POST", body: JSON.stringify(body) }),
   delTimeOff: (id: string) => mutate(`/api/app/time-off/${id}`, { method: "DELETE" }),
   bookings: () => inflight<{ bookings: Booking[] }>("/api/app/bookings"),

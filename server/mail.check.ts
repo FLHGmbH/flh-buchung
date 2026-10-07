@@ -1,3 +1,4 @@
+import { guestMail, guestPhone } from "../client/src/guest.ts";
 import { confirmIcs, dotStuff, encodeSubject, escHtml, icsEscape, icsFold, icsUtc, mailbox, mailboxAddr, mailEnding, mimeBody, newPin, PIN_MS } from "./mail.ts";
 
 function assert(cond: unknown, msg: string) {
@@ -18,6 +19,10 @@ assert(mailboxAddr("kalender@flh-webdesign.de") === "kalender@flh-webdesign.de",
 assert(mailbox("FLH <kalender@flh-webdesign.de>")?.header === "FLH <kalender@flh-webdesign.de>", "from header");
 assert(mailboxAddr("a@b.de\r\nRCPT TO:<c@d.de>") === null, "no crlf");
 assert(mailboxAddr("a@b.de\ncc@d.de") === null, "no lf");
+assert(guestMail("Max@Mustermann.DE") && guestMail("max.m+tag@example.co.uk"), "guest mail");
+assert(!guestMail("a@b") && !guestMail("a@b.c") && !guestMail("max@") && !guestMail("a@@b.de") && !guestMail("a@b.de\ncc@d.de"), "guest mail reject");
+assert(guestPhone("") && guestPhone("0151 12345678") && guestPhone("+49 151 12345678") && guestPhone("089/12345678"), "guest phone");
+assert(!guestPhone("abc") && !guestPhone("123") && !guestPhone("++49151") && !guestPhone("1234567890123456"), "guest phone reject");
 assert(encodeSubject("Code") === "Code", "ascii subject");
 assert(encodeSubject("für").startsWith("=?UTF-8?B?"), "utf8 subject");
 assert(dotStuff("ok\n.\nhi") === "ok\n..\nhi", "dot stuff");
