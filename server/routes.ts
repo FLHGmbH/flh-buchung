@@ -1323,14 +1323,6 @@ api.get("/public/:slug", async (c) => {
 async function publicChain(tenantId: string, serviceId: string, extraIds: string[]) {
   const ids = [serviceId, ...extraIds];
   if (ids.length > 9 || new Set(ids).size !== ids.length) return null;
-  if (extraIds.length) {
-    const rows = await db
-      .select()
-      .from(serviceCross)
-      .where(or(eq(serviceCross.serviceId, serviceId), eq(serviceCross.otherId, serviceId)));
-    const allowed = new Set(linkedIds(serviceId, rows));
-    if (extraIds.some((id) => !allowed.has(id))) return null;
-  }
   const rows = await db
     .select()
     .from(services)

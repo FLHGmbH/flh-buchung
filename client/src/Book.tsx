@@ -96,33 +96,19 @@ export function BookPage() {
     ...cats.map((c) => ({ id: c.id, name: c.name, rows: pub.services.filter((s) => s.categoryId === c.id) })),
     ...(loose.length ? [{ id: "_", name: "Weitere Leistungen", rows: loose }] : []),
   ];
-  function pairOk(cur: string[], id: string) {
-    if (!cur.length || cur.includes(id)) return true;
-    const main = pub.services.find((s) => s.id === cur[0]);
-    return (main?.crossIds ?? []).includes(id);
-  }
   function toggleService(id: string, keepStaff = false) {
-    setIds((cur) => {
-      if (!pairOk(cur, id)) return cur;
-      if (!cur.includes(id)) return [...cur, id];
-      const next = cur.filter((x) => x !== id);
-      const allow = new Set(pub.services.find((s) => s.id === next[0])?.crossIds ?? []);
-      return next.filter((x, i) => i === 0 || allow.has(x));
-    });
+    setIds((cur) => (cur.includes(id) ? cur.filter((x) => x !== id) : [...cur, id]));
     if (!keepStaff) setStaffId("");
     setSlot(null);
   }
   function svcRow(s: (typeof pub.services)[number], keepStaff = false) {
     const on = ids.includes(s.id);
-    const open = on || pairOk(ids, s.id);
     return (
       <div key={s.id} className={"choice svc-pick" + (on ? " on" : "")}>
-        <button className="choice-hit" type="button" disabled={!open} onClick={() => toggleService(s.id, keepStaff)}>{serviceLine(s)}</button>
-        {open ? (
-          <button className={"choice-mark" + (on ? " is-minus" : "")} type="button" aria-label={on ? `${s.name} entfernen` : `${s.name} hinzufügen`} onClick={() => toggleService(s.id, keepStaff)}>
-            <Mark minus={on} />
-          </button>
-        ) : null}
+        <button className="choice-hit" type="button" onClick={() => toggleService(s.id, keepStaff)}>{serviceLine(s)}</button>
+        <button className={"choice-mark" + (on ? " is-minus" : "")} type="button" aria-label={on ? `${s.name} entfernen` : `${s.name} hinzufügen`} onClick={() => toggleService(s.id, keepStaff)}>
+          <Mark minus={on} />
+        </button>
       </div>
     );
   }
@@ -137,11 +123,11 @@ export function BookPage() {
   const who = staffId ? pub.staff.find((s) => s.id === staffId)?.name ?? "Egal" : "Egal";
   const pickedDay = days.find((d) => d.key === day);
   const offer = service ? pub.services.find((s) => s.id !== service.id && (service.crossIds ?? []).includes(s.id)) : undefined;
-  const hasOffer = Boolean(offer);
-  const labels = hasOffer
+  const withUpsell = Boolean(offer) && ids.length <= 2 && ids.every((id, i) => i === 0 || id === offer?.id);
+  const labels = withUpsell
     ? ["Leistung", "Person", "Tag", "Dazu", "Uhrzeit", "Angaben", "Code", "Fertig"]
     : STEPS;
-  const at = hasOffer || step < 3 ? step : step - 1;
+  const at = withUpsell || step < 3 ? step : step - 1;
   const pickedNames = ids.map((id) => pub.services.find((s) => s.id === id)?.name).filter(Boolean).join(" + ");
   const recap = [
     pickedNames,
@@ -260,7 +246,7 @@ export function BookPage() {
           {pending && !slots.length ? <DayBones /> : null}
           <div className="days">
             {days.map((d) => (
-              <button key={d.key} type="button" disabled={!d.open} className={day === d.key ? "on" : ""} onClick={() => { setDay(d.key); setStep(hasOffer && offer && !ids.includes(offer.id) ? 3 : 4); }}>
+              <button key={d.key} type="button" disabled={!d.open} className={day === d.key ? "on" : ""} onClick={() => { setDay(d.key); setStep(ids.length === 1 && offer ? 3 : 4); }}>
                 <small>{d.wd}</small>
                 <strong>{d.num}</strong>
                 <small>{d.mon}</small>
@@ -304,7 +290,7 @@ export function BookPage() {
             ))}
           </div>
           {!pending && !daySlots.length ? <p>An dem Tag ist dafür nichts frei.</p> : null}
-          <button className="btn quiet book-back" type="button" onClick={() => setStep(hasOffer ? 3 : 2)}>Zurück</button>
+          <button className="btn quiet book-back" type="button" onClick={() => setStep(withUpsell ? 3 : 2)}>Zurück</button>
         </>
       )}
 
