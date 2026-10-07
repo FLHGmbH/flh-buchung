@@ -149,7 +149,7 @@ export function BookPage() {
     step > 2 && pickedDay ? `${pickedDay.wd} ${pickedDay.num}. ${pickedDay.mon}` : "",
     step > 4 && slot ? new Date(slot.start).toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" }) : "",
   ].filter(Boolean).join(" · ");
-  function cart(next: { go: () => void; on: boolean; quiet?: boolean }, lockMain = false) {
+  function cart(next: { go: () => void; on: boolean; label?: string }, lockMain = false) {
     return (
       <aside className="book-cart" aria-label="Auswahl">
         <div className="book-cart-h">
@@ -175,7 +175,7 @@ export function BookPage() {
           </ol>
         ) : <p>Noch keine Leistung.</p>}
         {picked.length ? <p className="book-cart-sum">{mins} Min.{cents != null ? ` · ${euro(cents)}` : ""}</p> : null}
-        {next.on ? <button className={next.quiet ? "btn outline" : "btn"} type="button" onClick={next.go}>Weiter</button> : null}
+        {next.on ? <button className="btn" type="button" onClick={next.go}>{next.label ?? "Weiter"}</button> : null}
       </aside>
     );
   }
@@ -275,20 +275,14 @@ export function BookPage() {
       {step === 3 && offer && (
         <>
           <div className="book-pick upsell">
-            <div className="upsell-pitch">
-              <h2>{offer.name} gleich mit?</h2>
-              <p>{service && service.name.length <= 32 ? `Direkt nach ${service.name}, im selben Termin.` : "Im selben Termin, direkt im Anschluss."}</p>
-              <div className={"upsell-card" + (ids.includes(offer.id) ? " on" : "")}>
-                <span>
-                  <strong>{offer.name}</strong>
-                  <small>{offer.durationMin} Min.{offer.priceCents != null ? ` · ${euro(offer.priceCents)}` : ""}</small>
-                </span>
-                <button className={ids.includes(offer.id) ? "btn outline" : "btn"} type="button" onClick={() => toggleService(offer.id, true)}>
-                  {ids.includes(offer.id) ? "Doch nicht" : "Dazunehmen"}
-                </button>
-              </div>
-            </div>
-            {cart({ go: () => setStep(4), on: true, quiet: !ids.includes(offer.id) }, true)}
+            <UpsellOffer
+              name={offer.name}
+              detail={offer.durationMin + " Min." + (offer.priceCents != null ? ` · ${euro(offer.priceCents)}` : "")}
+              line={service && service.name.length <= 32 ? `Direkt nach ${service.name}, im selben Termin.` : "Im selben Termin, direkt im Anschluss."}
+              on={ids.includes(offer.id)}
+              onToggle={() => toggleService(offer.id, true)}
+            />
+            {cart({ go: () => setStep(4), on: true, label: ids.includes(offer.id) ? "Weiter" : "Ohne weiter" }, true)}
           </div>
           <button className="btn quiet book-back" type="button" onClick={() => setStep(2)}>Zurück</button>
         </>
@@ -487,6 +481,30 @@ function BookShell({ children, slug }: { children: ReactNode; slug: string }) {
     <div className={"book-page" + (cookies ? " has-cookie" : "")}>
       <div className="book" ref={ref}>{children}</div>
       {cookies ? <CookieBar privacyHref={`/b/${slug}/datenschutz`} onOk={() => setCookies(false)} /> : null}
+    </div>
+  );
+}
+
+function UpsellOffer({ name, detail, line, on, onToggle }: { name: string; detail: string; line: string; on: boolean; onToggle: () => void }) {
+  const ref = useRef<HTMLDivElement>(null);
+  useGSAP(() => {
+    const btn = ref.current?.querySelector(".upsell-add");
+    if (!btn || reduced() || on) return;
+    gsap.fromTo(btn, { scale: 1 }, { scale: 1.04, duration: 0.5, ease: "sine.inOut", yoyo: true, repeat: 3, transformOrigin: "center", onComplete: () => gsap.set(btn, { clearProps: "transform" }) });
+  }, { scope: ref });
+  return (
+    <div className="upsell-pitch" ref={ref}>
+      <h2>{name} gleich mit?</h2>
+      <p>{line}</p>
+      <div className={"upsell-card" + (on ? " on" : "")}>
+        <span>
+          <strong>{name}</strong>
+          <small>{detail}</small>
+        </span>
+        <button className={on ? "btn outline upsell-add" : "btn upsell-add"} type="button" onClick={onToggle}>
+          {on ? "Doch nicht" : "Dazunehmen"}
+        </button>
+      </div>
     </div>
   );
 }
