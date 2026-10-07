@@ -643,6 +643,26 @@ export function ServicesPage() {
     if (next > slide && slide === 1 && !form.staffIds.length) { setErr("Mindestens eine Person wählen."); return; }
     setSlide(next);
   }
+  function save() {
+    if (!form) return;
+    setErr("");
+    const priceCents = centsFromEuro(form.price);
+    if (priceCents === false) {
+      setErr("Preis ungültig.");
+      return;
+    }
+    if (!form.categoryId) {
+      setErr("Kategorie nötig.");
+      return;
+    }
+    setPending(true);
+    const body = { name: form.name, durationMin: form.durationMin, bufferMin: form.bufferMin, staffIds: form.staffIds, crossIds: form.crossIds, active: form.active, categoryId: form.categoryId, priceCents };
+    const done = form.id ? api.patchService(form.id, body) : api.addService(body);
+    done
+      .then(() => setForm(null))
+      .catch((ex) => setErr(ex instanceof Error ? ex.message : "Speichern fehlgeschlagen."))
+      .finally(() => setPending(false));
+  }
   function catName(id: string | null | undefined) {
     return cats.find((c) => c.id === id)?.name ?? "—";
   }
@@ -761,27 +781,8 @@ export function ServicesPage() {
           <form
             onSubmit={(e) => {
               e.preventDefault();
-              if (slide < 2) {
-                go(slide + 1);
-                return;
-              }
-              setErr("");
-              const priceCents = centsFromEuro(form.price);
-              if (priceCents === false) {
-                setErr("Preis ungültig.");
-                return;
-              }
-              if (!form.categoryId) {
-                setErr("Kategorie nötig.");
-                return;
-              }
-              setPending(true);
-              const body = { name: form.name, durationMin: form.durationMin, bufferMin: form.bufferMin, staffIds: form.staffIds, crossIds: form.crossIds, active: form.active, categoryId: form.categoryId, priceCents };
-              const done = form.id ? api.patchService(form.id, body) : api.addService(body);
-              done
-                .then(() => setForm(null))
-                .catch((ex) => setErr(ex instanceof Error ? ex.message : "Speichern fehlgeschlagen."))
-                .finally(() => setPending(false));
+              if (slide < 2) go(slide + 1);
+              else save();
             }}
           >
             <p className="svc-step">Schritt {slide + 1} von 3 · {["Leistung", "Mitarbeiter", "Preis"][slide]}</p>
@@ -892,11 +893,9 @@ export function ServicesPage() {
               ) : (
                 <button type="button" className="btn outline" onClick={() => { setErr(""); setSlide(slide - 1); }}>Zurück</button>
               )}
-              {slide < 2 ? (
-                <button type="button" className="btn" onClick={() => go(slide + 1)}>Weiter</button>
-              ) : (
-                <button className="btn" type="submit" disabled={pending}>{pending ? "Speichern…" : "Speichern"}</button>
-              )}
+              <button type="button" className="btn" disabled={pending} onClick={() => (slide < 2 ? go(slide + 1) : save())}>
+                {pending ? "Speichern…" : slide < 2 ? "Weiter" : "Speichern"}
+              </button>
             </div>
           </form>
         </Modal>

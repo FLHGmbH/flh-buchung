@@ -85,12 +85,16 @@ function fold(s: string) {
 }
 
 export function matchTpl(q: string) {
-  const words = fold(q).split(/\s+/).filter((w) => w.length > 1);
+  const words = fold(q).split(/\s+/).filter((w) => w.length > 0);
   if (!words.length) return [];
-  return CATALOG.filter((t) => {
-    const hay = fold(`${t.group} ${t.name}`);
-    return words.every((w) => hay.includes(w));
-  }).slice(0, 8);
+  const hit = CATALOG.filter((t) => words.every((w) => fold(`${t.group} ${t.name}`).includes(w)));
+  const score = (t: Tpl) => {
+    const parts = fold(t.name).split(/[^a-z0-9]+/);
+    if (words.every((w) => parts[0]?.startsWith(w))) return 0;
+    if (words.every((w) => parts.some((part) => part.startsWith(w)))) return 1;
+    return 2;
+  };
+  return hit.sort((a, b) => score(a) - score(b)).slice(0, 8);
 }
 
 if (
@@ -98,7 +102,7 @@ if (
   matchTpl("pony")[0]?.buffer !== 5 ||
   matchTpl("balayage")[0]?.buffer !== 15 ||
   CATALOG.some((t) => t.buffer < 5 || t.buffer > 15) ||
-  matchTpl("a").length !== 0
+  matchTpl("").length !== 0 || matchTpl("p").length === 0
 ) {
   throw new Error("Vorlagen passen nicht.");
 }
