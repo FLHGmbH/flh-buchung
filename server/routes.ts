@@ -110,11 +110,33 @@ async function serviceIdsInTenant(tenantId: string, ids: string[]) {
   return rows.length === unique.length;
 }
 
+function linkedIds(serviceId: string, rows: { serviceId: string; otherId: string }[]) {
+  const ids: string[] = [];
+  for (const row of rows) {
+    const other = row.serviceId === serviceId ? row.otherId : row.otherId === serviceId ? row.serviceId : "";
+    if (other && other !== serviceId && !ids.includes(other)) ids.push(other);
+  }
+  return ids;
+}
+
 async function saveCross(tid: string, serviceId: string, ids: string[]) {
-  const unique = [...new Set(ids)].filter((id) => id && id !== serviceId);
-  if (!(await serviceIdsInTenant(tid, unique))) return false;
-  await db.delete(serviceCross).where(eq(serviceCross.serviceId, serviceId));
-  if (unique.length) await db.insert(serviceCross).values(unique.map((otherId) => ({ serviceId, otherId })));
+  const partner = ids.find((id) => id && id !== serviceId) ?? "";
+  if (partner && !(await serviceIdsInTenant(tid, [partner]))) return false;
+  const touch = partner
+    ? or(
+        eq(serviceCross.serviceId, serviceId),
+        eq(serviceCross.otherId, serviceId),
+        eq(serviceCross.serviceId, partner),
+        eq(serviceCross.otherId, partner),
+      )
+    : or(eq(serviceCross.serviceId, serviceId), eq(serviceCross.otherId, serviceId));
+  await db.delete(serviceCross).where(touch);
+  if (partner) {
+    await db.insert(serviceCross).values([
+      { serviceId, otherId: partner },
+      { serviceId: partner, otherId: serviceId },
+    ]);
+  }
   return true;
 }
 
@@ -642,7 +664,7 @@ api.get("/app/bootstrap", async (c) => {
     services: serviceRows.map((s) => ({
       ...s,
       staffIds: links.filter((l) => l.serviceId === s.id).map((l) => l.staffId),
-      crossIds: crosses.filter((l) => l.serviceId === s.id).map((l) => l.otherId),
+      crossIds: linkedIds(s.id, crosses),
     })),
     hours,
   });
@@ -1293,7 +1315,7 @@ api.get("/public/:slug", async (c) => {
       categoryId: s.categoryId,
       priceCents: s.priceCents,
       staffIds: links.filter((l) => l.serviceId === s.id).map((l) => l.staffId),
-      crossIds: crosses.filter((l) => l.serviceId === s.id).map((l) => l.otherId),
+      crossIds: linkedIds(s.id, crosses),
     })),
   });
 });
@@ -1302,7 +1324,11 @@ async function publicChain(tenantId: string, serviceId: string, extraIds: string
   const ids = [serviceId, ...extraIds];
   if (ids.length > 9 || new Set(ids).size !== ids.length) return null;
   if (extraIds.length) {
-    const allowed = new Set((await crossLinks([serviceId])).map((l) => l.otherId));
+    const rows = await db
+      .select()
+      .from(serviceCross)
+      .where(or(eq(serviceCross.serviceId, serviceId), eq(serviceCross.otherId, serviceId)));
+    const allowed = new Set(linkedIds(serviceId, rows));
     if (extraIds.some((id) => !allowed.has(id))) return null;
   }
   const rows = await db

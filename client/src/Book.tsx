@@ -139,7 +139,7 @@ export function BookPage() {
   const offer = service ? pub.services.find((s) => s.id !== service.id && (service.crossIds ?? []).includes(s.id)) : undefined;
   const hasOffer = Boolean(offer);
   const labels = hasOffer
-    ? ["Leistung", "Person", "Tag", "Zusatz", "Uhrzeit", "Angaben", "Code", "Fertig"]
+    ? ["Leistung", "Person", "Tag", "Dazu", "Uhrzeit", "Angaben", "Code", "Fertig"]
     : STEPS;
   const at = hasOffer || step < 3 ? step : step - 1;
   const pickedNames = ids.map((id) => pub.services.find((s) => s.id === id)?.name).filter(Boolean).join(" + ");
@@ -149,7 +149,7 @@ export function BookPage() {
     step > 2 && pickedDay ? `${pickedDay.wd} ${pickedDay.num}. ${pickedDay.mon}` : "",
     step > 4 && slot ? new Date(slot.start).toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" }) : "",
   ].filter(Boolean).join(" · ");
-  function cart(next: { go: () => void; on: boolean }, lockMain = false) {
+  function cart(next: { go: () => void; on: boolean; quiet?: boolean }, lockMain = false) {
     return (
       <aside className="book-cart" aria-label="Auswahl">
         <div className="book-cart-h">
@@ -175,7 +175,7 @@ export function BookPage() {
           </ol>
         ) : <p>Noch keine Leistung.</p>}
         {picked.length ? <p className="book-cart-sum">{mins} Min.{cents != null ? ` · ${euro(cents)}` : ""}</p> : null}
-        {next.on ? <button className="btn" type="button" onClick={next.go}>Weiter</button> : null}
+        {next.on ? <button className={next.quiet ? "btn outline" : "btn"} type="button" onClick={next.go}>Weiter</button> : null}
       </aside>
     );
   }
@@ -274,12 +274,21 @@ export function BookPage() {
 
       {step === 3 && offer && (
         <>
-          <div className="book-pick">
-            <div className="book-list">
-              <p className="lead">Optional dazu. Du kannst sie nehmen oder ohne sie weiter.</p>
-              {svcRow(offer, true)}
+          <div className="book-pick upsell">
+            <div className="upsell-pitch">
+              <h2>{offer.name} gleich mit?</h2>
+              <p>{service && service.name.length <= 32 ? `Direkt nach ${service.name}, im selben Termin.` : "Im selben Termin, direkt im Anschluss."}</p>
+              <div className={"upsell-card" + (ids.includes(offer.id) ? " on" : "")}>
+                <span>
+                  <strong>{offer.name}</strong>
+                  <small>{offer.durationMin} Min.{offer.priceCents != null ? ` · ${euro(offer.priceCents)}` : ""}</small>
+                </span>
+                <button className={ids.includes(offer.id) ? "btn outline" : "btn"} type="button" onClick={() => toggleService(offer.id, true)}>
+                  {ids.includes(offer.id) ? "Doch nicht" : "Dazunehmen"}
+                </button>
+              </div>
             </div>
-            {cart({ go: () => setStep(4), on: true }, true)}
+            {cart({ go: () => setStep(4), on: true, quiet: !ids.includes(offer.id) }, true)}
           </div>
           <button className="btn quiet book-back" type="button" onClick={() => setStep(2)}>Zurück</button>
         </>
