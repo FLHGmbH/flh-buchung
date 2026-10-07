@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { api, useApi, type Bootstrap, type Booking, type StaffShift, type TimeOff } from "./api";
+import { matchTpl } from "./catalog";
 import { Avatar, BookingModal, centsFromEuro, euro, euroInput, firstOpen, ImageDrop, Modal, PageHead, STAFF_COLORS, staffColor, svcTone } from "./ui";
 
 function useBoot() {
@@ -616,8 +617,9 @@ export function StaffPage() {
 
 export function ServicesPage() {
   const boot = useBoot();
-  const blank = { name: "", durationMin: 45, bufferMin: 0, staffIds: [] as string[], active: true, categoryId: "", price: "" };
+  const blank = { name: "", durationMin: 45, bufferMin: 0, staffIds: [] as string[], crossIds: [] as string[], active: true, categoryId: "", price: "" };
   const [form, setForm] = useState<(typeof blank & { id?: string }) | null>(null);
+  const [slide, setSlide] = useState(0);
   const [catForm, setCatForm] = useState<{ id?: string; name: string } | null>(null);
   const [err, setErr] = useState("");
   const [pending, setPending] = useState(false);
@@ -625,6 +627,21 @@ export function ServicesPage() {
   const cats = boot.categories ?? [];
   function toggle(id: string) {
     setForm((f) => f && ({ ...f, staffIds: f.staffIds.includes(id) ? f.staffIds.filter((x) => x !== id) : [...f.staffIds, id] }));
+  }
+  function toggleCross(id: string) {
+    setForm((f) => f && ({ ...f, crossIds: f.crossIds.includes(id) ? f.crossIds.filter((x) => x !== id) : [...f.crossIds, id] }));
+  }
+  function go(next: number) {
+    if (!form) return;
+    setErr("");
+    if (next > slide && slide === 0) {
+      if (!form.name.trim()) { setErr("Name nötig."); return; }
+      if (!(form.durationMin >= 5 && form.durationMin <= 480)) { setErr("Dauer muss 5–480 Minuten sein."); return; }
+      if (!(form.bufferMin >= 0 && form.bufferMin <= 120)) { setErr("Nachbearbeitung muss 0–120 Minuten sein."); return; }
+      if (!form.categoryId) { setErr("Kategorie nötig."); return; }
+    }
+    if (next > slide && slide === 1 && !form.staffIds.length) { setErr("Mindestens eine Person wählen."); return; }
+    setSlide(next);
   }
   function catName(id: string | null | undefined) {
     return cats.find((c) => c.id === id)?.name ?? "—";
@@ -636,7 +653,7 @@ export function ServicesPage() {
         aside={
           <div className="head-tools">
             <button className="btn outline" type="button" onClick={() => { setErr(""); setCatForm({ name: "" }); }}>+ Kategorie</button>
-            <button className="btn" type="button" onClick={() => { setErr(""); setForm({ ...blank }); }}>+ Leistung</button>
+            <button className="btn" type="button" onClick={() => { setErr(""); setSlide(0); setForm({ ...blank }); }}>+ Leistung</button>
           </div>
         }
       />
@@ -675,7 +692,8 @@ export function ServicesPage() {
                 key={s.id}
                 onClick={() => {
                   setErr("");
-                  setForm({ id: s.id, name: s.name, durationMin: s.durationMin, bufferMin: s.bufferMin, staffIds: [...s.staffIds], active: s.active, categoryId: s.categoryId ?? "", price: euroInput(s.priceCents) });
+                  setSlide(0);
+                  setForm({ id: s.id, name: s.name, durationMin: s.durationMin, bufferMin: s.bufferMin, staffIds: [...s.staffIds], crossIds: [...(s.crossIds ?? [])], active: s.active, categoryId: s.categoryId ?? "", price: euroInput(s.priceCents) });
                 }}
               >
                 <td>{s.name}</td>
@@ -739,18 +757,26 @@ export function ServicesPage() {
         </Modal>
       ) : null}
       {form ? (
-        <Modal title={form.id ? "Leistung" : "Neue Leistung"} onClose={() => setForm(null)}>
+        <Modal title={form.id ? "Leistung" : "Neue Leistung"} wide={slide === 0} onClose={() => setForm(null)}>
           <form
             onSubmit={(e) => {
               e.preventDefault();
+              if (slide < 2) {
+                go(slide + 1);
+                return;
+              }
               setErr("");
               const priceCents = centsFromEuro(form.price);
               if (priceCents === false) {
                 setErr("Preis ungültig.");
                 return;
               }
+              if (!form.categoryId) {
+                setErr("Kategorie nötig.");
+                return;
+              }
               setPending(true);
-              const body = { name: form.name, durationMin: form.durationMin, bufferMin: form.bufferMin, staffIds: form.staffIds, active: form.active, categoryId: form.categoryId || null, priceCents };
+              const body = { name: form.name, durationMin: form.durationMin, bufferMin: form.bufferMin, staffIds: form.staffIds, crossIds: form.crossIds, active: form.active, categoryId: form.categoryId, priceCents };
               const done = form.id ? api.patchService(form.id, body) : api.addService(body);
               done
                 .then(() => setForm(null))
@@ -758,72 +784,119 @@ export function ServicesPage() {
                 .finally(() => setPending(false));
             }}
           >
+            <p className="svc-step">Schritt {slide + 1} von 3 · {["Leistung", "Mitarbeiter", "Preis"][slide]}</p>
             {err ? <p className="err" role="alert">{err}</p> : null}
-            <label className="field">
-              <span>Name der Leistung</span>
-              <input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required placeholder="z.B. Bartpflege / Herrenhaarschnitt" />
-            </label>
-            <label className="field">
-              <span>Kategorie</span>
-              <select value={form.categoryId} onChange={(e) => setForm({ ...form, categoryId: e.target.value })}>
-                <option value="">Keine</option>
-                {cats.map((c) => (
-                  <option key={c.id} value={c.id}>{c.name}</option>
-                ))}
-              </select>
-            </label>
-            <p className="hint-line">Kategorie oben anlegen, dann hier zuordnen. Im Buchungs-iframe erscheint sie als Dropdown.</p>
-            <div className="fields-2">
-              <label className="field">
-                <span>Dauer</span>
-                <input type="number" min={5} max={480} value={form.durationMin} onChange={(e) => setForm({ ...form, durationMin: Number(e.target.value) })} />
-              </label>
-              <label className="field">
-                <span>Pufferzeit</span>
-                <input type="number" min={0} max={120} value={form.bufferMin} onChange={(e) => setForm({ ...form, bufferMin: Number(e.target.value) })} />
-              </label>
-            </div>
-            <label className="field">
-              <span>Preis (optional)</span>
-              <input inputMode="decimal" value={form.price} onChange={(e) => setForm({ ...form, price: e.target.value })} placeholder="z. B. 29,50" />
-            </label>
-            <p className="hint-line">Leer lassen, wenn kein Preis auf der Buchungsseite stehen soll. Euro, mit Komma oder Punkt.</p>
-            <div className="field">
-              <span>Zuständige Mitarbeiter</span>
-              {boot.staff.map((s) => (
-                <label className="check" key={s.id}>
-                  <input type="checkbox" checked={form.staffIds.includes(s.id)} onChange={() => toggle(s.id)} />
-                  {s.name}
+            {slide === 0 ? (
+              <>
+                <label className="field">
+                  <span>Name der Leistung</span>
+                  <input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required placeholder="z. B. Waschen, Schneiden, Föhnen" />
                 </label>
-              ))}
-            </div>
-            {form.id ? (
-              <label className="check">
-                <input type="checkbox" checked={form.active} onChange={(e) => setForm({ ...form, active: e.target.checked })} />
-                Aktiv
-              </label>
+                {matchTpl(form.name).length ? (
+                  <div className="tpl-list">
+                    {matchTpl(form.name).map((t) => (
+                      <button
+                        key={`${t.group}-${t.name}`}
+                        type="button"
+                        className="tpl-hit"
+                        onClick={() => setForm({ ...form, name: t.name, durationMin: t.min, bufferMin: t.buffer })}
+                      >
+                        <span>
+                          <strong>{t.name}</strong>
+                          <small>{t.group}</small>
+                        </span>
+                        <b>{t.min} min<small>+ {t.buffer} Puffer</small></b>
+                      </button>
+                    ))}
+                  </div>
+                ) : null}
+                <div className="fields-2">
+                  <label className="field">
+                    <span>Dauer</span>
+                    <input type="number" min={5} max={480} value={form.durationMin} onChange={(e) => setForm({ ...form, durationMin: Number(e.target.value) })} required />
+                  </label>
+                  <label className="field">
+                    <span>Nachbearbeitung</span>
+                    <input type="number" min={0} max={120} value={form.bufferMin} onChange={(e) => setForm({ ...form, bufferMin: Number(e.target.value) })} required />
+                  </label>
+                </div>
+                <label className="field">
+                  <span>Kategorie</span>
+                  <select value={form.categoryId} onChange={(e) => setForm({ ...form, categoryId: e.target.value })} required>
+                    <option value="">Bitte wählen</option>
+                    {cats.map((c) => (
+                      <option key={c.id} value={c.id}>{c.name}</option>
+                    ))}
+                  </select>
+                </label>
+                {!cats.length ? <p className="hint-line">Zuerst oben eine Kategorie anlegen.</p> : null}
+              </>
             ) : null}
-            {form.id ? (
-              <button
-                type="button"
-                className="btn danger staff-del"
-                disabled={pending}
-                onClick={() => {
-                  if (!window.confirm(`${form.name} wirklich löschen?`)) return;
-                  setErr("");
-                  setPending(true);
-                  api.delService(form.id as string)
-                    .then(() => setForm(null))
-                    .catch((ex) => setErr(ex instanceof Error ? ex.message : "Löschen fehlgeschlagen."))
-                    .finally(() => setPending(false));
-                }}
-              >
-                Löschen
-              </button>
+            {slide === 1 ? (
+              <div className="field">
+                <span>Wer darf die Leistung machen?</span>
+                {boot.staff.length ? boot.staff.map((s) => (
+                  <label className="check" key={s.id}>
+                    <input type="checkbox" checked={form.staffIds.includes(s.id)} onChange={() => toggle(s.id)} />
+                    {s.name}
+                  </label>
+                )) : <p className="hint-line">Noch kein Mitarbeiter angelegt.</p>}
+              </div>
+            ) : null}
+            {slide === 2 ? (
+              <>
+                <label className="field">
+                  <span>Preis (optional)</span>
+                  <input inputMode="decimal" value={form.price} onChange={(e) => setForm({ ...form, price: e.target.value })} placeholder="z. B. 29,50" />
+                </label>
+                <p className="hint-line">Leer lassen, wenn kein Preis auf der Buchungsseite stehen soll.</p>
+                <div className="field">
+                  <span>Zusammen buchbar (optional)</span>
+                  {boot.services.filter((s) => s.id !== form.id).length ? boot.services.filter((s) => s.id !== form.id).map((s) => (
+                    <label className="check" key={s.id}>
+                      <input type="checkbox" checked={form.crossIds.includes(s.id)} onChange={() => toggleCross(s.id)} />
+                      {s.name}
+                    </label>
+                  )) : <p className="hint-line">Noch keine andere Leistung.</p>}
+                </div>
+                <p className="hint-line">Im Buchungsfenster kann man diese Leistungen zur ausgewählten dazubuchen.</p>
+                {form.id ? (
+                  <label className="check">
+                    <input type="checkbox" checked={form.active} onChange={(e) => setForm({ ...form, active: e.target.checked })} />
+                    Aktiv
+                  </label>
+                ) : null}
+                {form.id ? (
+                  <button
+                    type="button"
+                    className="btn danger staff-del"
+                    disabled={pending}
+                    onClick={() => {
+                      if (!window.confirm(`${form.name} wirklich löschen?`)) return;
+                      setErr("");
+                      setPending(true);
+                      api.delService(form.id as string)
+                        .then(() => setForm(null))
+                        .catch((ex) => setErr(ex instanceof Error ? ex.message : "Löschen fehlgeschlagen."))
+                        .finally(() => setPending(false));
+                    }}
+                  >
+                    Löschen
+                  </button>
+                ) : null}
+              </>
             ) : null}
             <div className="modal-foot">
-              <button type="button" className="btn outline" onClick={() => setForm(null)}>Abbrechen</button>
-              <button className="btn" type="submit" disabled={pending}>{pending ? "Speichern…" : form.id ? "Speichern" : "Leistung erstellen"}</button>
+              {slide === 0 ? (
+                <button type="button" className="btn outline" onClick={() => setForm(null)}>Abbrechen</button>
+              ) : (
+                <button type="button" className="btn outline" onClick={() => { setErr(""); setSlide(slide - 1); }}>Zurück</button>
+              )}
+              {slide < 2 ? (
+                <button type="button" className="btn" onClick={() => go(slide + 1)}>Weiter</button>
+              ) : (
+                <button className="btn" type="submit" disabled={pending}>{pending ? "Speichern…" : "Speichern"}</button>
+              )}
             </div>
           </form>
         </Modal>
@@ -965,6 +1038,13 @@ export function HoursPage() {
 }
 
 type Hit = { id: string; serviceId: string | null; startsAt: string; endsAt: string; guestName: string };
+type Edit = { staffId: string; date: string; time: string; serviceId: string };
+
+function parts(iso: string) {
+  const d = new Date(iso);
+  const p = (n: number) => String(n).padStart(2, "0");
+  return { date: `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`, time: `${p(d.getHours())}:${p(d.getMinutes())}` };
+}
 
 export function TimeOffPage() {
   const boot = useBoot();
@@ -973,7 +1053,7 @@ export function TimeOffPage() {
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState({ staffId: "", from: "", to: "", reason: "Urlaub" });
   const [hits, setHits] = useState<Hit[] | null>(null);
-  const [moves, setMoves] = useState<Record<string, string>>({});
+  const [edits, setEdits] = useState<Record<string, Edit>>({});
   const [err, setErr] = useState("");
   const [pending, setPending] = useState(false);
   if (!boot) return <div className="page" />;
@@ -981,13 +1061,27 @@ export function TimeOffPage() {
   function close() {
     setOpen(false);
     setHits(null);
-    setMoves({});
+    setEdits({});
     setErr("");
     setForm(blank);
   }
-  function candidates(serviceId: string | null) {
+  function inside(date: string, time: string, serviceId: string) {
+    const dur = boot!.services.find((s) => s.id === serviceId)?.durationMin ?? 0;
+    const startAt = new Date(`${date}T${time}`).getTime();
+    if (Number.isNaN(startAt)) return true;
+    const blockStart = new Date(`${form.from}T00:00:00`).getTime();
+    const blockEnd = new Date(`${form.to}T00:00:00`).getTime() + 86_400_000;
+    return startAt < blockEnd && startAt + dur * 60_000 > blockStart;
+  }
+  function candidates(serviceId: string | null, blocked: boolean) {
     const svc = boot!.services.find((s) => s.id === serviceId);
-    return boot!.staff.filter((s) => s.active && s.id !== form.staffId && svc?.staffIds.includes(s.id));
+    return boot!.staff.filter((s) => s.active && svc?.staffIds.includes(s.id) && !(blocked && s.id === form.staffId));
+  }
+  function pick(serviceId: string | null, blocked: boolean, current: string) {
+    const who = candidates(serviceId, blocked);
+    if (who.some((s) => s.id === current)) return current;
+    if (!blocked && who.some((s) => s.id === form.staffId)) return form.staffId;
+    return who.length === 1 ? who[0].id : "";
   }
   function look(e: FormEvent) {
     e.preventDefault();
@@ -995,34 +1089,51 @@ export function TimeOffPage() {
     setPending(true);
     api.previewTimeOff(form)
       .then((r) => {
-        const next: Record<string, string> = {};
+        const next: Record<string, Edit> = {};
         for (const hit of r.bookings) {
-          const who = candidates(hit.serviceId);
-          next[hit.id] = who.length === 1 ? who[0].id : "";
+          const when = parts(hit.startsAt);
+          next[hit.id] = { ...when, serviceId: hit.serviceId ?? "", staffId: pick(hit.serviceId, true, "") };
         }
-        setMoves(next);
+        setEdits(next);
         setHits(r.bookings);
       })
       .catch((ex) => setErr(ex instanceof Error ? ex.message : "Termine nicht geladen."))
       .finally(() => setPending(false));
   }
+  function setEdit(id: string, part: Partial<Edit>) {
+    setEdits((prev) => {
+      const cur = { ...prev[id], ...part };
+      const was = inside(prev[id].date, prev[id].time, prev[id].serviceId);
+      const now = inside(cur.date, cur.time, cur.serviceId);
+      const staffId = was && !now ? pick(cur.serviceId, false, form.staffId) : pick(cur.serviceId, now, cur.staffId);
+      return { ...prev, [id]: { ...cur, staffId } };
+    });
+  }
   function save(e: FormEvent) {
     e.preventDefault();
-    if (hits?.some((h) => !moves[h.id])) {
-      setErr("Für jeden Termin eine Vertretung wählen.");
+    if (hits?.some((h) => !edits[h.id]?.staffId || !edits[h.id]?.date || !edits[h.id]?.time || !edits[h.id]?.serviceId)) {
+      setErr("Für jeden Termin Zeit, Leistung und eine Person wählen.");
       return;
     }
     setErr("");
     setPending(true);
     api.addTimeOff({
       ...form,
-      moves: (hits ?? []).map((h) => ({ bookingId: h.id, staffId: moves[h.id] })),
+      moves: (hits ?? []).map((h) => {
+        const edit = edits[h.id];
+        return {
+          bookingId: h.id,
+          staffId: edit.staffId,
+          serviceId: edit.serviceId,
+          startsAt: new Date(`${edit.date}T${edit.time}`).toISOString(),
+        };
+      }),
     })
       .then(() => close())
       .catch((ex) => setErr(ex instanceof Error ? ex.message : "Speichern fehlgeschlagen."))
       .finally(() => setPending(false));
   }
-  const ready = !hits?.some((h) => !moves[h.id]);
+  const ready = !hits?.some((h) => !edits[h.id]?.staffId || !edits[h.id]?.serviceId);
   return (
     <div className="page">
       <PageHead
@@ -1055,28 +1166,41 @@ export function TimeOffPage() {
         <Modal title={hits ? "Termine übernehmen" : "Neue Sperre"} wide={Boolean(hits?.length)} onClose={close}>
           {hits ? (
             <form onSubmit={save}>
-              <p className="lead">{form.from.split("-").reverse().join(".")} – {form.to.split("-").reverse().join(".")}. {hits.length ? "Wähle, wer die Termine übernimmt." : "Keine Termine in diesem Zeitraum."}</p>
+              <p className="lead">{form.from.split("-").reverse().join(".")} – {form.to.split("-").reverse().join(".")}. {hits.length ? "Verschieb den Termin oder wähle, wer ihn übernimmt." : "Keine Termine in diesem Zeitraum."}</p>
               {hits.length ? (
                 <table className="table quiet">
                   <thead>
                     <tr>
-                      <th>Termin</th>
-                      <th>Übernimmt</th>
+                      <th>Gast</th>
+                      <th>Wann</th>
+                      <th>Leistung</th>
+                      <th>Wer</th>
                     </tr>
                   </thead>
                   <tbody>
                     {hits.map((h) => {
-                      const w = when(h.startsAt);
-                      const who = candidates(h.serviceId);
+                      const edit = edits[h.id];
+                      if (!edit) return null;
+                      const blocked = inside(edit.date, edit.time, edit.serviceId);
+                      const who = candidates(edit.serviceId, blocked);
+                      const services = boot.services.filter((s) => s.active || s.id === edit.serviceId);
                       return (
                         <tr key={h.id}>
+                          <td><strong>{h.guestName}</strong></td>
                           <td>
-                            <strong>{w.day} · {w.time}</strong>
-                            <div>{h.guestName} · {boot.services.find((s) => s.id === h.serviceId)?.name ?? "Termin"}</div>
+                            <div className="when-edit">
+                              <input type="date" aria-label={`Tag für ${h.guestName}`} value={edit.date} onChange={(e) => setEdit(h.id, { date: e.target.value })} required />
+                              <input type="time" aria-label={`Uhrzeit für ${h.guestName}`} value={edit.time} onChange={(e) => setEdit(h.id, { time: e.target.value })} required />
+                            </div>
                           </td>
                           <td>
-                            <select aria-label={`Vertretung für ${h.guestName}`} value={moves[h.id] ?? ""} onChange={(e) => setMoves({ ...moves, [h.id]: e.target.value })} required>
-                              <option value="">{who.length ? "Bitte wählen" : "Keine Vertretung"}</option>
+                            <select aria-label={`Leistung für ${h.guestName}`} value={edit.serviceId} onChange={(e) => setEdit(h.id, { serviceId: e.target.value })} required>
+                              {services.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+                            </select>
+                          </td>
+                          <td>
+                            <select aria-label={`Mitarbeiter für ${h.guestName}`} value={edit.staffId} onChange={(e) => setEdit(h.id, { staffId: e.target.value })} required>
+                              <option value="">{who.length ? "Bitte wählen" : "Niemand frei"}</option>
                               {who.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
                             </select>
                           </td>

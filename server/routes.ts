@@ -14,6 +14,7 @@ import {
   memberships,
   openingHours,
   serviceCategories,
+  serviceCross,
   serviceStaff,
   services,
   staff,
@@ -92,6 +93,29 @@ async function bookableStaffIds(tenantId: string, serviceId: string, staffId: st
 async function staffLinks(serviceIds: string[]) {
   if (!serviceIds.length) return [];
   return db.select().from(serviceStaff).where(inArray(serviceStaff.serviceId, serviceIds));
+}
+
+async function crossLinks(serviceIds: string[]) {
+  if (!serviceIds.length) return [];
+  return db.select().from(serviceCross).where(inArray(serviceCross.serviceId, serviceIds));
+}
+
+async function serviceIdsInTenant(tenantId: string, ids: string[]) {
+  const unique = [...new Set(ids)];
+  if (!unique.length) return true;
+  const rows = await db
+    .select({ id: services.id })
+    .from(services)
+    .where(and(eq(services.tenantId, tenantId), inArray(services.id, unique)));
+  return rows.length === unique.length;
+}
+
+async function saveCross(tid: string, serviceId: string, ids: string[]) {
+  const unique = [...new Set(ids)].filter((id) => id && id !== serviceId);
+  if (!(await serviceIdsInTenant(tid, unique))) return false;
+  await db.delete(serviceCross).where(eq(serviceCross.serviceId, serviceId));
+  if (unique.length) await db.insert(serviceCross).values(unique.map((otherId) => ({ serviceId, otherId })));
+  return true;
 }
 
 async function categoryInTenant(tid: string, id: string | null | undefined) {
@@ -609,6 +633,7 @@ api.get("/app/bootstrap", async (c) => {
   const hours = await db.select().from(openingHours).where(eq(openingHours.tenantId, tid));
   const shifts = await db.select().from(staffHours).where(eq(staffHours.tenantId, tid));
   const categories = await db.select().from(serviceCategories).where(eq(serviceCategories.tenantId, tid)).orderBy(serviceCategories.sort);
+  const crosses = await crossLinks(serviceRows.map((s) => s.id));
   return c.json({
     tenant,
     staff: staffRows,
@@ -617,6 +642,7 @@ api.get("/app/bootstrap", async (c) => {
     services: serviceRows.map((s) => ({
       ...s,
       staffIds: links.filter((l) => l.serviceId === s.id).map((l) => l.staffId),
+      crossIds: crosses.filter((l) => l.serviceId === s.id).map((l) => l.otherId),
     })),
     hours,
   });
@@ -738,7 +764,7 @@ api.delete("/app/staff/:id/photo", async (c) => {
 
 api.post("/app/services", async (c) => {
   const tid = tenantId(c);
-  const body = await readJson<{ name?: string; durationMin?: number; bufferMin?: number; staffIds?: string[]; categoryId?: string | null; priceCents?: number | null }>(c);
+  const body = await readJson<{ name?: string; durationMin?: number; bufferMin?: number; staffIds?: string[]; categoryId?: string | null; priceCents?: number | null; crossIds?: string[] }>(c);
   if (!body) return c.json({ error: "Ungültige Anfrage." }, 400);
   const name = clip(body.name ?? "", LEN.name);
   const mins = serviceMins(body.durationMin, body.bufferMin);
@@ -748,13 +774,19 @@ api.post("/app/services", async (c) => {
   const ids = body.staffIds ?? [];
   if (!(await staffIdsInTenant(tid, ids))) return c.json({ error: "Mitarbeiter ungültig." }, 400);
   const categoryId = body.categoryId || null;
+  if (!categoryId) return c.json({ error: "Kategorie nötig." }, 400);
   if (!(await categoryInTenant(tid, categoryId))) return c.json({ error: "Kategorie ungültig." }, 400);
   const [row] = await db
     .insert(services)
     .values({ tenantId: tid, name, durationMin: mins.durationMin, bufferMin: mins.bufferMin, categoryId, priceCents: cents })
     .returning();
   if (ids.length) await db.insert(serviceStaff).values(ids.map((staffId) => ({ serviceId: row.id, staffId })));
-  return c.json({ service: { ...row, staffIds: ids } }, 201);
+  const crossIds = body.crossIds ?? [];
+  if (!(await saveCross(tid, row.id, crossIds))) {
+    await db.delete(services).where(eq(services.id, row.id));
+    return c.json({ error: "Kombination ungültig." }, 400);
+  }
+  return c.json({ service: { ...row, staffIds: ids, crossIds } }, 201);
 });
 
 api.patch("/app/services/:id", async (c) => {
@@ -768,6 +800,7 @@ api.patch("/app/services/:id", async (c) => {
     staffIds?: string[];
     categoryId?: string | null;
     priceCents?: number | null;
+    crossIds?: string[];
   }>(c);
   if (!body) return c.json({ error: "Ungültige Anfrage." }, 400);
   if (body.durationMin !== undefined && !inIntRange(body.durationMin, 5, 480)) {
@@ -781,6 +814,7 @@ api.patch("/app/services/:id", async (c) => {
   if (body.staffIds && !(await staffIdsInTenant(tid, body.staffIds))) {
     return c.json({ error: "Mitarbeiter ungültig." }, 400);
   }
+  if ("categoryId" in body && !body.categoryId) return c.json({ error: "Kategorie nötig." }, 400);
   if ("categoryId" in body && !(await categoryInTenant(tid, body.categoryId))) {
     return c.json({ error: "Kategorie ungültig." }, 400);
   }
@@ -803,7 +837,10 @@ api.patch("/app/services/:id", async (c) => {
       await db.insert(serviceStaff).values(body.staffIds.map((staffId) => ({ serviceId: id, staffId })));
     }
   }
-  return c.json({ service: { ...row, staffIds: body.staffIds } });
+  if (body.crossIds && !(await saveCross(tid, id, body.crossIds))) {
+    return c.json({ error: "Kombination ungültig." }, 400);
+  }
+  return c.json({ service: { ...row, staffIds: body.staffIds, crossIds: body.crossIds } });
 });
 
 api.delete("/app/services/:id", async (c) => {
@@ -957,7 +994,7 @@ api.post("/app/time-off", async (c) => {
     to?: string;
     reason?: string;
     preview?: boolean;
-    moves?: { bookingId?: string; staffId?: string }[];
+    moves?: { bookingId?: string; staffId?: string; serviceId?: string; startsAt?: string }[];
   }>(c);
   if (!body) return c.json({ error: "Ungültige Anfrage." }, 400);
   if (!body.staffId || !/^\d{4}-\d{2}-\d{2}$/.test(body.from ?? "") || !/^\d{4}-\d{2}-\d{2}$/.test(body.to ?? "")) {
@@ -991,20 +1028,44 @@ api.post("/app/time-off", async (c) => {
   if (moves.length !== hits.length || hits.some((h) => !moves.some((m) => m.bookingId === h.id && m.staffId))) {
     return c.json({ error: "Für jeden Termin eine Vertretung wählen." }, 400);
   }
-  const done: { id: string }[] = [];
+  const svcs = await db.select({ id: services.id, durationMin: services.durationMin }).from(services).where(eq(services.tenantId, tid));
+  const dur = new Map(svcs.map((s) => [s.id, s.durationMin]));
+  const plan: { id: string; staffId: string; serviceId: string; startsAt: Date; endsAt: Date }[] = [];
   for (const hit of hits) {
-    const next = moves.find((m) => m.bookingId === hit.id)?.staffId ?? "";
-    if (next === body.staffId) return c.json({ error: "Die Vertretung muss eine andere Person sein." }, 400);
-    if (!hit.serviceId) return c.json({ error: "Termin ohne Leistung." }, 400);
-    const allowed = await bookableStaffIds(tid, hit.serviceId, next);
-    if (!allowed.includes(next)) return c.json({ error: "Diese Person macht die Leistung nicht." }, 400);
-    await db.update(bookings).set({ staffId: next }).where(and(eq(bookings.id, hit.id), eq(bookings.tenantId, tid)));
-    done.push({ id: hit.id });
-    const deny = await denyIfTaken(tid, { staffId: next, serviceId: hit.serviceId, startsAt: hit.startsAt, endsAt: hit.endsAt }, hit.id);
+    const move = moves.find((m) => m.bookingId === hit.id);
+    const serviceId = move?.serviceId || hit.serviceId || "";
+    const minutes = dur.get(serviceId);
+    const startsAt = move?.startsAt ? new Date(move.startsAt) : hit.startsAt;
+    if (minutes == null || Number.isNaN(startsAt.getTime())) return c.json({ error: "Termin ungültig." }, 400);
+    const endsAt = new Date(startsAt.getTime() + minutes * 60_000);
+    const staffId = move?.staffId ?? "";
+    const inside = startsAt < end.toJSDate() && endsAt > start.toJSDate();
+    if (inside && staffId === body.staffId) {
+      return c.json({ error: "Der Termin liegt in der Sperre. Verschieb ihn oder wähle eine andere Person." }, 400);
+    }
+    plan.push({ id: hit.id, staffId, serviceId, startsAt, endsAt });
+  }
+  const snaps = hits.map((h) => ({ id: h.id, staffId: body.staffId, serviceId: h.serviceId, startsAt: h.startsAt, endsAt: h.endsAt }));
+  async function restore() {
+    for (const row of snaps) {
+      await db.update(bookings).set({
+        staffId: row.staffId,
+        serviceId: row.serviceId,
+        startsAt: row.startsAt,
+        endsAt: row.endsAt,
+      }).where(and(eq(bookings.id, row.id), eq(bookings.tenantId, tid)));
+    }
+  }
+  for (const row of plan) {
+    await db.update(bookings).set({
+      staffId: row.staffId,
+      serviceId: row.serviceId,
+      startsAt: row.startsAt,
+      endsAt: row.endsAt,
+    }).where(and(eq(bookings.id, row.id), eq(bookings.tenantId, tid)));
+    const deny = await denyIfTaken(tid, row, row.id);
     if (deny) {
-      for (const row of done) {
-        await db.update(bookings).set({ staffId: body.staffId }).where(and(eq(bookings.id, row.id), eq(bookings.tenantId, tid)));
-      }
+      await restore();
       return c.json({ error: deny }, 409);
     }
   }
@@ -1021,9 +1082,7 @@ api.post("/app/time-off", async (c) => {
       .returning();
     return c.json({ timeOff: row }, 201);
   } catch (e) {
-    for (const row of done) {
-      await db.update(bookings).set({ staffId: body.staffId }).where(and(eq(bookings.id, row.id), eq(bookings.tenantId, tid)));
-    }
+    await restore();
     throw e;
   }
 });
@@ -1216,6 +1275,7 @@ api.get("/public/:slug", async (c) => {
     .from(services)
     .where(and(eq(services.tenantId, tenant.id), eq(services.active, true)));
   const links = await staffLinks(serviceRows.map((s) => s.id));
+  const crosses = await crossLinks(serviceRows.map((s) => s.id));
   const categories = await db
     .select({ id: serviceCategories.id, name: serviceCategories.name })
     .from(serviceCategories)
@@ -1233,6 +1293,7 @@ api.get("/public/:slug", async (c) => {
       categoryId: s.categoryId,
       priceCents: s.priceCents,
       staffIds: links.filter((l) => l.serviceId === s.id).map((l) => l.staffId),
+      crossIds: crosses.filter((l) => l.serviceId === s.id).map((l) => l.otherId),
     })),
   });
 });
@@ -1240,6 +1301,10 @@ api.get("/public/:slug", async (c) => {
 async function publicChain(tenantId: string, serviceId: string, extraIds: string[]) {
   const ids = [serviceId, ...extraIds];
   if (ids.length > 9 || new Set(ids).size !== ids.length) return null;
+  if (extraIds.length) {
+    const allowed = new Set((await crossLinks([serviceId])).map((l) => l.otherId));
+    if (extraIds.some((id) => !allowed.has(id))) return null;
+  }
   const rows = await db
     .select()
     .from(services)

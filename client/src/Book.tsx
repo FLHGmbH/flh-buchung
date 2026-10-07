@@ -95,19 +95,33 @@ export function BookPage() {
     ...cats.map((c) => ({ id: c.id, name: c.name, rows: pub.services.filter((s) => s.categoryId === c.id) })),
     ...(loose.length ? [{ id: "_", name: "Weitere Leistungen", rows: loose }] : []),
   ];
+  function pairOk(cur: string[], id: string) {
+    if (!cur.length || cur.includes(id)) return true;
+    const main = pub.services.find((s) => s.id === cur[0]);
+    return (main?.crossIds ?? []).includes(id);
+  }
   function toggleService(id: string) {
-    setIds((cur) => (cur.includes(id) ? cur.filter((x) => x !== id) : [...cur, id]));
+    setIds((cur) => {
+      if (!pairOk(cur, id)) return cur;
+      if (!cur.includes(id)) return [...cur, id];
+      const next = cur.filter((x) => x !== id);
+      const allow = new Set(pub.services.find((s) => s.id === next[0])?.crossIds ?? []);
+      return next.filter((x, i) => i === 0 || allow.has(x));
+    });
     setStaffId("");
     setSlot(null);
   }
   function svcRow(s: (typeof pub.services)[number]) {
     const on = ids.includes(s.id);
+    const open = on || pairOk(ids, s.id);
     return (
       <div key={s.id} className={"choice svc-pick" + (on ? " on" : "")}>
-        <button className="choice-hit" type="button" onClick={() => toggleService(s.id)}>{serviceLine(s)}</button>
-        <button className={"choice-mark" + (on ? " is-minus" : "")} type="button" aria-label={on ? `${s.name} entfernen` : `${s.name} hinzufügen`} onClick={() => toggleService(s.id)}>
-          <Mark minus={on} />
-        </button>
+        <button className="choice-hit" type="button" disabled={!open} onClick={() => toggleService(s.id)}>{serviceLine(s)}</button>
+        {open ? (
+          <button className={"choice-mark" + (on ? " is-minus" : "")} type="button" aria-label={on ? `${s.name} entfernen` : `${s.name} hinzufügen`} onClick={() => toggleService(s.id)}>
+            <Mark minus={on} />
+          </button>
+        ) : null}
       </div>
     );
   }

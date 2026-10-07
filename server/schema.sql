@@ -58,6 +58,12 @@ CREATE TABLE IF NOT EXISTS services (
   active boolean NOT NULL DEFAULT true
 );
 
+CREATE TABLE IF NOT EXISTS service_cross (
+  service_id uuid NOT NULL REFERENCES services(id) ON DELETE CASCADE,
+  other_id uuid NOT NULL REFERENCES services(id) ON DELETE CASCADE,
+  PRIMARY KEY (service_id, other_id)
+);
+
 CREATE TABLE IF NOT EXISTS service_staff (
   service_id uuid NOT NULL REFERENCES services(id) ON DELETE CASCADE,
   staff_id uuid NOT NULL REFERENCES staff(id) ON DELETE CASCADE,

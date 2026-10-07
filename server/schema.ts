@@ -56,6 +56,15 @@ export const services = pgTable("services", {
   active: boolean("active").notNull().default(true),
 });
 
+export const serviceCross = pgTable(
+  "service_cross",
+  {
+    serviceId: uuid("service_id").notNull().references(() => services.id, { onDelete: "cascade" }),
+    otherId: uuid("other_id").notNull().references(() => services.id, { onDelete: "cascade" }),
+  },
+  (t) => [primaryKey({ columns: [t.serviceId, t.otherId] })],
+);
+
 export const serviceStaff = pgTable(
   "service_staff",
   {

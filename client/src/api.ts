@@ -294,7 +294,7 @@ export type TenantRow = {
 export type Staff = { id: string; name: string; active: boolean; photoUrl?: string | null; color?: string | null };
 export type StaffShift = { staffId: string; weekday: number; startHm: string; endHm: string };
 export type ServiceCategory = { id: string; name: string };
-export type Service = { id: string; name: string; durationMin: number; bufferMin: number; active: boolean; staffIds: string[]; categoryId?: string | null; priceCents?: number | null };
+export type Service = { id: string; name: string; durationMin: number; bufferMin: number; active: boolean; staffIds: string[]; crossIds?: string[]; categoryId?: string | null; priceCents?: number | null };
 export type Booking = {
   id: string;
   staffId: string | null;
@@ -359,5 +359,5 @@ export type Pub = {
   tenant: { name: string; slug: string; timezone: string; logoUrl?: string | null };
   staff: { id: string; name: string; photoUrl?: string | null }[];
   categories: ServiceCategory[];
-  services: { id: string; name: string; durationMin: number; bufferMin?: number; categoryId?: string | null; priceCents?: number | null; staffIds: string[] }[];
+  services: { id: string; name: string; durationMin: number; bufferMin?: number; categoryId?: string | null; priceCents?: number | null; staffIds: string[]; crossIds?: string[] }[];
 };
