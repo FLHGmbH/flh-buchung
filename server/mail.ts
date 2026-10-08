@@ -252,6 +252,49 @@ export function mailEnding(sign: string, imageUrl: string) {
   return { text, html };
 }
 
+export function guestInfoMail(kind: "move" | "cancel", opts: {
+  guestName: string;
+  tenantName: string;
+  serviceName: string;
+  staffName: string;
+  when: string;
+  before?: string;
+  sign?: string;
+  imageUrl?: string;
+}) {
+  const end = mailEnding(opts.sign ?? "", opts.imageUrl ?? "");
+  const summary = opts.staffName ? `${opts.serviceName} bei ${opts.staffName}` : opts.serviceName;
+  const name = escHtml(opts.guestName);
+  const tenant = escHtml(opts.tenantName);
+  const what = escHtml(summary);
+  const when = escHtml(opts.when);
+  if (kind === "cancel") {
+    return {
+      subject: `Termin storniert – ${opts.tenantName}`,
+      text: `Hallo ${opts.guestName},\n\ndein Termin wurde storniert.\n\n${summary}\n${opts.when}\n\n${opts.tenantName}${end.text}`,
+      html: `<p>Hallo ${name},</p><p>dein Termin wurde storniert.</p><p><strong>${what}</strong><br>${when}</p><p>${tenant}</p>${end.html}`,
+    };
+  }
+  const before = escHtml(opts.before ?? "");
+  return {
+    subject: `Termin verschoben – ${opts.tenantName}`,
+    text: `Hallo ${opts.guestName},\n\ndein Termin wurde verschoben.\n\nBisher: ${opts.before ?? ""}\nNeu: ${summary}\n${opts.when}\n\n${opts.tenantName}${end.text}`,
+    html: `<p>Hallo ${name},</p><p>dein Termin wurde verschoben.</p><p>Bisher: ${before}<br>Neu: <strong>${what}</strong><br>${when}</p><p>${tenant}</p>${end.html}`,
+  };
+}
+
+export async function sendGuestInfo(kind: "move" | "cancel", opts: { to: string } & Parameters<typeof guestInfoMail>[1]) {
+  const from = mailFromAddr(process.env.MAIL_FROM);
+  if (!from) throw new Error("MAIL_FROM muss eine eigene Domain sein.");
+  const body = guestInfoMail(kind, opts);
+  try {
+    await smtpSend({ from, to: opts.to, ...body });
+  } catch (e) {
+    console.error("smtp failed", e instanceof Error ? e.message : e);
+    throw new Error("Mailversand fehlgeschlagen.");
+  }
+}
+
 export async function sendPinMail(opts: { to: string; pin: string; tenantName: string; when: string; sign?: string; imageUrl?: string }) {
   const from = mailFromAddr(process.env.MAIL_FROM);
   if (!from) throw new Error("MAIL_FROM muss eine eigene Domain sein.");

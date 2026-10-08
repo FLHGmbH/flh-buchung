@@ -1,7 +1,8 @@
-import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { api, useApi, type Bootstrap, type Booking, type StaffShift, type TimeOff } from "./api";
 import { matchTpl } from "./catalog";
-import { Avatar, BookingModal, centsFromEuro, euro, euroInput, firstOpen, ImageDrop, Modal, PageHead, Skel, STAFF_COLORS, staffColor, svcTone } from "./ui";
+import { gsap, reduced, useGSAP } from "./motion";
+import { Avatar, BookingModal, centsFromEuro, euroInput, firstOpen, ImageDrop, Modal, PageHead, priceLabel, Skel, STAFF_COLORS, staffColor, svcTone } from "./ui";
 
 function useBoot() {
   return useApi<Bootstrap>("/api/app/bootstrap");
@@ -628,9 +629,53 @@ export function StaffPage() {
 
 export function ServicesPage() {
   const boot = useBoot();
-  const blank = { name: "", durationMin: 45, bufferMin: 0, staffIds: [] as string[], crossIds: [] as string[], active: true, categoryId: "", price: "" };
+  const blank = { name: "", durationMin: 45, bufferMin: 0, staffIds: [] as string[], crossIds: [] as string[], active: true, categoryId: "", price: "", priceTo: "", priceKind: "" as "" | "fixed" | "from" | "range", info: "" };
   const [form, setForm] = useState<(typeof blank & { id?: string }) | null>(null);
   const [slide, setSlide] = useState(0);
+  const [nameLive, setNameLive] = useState(false);
+  const stage = useRef<HTMLDivElement>(null);
+  const placed = useRef(false);
+  const prevSlide = useRef(0);
+  const open = form != null;
+  useGSAP(() => {
+    const root = stage.current;
+    if (!root) {
+      placed.current = false;
+      return;
+    }
+    const panes = [...root.querySelectorAll<HTMLElement>(".svc-pane")];
+    const pane = panes[slide];
+    if (!pane) return;
+    const bits = [...pane.children].flatMap((el) => {
+      if (el.classList.contains("tpl-list")) return [...el.children];
+      if (el.classList.contains("fields-2")) return [...el.children];
+      if (el.classList.contains("field") && el.querySelector(".check")) return [...el.children];
+      return [el];
+    });
+    if (!placed.current || reduced()) {
+      placed.current = true;
+      prevSlide.current = slide;
+      gsap.set(panes, { autoAlpha: 0, y: 0 });
+      gsap.set(pane, { autoAlpha: 1 });
+      return;
+    }
+    const from = panes[prevSlide.current];
+    const forward = slide >= prevSlide.current;
+    prevSlide.current = slide;
+    gsap.killTweensOf([...panes, ...bits]);
+    gsap.set(pane, { autoAlpha: 1, y: 0, zIndex: 2 });
+    if (from && from !== pane) gsap.set(from, { zIndex: 1 });
+    const tl = gsap.timeline();
+    if (from && from !== pane) tl.to(from, { autoAlpha: 0, duration: 0.16, ease: "power2.in" }, 0);
+    tl.fromTo(bits, { opacity: 0, y: forward ? 12 : -12 }, {
+      opacity: 1,
+      y: 0,
+      duration: 0.26,
+      stagger: { each: 0.032, from: forward ? "start" : "end" },
+      ease: "power3.out",
+      clearProps: "opacity,transform",
+    }, 0.04);
+  }, { dependencies: [slide, open], scope: stage });
   const [askDel, setAskDel] = useState(false);
   const [catForm, setCatForm] = useState<{ id?: string; name: string } | null>(null);
   const [err, setErr] = useState("");
@@ -655,9 +700,27 @@ export function ServicesPage() {
   function save() {
     if (!form) return;
     setErr("");
-    const priceCents = centsFromEuro(form.price);
-    if (priceCents === false) {
+    const priced = form.priceKind !== "";
+    const priceCents = priced ? centsFromEuro(form.price) : null;
+    const priceMaxCents = form.priceKind === "range" ? centsFromEuro(form.priceTo) : null;
+    if (priceCents === false || priceMaxCents === false) {
       setErr("Preis ungültig.");
+      return;
+    }
+    if ((form.priceKind === "fixed" || form.priceKind === "from") && priceCents == null) {
+      setErr("Preis fehlt.");
+      return;
+    }
+    if (form.priceKind === "range" && (priceCents == null || priceMaxCents == null)) {
+      setErr("Spanne braucht zwei Preise.");
+      return;
+    }
+    if (form.priceKind === "range" && priceCents != null && priceMaxCents != null && priceMaxCents <= priceCents) {
+      setErr("Der bis-Preis muss höher sein.");
+      return;
+    }
+    if (form.info.trim().length > 512) {
+      setErr("Info darf höchstens 512 Zeichen haben.");
       return;
     }
     if (!form.categoryId) {
@@ -665,7 +728,7 @@ export function ServicesPage() {
       return;
     }
     setPending(true);
-    const body = { name: form.name, durationMin: form.durationMin, bufferMin: form.bufferMin, staffIds: form.staffIds, crossIds: form.crossIds.slice(0, 1), active: form.active, categoryId: form.categoryId, priceCents };
+    const body = { name: form.name, durationMin: form.durationMin, bufferMin: form.bufferMin, staffIds: form.staffIds, crossIds: form.crossIds.slice(0, 1), active: form.active, categoryId: form.categoryId, priceCents, priceMaxCents, priceFrom: form.priceKind === "from", info: form.info.trim() };
     const done = form.id ? api.patchService(form.id, body) : api.addService(body);
     done
       .then(() => setForm(null))
@@ -682,7 +745,7 @@ export function ServicesPage() {
         aside={
           <div className="head-tools">
             <button className="btn outline" type="button" onClick={() => { setErr(""); setCatForm({ name: "" }); }}>+ Kategorie</button>
-            <button className="btn" type="button" onClick={() => { setErr(""); setSlide(0); setForm({ ...blank }); }}>+ Leistung</button>
+            <button className="btn" type="button" onClick={() => { setErr(""); setNameLive(false); setSlide(0); setForm({ ...blank }); }}>+ Leistung</button>
           </div>
         }
       />
@@ -721,14 +784,15 @@ export function ServicesPage() {
                 key={s.id}
                 onClick={() => {
                   setErr("");
+                  setNameLive(false);
                   setSlide(0);
-                  setForm({ id: s.id, name: s.name, durationMin: s.durationMin, bufferMin: s.bufferMin, staffIds: [...s.staffIds], crossIds: [...(s.crossIds ?? [])], active: s.active, categoryId: s.categoryId ?? "", price: euroInput(s.priceCents) });
+                  setForm({ id: s.id, name: s.name, durationMin: s.durationMin, bufferMin: s.bufferMin, staffIds: [...s.staffIds], crossIds: [...(s.crossIds ?? [])], active: s.active, categoryId: s.categoryId ?? "", price: euroInput(s.priceCents), priceTo: euroInput(s.priceMaxCents), priceKind: s.priceMaxCents != null ? "range" : s.priceFrom ? "from" : s.priceCents != null ? "fixed" : "", info: s.info ?? "" });
                 }}
               >
                 <td>{s.name}</td>
                 <td>{catName(s.categoryId)}</td>
                 <td>{s.durationMin} min</td>
-                <td>{s.priceCents != null ? euro(s.priceCents) : "—"}</td>
+                <td>{priceLabel(s) || "—"}</td>
                 <td>{s.bufferMin} min</td>
                 <td>{s.staffIds.map((id) => boot.staff.find((x) => x.id === id)?.name).filter(Boolean).join(", ") || "—"}</td>
                 <td>
@@ -786,7 +850,7 @@ export function ServicesPage() {
         </Modal>
       ) : null}
       {form ? (
-        <Modal title={form.id ? "Leistung" : "Neue Leistung"} wide={slide === 0} onClose={() => { setAskDel(false); setForm(null); }}>
+        <Modal title={form.id ? "Leistung" : "Neue Leistung"} onClose={() => { setAskDel(false); setForm(null); }}>
           <form className="svc-form"
             onSubmit={(e) => {
               e.preventDefault();
@@ -795,22 +859,30 @@ export function ServicesPage() {
             }}
           >
             <div className="svc-body">
-            <p className="svc-step">Schritt {slide + 1} von 3 · {["Leistung", "Mitarbeiter", "Preis"][slide]}</p>
             {err ? <p className="err" role="alert">{err}</p> : null}
-            {slide === 0 ? (
-              <>
+            <div className="svc-stage" ref={stage}>
+            <div className="svc-track">
+            <div className="svc-pane" inert={slide !== 0}>
+            <p className="svc-step">Schritt 1 von 3 · Leistung</p>
                 <label className="field">
                   <span>Name der Leistung</span>
-                  <input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required placeholder="z. B. Waschen, Schneiden, Föhnen" />
+                  <input
+                    value={form.name}
+                    onChange={(e) => { setNameLive(true); setForm({ ...form, name: e.target.value }); }}
+                    onBlur={() => setNameLive(false)}
+                    required
+                    placeholder="z. B. Waschen, Schneiden, Föhnen"
+                  />
                 </label>
-                {matchTpl(form.name).length ? (
+                {nameLive && matchTpl(form.name).length ? (
                   <div className="tpl-list">
                     {matchTpl(form.name).map((t) => (
                       <button
                         key={`${t.group}-${t.name}`}
                         type="button"
                         className="tpl-hit"
-                        onClick={() => setForm({ ...form, name: t.name, durationMin: t.min, bufferMin: t.buffer })}
+                        onMouseDown={(e) => e.preventDefault()}
+                        onClick={() => { setNameLive(false); setForm({ ...form, name: t.name, durationMin: t.min, bufferMin: t.buffer }); }}
                       >
                         <span>
                           <strong>{t.name}</strong>
@@ -841,9 +913,9 @@ export function ServicesPage() {
                   </select>
                 </label>
                 {!cats.length ? <p className="hint-line">Zuerst oben eine Kategorie anlegen.</p> : null}
-              </>
-            ) : null}
-            {slide === 1 ? (
+            </div>
+            <div className="svc-pane" inert={slide !== 1}>
+            <p className="svc-step">Schritt 2 von 3 · Mitarbeiter</p>
               <div className="field">
                 <span>Wer darf die Leistung machen?</span>
                 {boot.staff.length ? boot.staff.map((s) => (
@@ -853,14 +925,37 @@ export function ServicesPage() {
                   </label>
                 )) : <p className="hint-line">Noch kein Mitarbeiter angelegt.</p>}
               </div>
-            ) : null}
-            {slide === 2 ? (
-              <>
+            </div>
+            <div className="svc-pane" inert={slide !== 2}>
+            <p className="svc-step">Schritt 3 von 3 · Preis</p>
                 <label className="field">
                   <span>Preis (optional)</span>
-                  <input inputMode="decimal" value={form.price} onChange={(e) => setForm({ ...form, price: e.target.value })} placeholder="z. B. 29,50" />
+                  <select value={form.priceKind} onChange={(e) => setForm({ ...form, priceKind: e.target.value as typeof form.priceKind })}>
+                    <option value="">Kein Preis</option>
+                    <option value="fixed">Festpreis</option>
+                    <option value="from">ab</option>
+                    <option value="range">Spanne</option>
+                  </select>
                 </label>
-                <p className="hint-line">Leer lassen, wenn kein Preis auf der Buchungsseite stehen soll.</p>
+                {form.priceKind ? (
+                  <div className={form.priceKind === "range" ? "fields-2" : ""}>
+                    <label className="field">
+                      <span>{form.priceKind === "range" ? "Von" : form.priceKind === "from" ? "Ab" : "Preis"}</span>
+                      <input inputMode="decimal" value={form.price} onChange={(e) => setForm({ ...form, price: e.target.value })} placeholder="z. B. 29,50" />
+                    </label>
+                    {form.priceKind === "range" ? (
+                      <label className="field">
+                        <span>Bis</span>
+                        <input inputMode="decimal" value={form.priceTo} onChange={(e) => setForm({ ...form, priceTo: e.target.value })} placeholder="z. B. 45" />
+                      </label>
+                    ) : null}
+                  </div>
+                ) : <p className="hint-line">Ohne Preisangabe bleibt die Leistung ohne Betrag auf der Buchungsseite.</p>}
+                <label className="field">
+                  <span>Weitere Infos (optional)</span>
+                  <textarea maxLength={512} value={form.info} onChange={(e) => setForm({ ...form, info: e.target.value })} placeholder="z. B. Waschen und Föhnen inklusive" />
+                  <small className="hint-line">{form.info.length}/512</small>
+                </label>
                 <label className="field">
                   <span>Zusammen buchbar (optional)</span>
                   <select value={form.crossIds[0] ?? ""} onChange={(e) => setForm({ ...form, crossIds: e.target.value ? [e.target.value] : [] })}>
@@ -871,18 +966,19 @@ export function ServicesPage() {
                   </select>
                 </label>
                 <p className="hint-line">Im Buchungsfenster kann man diese Leistung dazubuchen.</p>
-                {form.id ? (
-                  <label className="check">
-                    <input type="checkbox" checked={form.active} onChange={(e) => setForm({ ...form, active: e.target.checked })} />
-                    Aktiv
-                  </label>
-                ) : null}
-                {form.id ? (
-                  <button type="button" className="linkish is-danger" onClick={() => setAskDel(true)}>Leistung löschen</button>
-                ) : null}
-              </>
-            ) : null}
             </div>
+            </div>
+            </div>
+            </div>
+            {form.id && slide === 0 ? (
+              <div className="svc-tools">
+                <button type="button" className="btn danger" onClick={() => setAskDel(true)}>Leistung löschen</button>
+                <label className="check">
+                  <input type="checkbox" checked={form.active} onChange={(e) => setForm({ ...form, active: e.target.checked })} />
+                  Aktiv
+                </label>
+              </div>
+            ) : null}
             <div className="modal-foot is-split">
               {slide === 0 ? (
                 <button type="button" className="btn outline" onClick={() => setForm(null)}>Abbrechen</button>
@@ -1056,7 +1152,7 @@ export function HoursPage() {
   );
 }
 
-type Hit = { id: string; serviceId: string | null; startsAt: string; endsAt: string; guestName: string };
+type Hit = { id: string; serviceId: string | null; startsAt: string; endsAt: string; guestName: string; guestEmail: string; guestPhone: string; note: string };
 type Edit = { staffId: string; date: string; time: string; serviceId: string };
 
 function parts(iso: string) {
@@ -1072,6 +1168,7 @@ export function TimeOffPage() {
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState({ staffId: "", from: "", to: "", reason: "Urlaub" });
   const [hits, setHits] = useState<Hit[] | null>(null);
+  const [more, setMore] = useState<string[]>([]);
   const [edits, setEdits] = useState<Record<string, Edit>>({});
   const [err, setErr] = useState("");
   const [pending, setPending] = useState(false);
@@ -1080,6 +1177,7 @@ export function TimeOffPage() {
   function close() {
     setOpen(false);
     setHits(null);
+    setMore([]);
     setEdits({});
     setErr("");
     setForm(blank);
@@ -1114,6 +1212,7 @@ export function TimeOffPage() {
           next[hit.id] = { ...when, serviceId: hit.serviceId ?? "", staffId: pick(hit.serviceId, true, "") };
         }
         setEdits(next);
+        setMore([]);
         setHits(r.bookings);
       })
       .catch((ex) => setErr(ex instanceof Error ? ex.message : "Termine nicht geladen."))
@@ -1203,9 +1302,17 @@ export function TimeOffPage() {
                       const blocked = inside(edit.date, edit.time, edit.serviceId);
                       const who = candidates(edit.serviceId, blocked);
                       const services = boot.services.filter((s) => s.active || s.id === edit.serviceId);
+                      const booked = boot.services.find((s) => s.id === h.serviceId);
+                      const open = more.includes(h.id);
                       return (
-                        <tr key={h.id}>
-                          <td><strong>{h.guestName}</strong></td>
+                        <Fragment key={h.id}>
+                        <tr>
+                          <td>
+                            <button type="button" className={"hit-name" + (open ? " on" : "")} aria-expanded={open} onClick={() => setMore((cur) => open ? cur.filter((id) => id !== h.id) : [...cur, h.id])}>
+                              <i aria-hidden="true" />
+                              <strong>{h.guestName}</strong>
+                            </button>
+                          </td>
                           <td>
                             <div className="when-edit">
                               <input type="date" aria-label={`Tag für ${h.guestName}`} value={edit.date} onChange={(e) => setEdit(h.id, { date: e.target.value })} required />
@@ -1224,6 +1331,19 @@ export function TimeOffPage() {
                             </select>
                           </td>
                         </tr>
+                        {open ? (
+                          <tr className="hit-detail">
+                            <td colSpan={4}>
+                              <dl>
+                                <div><dt>Gebucht</dt><dd>{booked ? `${booked.name} · ${booked.durationMin} Min.` : "—"}{booked?.info ? ` · ${booked.info}` : ""}</dd></div>
+                                <div><dt>Telefon</dt><dd>{h.guestPhone || "—"}</dd></div>
+                                <div><dt>E-Mail</dt><dd>{h.guestEmail || "—"}</dd></div>
+                                {h.note ? <div><dt>Notiz</dt><dd>{h.note}</dd></div> : null}
+                              </dl>
+                            </td>
+                          </tr>
+                        ) : null}
+                        </Fragment>
                       );
                     })}
                   </tbody>
@@ -1231,7 +1351,7 @@ export function TimeOffPage() {
               ) : null}
               {err ? <p className="err" role="alert">{err}</p> : null}
               <div className="modal-foot">
-                <button type="button" className="btn outline" onClick={() => { setHits(null); setErr(""); }}>Zurück</button>
+                <button type="button" className="btn outline" onClick={() => { setHits(null); setMore([]); setErr(""); }}>Zurück</button>
                 <button className={ready ? "btn" : "btn is-hold"} type="submit" disabled={pending || !ready}>Speichern</button>
               </div>
             </form>

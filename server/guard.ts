@@ -47,6 +47,17 @@ export function priceCents(v: unknown): number | null | false {
   return v;
 }
 
+export function priceQuote(cents: unknown, max: unknown, from: unknown) {
+  const low = priceCents(cents);
+  if (low === false) return { error: "Preis ungültig." } as const;
+  const high = priceCents(max ?? null);
+  if (high === false) return { error: "Preis ungültig." } as const;
+  if (low == null) return { priceCents: null, priceMaxCents: null, priceFrom: false };
+  if (from === true && high != null) return { error: "Entweder „ab“ oder eine Spanne." } as const;
+  if (high != null && high <= low) return { error: "Der bis-Preis muss höher sein." } as const;
+  return { priceCents: low, priceMaxCents: high, priceFrom: from === true };
+}
+
 const LOGO_MIME: Record<string, string> = { "image/png": "png", "image/jpeg": "jpg", "image/webp": "webp" };
 export const LOGO_MAX = 5_000_000;
 

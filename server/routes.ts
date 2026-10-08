@@ -6,9 +6,9 @@ import { Hono } from "hono";
 import { DateTime } from "luxon";
 import { actorFrom, actorFromEmail, actorFromUserId, createSession, destroySession, dropUserSessions, ensurePlatformAdmin, hashPassword, sbEnsureUser, sbPassword, sbRecover, sbSetPassword, sbUser, verifyLogin, verifyPassword, type Actor } from "./auth.ts";
 import { db } from "./db.ts";
-import { BOOK_MAX, LEN, LOGIN_MAX, PIN_MAX, WINDOW_MS, bookWindow, clip, clientIp, hoursWithin, inIntRange, limited, logoKind, passwordOk, priceCents, readJson, sbConfigured, serviceMins, siteOrigin } from "./guard.ts";
+import { BOOK_MAX, LEN, LOGIN_MAX, PIN_MAX, WINDOW_MS, bookWindow, clip, clientIp, hoursWithin, inIntRange, limited, logoKind, passwordOk, priceQuote, readJson, sbConfigured, serviceMins, siteOrigin } from "./guard.ts";
 import { guestMail, guestPhone } from "./guest.ts";
-import { newPin, PIN_MS, sendConfirmMail, sendPinMail } from "./mail.ts";
+import { newPin, PIN_MS, sendConfirmMail, sendGuestInfo, sendPinMail } from "./mail.ts";
 import {
   bookings,
   memberships,
@@ -646,6 +646,46 @@ function mailFootOf(tenant: { mailSign: string; mailImageUrl: string | null; log
   return { sign: tenant.mailSign ?? "", imageUrl };
 }
 
+function whenLabel(start: Date, end: Date, zone: string) {
+  const a = DateTime.fromJSDate(start).setZone(zone);
+  const b = DateTime.fromJSDate(end).setZone(zone);
+  return `${a.toFormat("dd.MM.yyyy HH:mm")}–${b.toFormat("HH:mm")}`;
+}
+
+async function tellGuest(reqUrl: string, tid: string, kind: "move" | "cancel", row: {
+  guestEmail: string;
+  guestName: string;
+  serviceId: string | null;
+  staffId: string | null;
+  startsAt: Date;
+  endsAt: Date;
+}, before?: { startsAt: Date; endsAt: Date }) {
+  if (!guestMail(row.guestEmail)) return;
+  try {
+    const [tenant] = await db.select().from(tenants).where(eq(tenants.id, tid)).limit(1);
+    if (!tenant) return;
+    const [svc] = row.serviceId
+      ? await db.select({ name: services.name }).from(services).where(eq(services.id, row.serviceId)).limit(1)
+      : [];
+    const [who] = row.staffId
+      ? await db.select({ name: staff.name }).from(staff).where(eq(staff.id, row.staffId)).limit(1)
+      : [];
+    const zone = tenant.timezone || "Europe/Berlin";
+    await sendGuestInfo(kind, {
+      to: row.guestEmail,
+      guestName: row.guestName,
+      tenantName: tenant.name,
+      serviceName: svc?.name || "Termin",
+      staffName: who?.name || "",
+      when: whenLabel(row.startsAt, row.endsAt, zone),
+      before: before ? whenLabel(before.startsAt, before.endsAt, zone) : undefined,
+      ...mailFootOf(tenant, reqUrl),
+    });
+  } catch (e) {
+    console.error("guest mail", e instanceof Error ? e.message : e);
+  }
+}
+
 api.get("/app/bootstrap", async (c) => {
   const tid = tenantId(c);
   const [tenant] = await db.select().from(tenants).where(eq(tenants.id, tid)).limit(1);
@@ -786,13 +826,15 @@ api.delete("/app/staff/:id/photo", async (c) => {
 
 api.post("/app/services", async (c) => {
   const tid = tenantId(c);
-  const body = await readJson<{ name?: string; durationMin?: number; bufferMin?: number; staffIds?: string[]; categoryId?: string | null; priceCents?: number | null; crossIds?: string[] }>(c);
+  const body = await readJson<{ name?: string; durationMin?: number; bufferMin?: number; staffIds?: string[]; categoryId?: string | null; priceCents?: number | null; priceMaxCents?: number | null; priceFrom?: boolean; info?: string; crossIds?: string[] }>(c);
   if (!body) return c.json({ error: "Ungültige Anfrage." }, 400);
   const name = clip(body.name ?? "", LEN.name);
   const mins = serviceMins(body.durationMin, body.bufferMin);
   if (!name || !mins) return c.json({ error: "Name und Dauer (5–480 Min.) nötig." }, 400);
-  const cents = priceCents(body.priceCents);
-  if (cents === false) return c.json({ error: "Preis ungültig." }, 400);
+  const quote = priceQuote(body.priceCents, body.priceMaxCents, body.priceFrom);
+  if ("error" in quote) return c.json({ error: quote.error }, 400);
+  const info = (body.info ?? "").trim();
+  if (info.length > 512) return c.json({ error: "Info darf höchstens 512 Zeichen haben." }, 400);
   const ids = body.staffIds ?? [];
   if (!(await staffIdsInTenant(tid, ids))) return c.json({ error: "Mitarbeiter ungültig." }, 400);
   const categoryId = body.categoryId || null;
@@ -800,7 +842,7 @@ api.post("/app/services", async (c) => {
   if (!(await categoryInTenant(tid, categoryId))) return c.json({ error: "Kategorie ungültig." }, 400);
   const [row] = await db
     .insert(services)
-    .values({ tenantId: tid, name, durationMin: mins.durationMin, bufferMin: mins.bufferMin, categoryId, priceCents: cents })
+    .values({ tenantId: tid, name, durationMin: mins.durationMin, bufferMin: mins.bufferMin, categoryId, priceCents: quote.priceCents, priceMaxCents: quote.priceMaxCents, priceFrom: quote.priceFrom, info })
     .returning();
   if (ids.length) await db.insert(serviceStaff).values(ids.map((staffId) => ({ serviceId: row.id, staffId })));
   const crossIds = body.crossIds ?? [];
@@ -822,6 +864,9 @@ api.patch("/app/services/:id", async (c) => {
     staffIds?: string[];
     categoryId?: string | null;
     priceCents?: number | null;
+    priceMaxCents?: number | null;
+    priceFrom?: boolean;
+    info?: string;
     crossIds?: string[];
   }>(c);
   if (!body) return c.json({ error: "Ungültige Anfrage." }, 400);
@@ -831,8 +876,9 @@ api.patch("/app/services/:id", async (c) => {
   if (body.bufferMin !== undefined && !inIntRange(body.bufferMin, 0, 120)) {
     return c.json({ error: "Puffer muss 0–120 Minuten sein." }, 400);
   }
-  const cents = "priceCents" in body ? priceCents(body.priceCents) : undefined;
-  if (cents === false) return c.json({ error: "Preis ungültig." }, 400);
+  const quote = "priceCents" in body ? priceQuote(body.priceCents, body.priceMaxCents, body.priceFrom) : undefined;
+  if (quote && "error" in quote) return c.json({ error: quote.error }, 400);
+  if (typeof body.info === "string" && body.info.trim().length > 512) return c.json({ error: "Info darf höchstens 512 Zeichen haben." }, 400);
   if (body.staffIds && !(await staffIdsInTenant(tid, body.staffIds))) {
     return c.json({ error: "Mitarbeiter ungültig." }, 400);
   }
@@ -848,7 +894,8 @@ api.patch("/app/services/:id", async (c) => {
       ...(typeof body.bufferMin === "number" ? { bufferMin: body.bufferMin } : {}),
       ...(typeof body.active === "boolean" ? { active: body.active } : {}),
       ...("categoryId" in body ? { categoryId: body.categoryId || null } : {}),
-      ...(cents !== undefined ? { priceCents: cents } : {}),
+      ...(quote && !("error" in quote) ? { priceCents: quote.priceCents, priceMaxCents: quote.priceMaxCents, priceFrom: quote.priceFrom } : {}),
+      ...(typeof body.info === "string" ? { info: body.info.trim() } : {}),
     })
     .where(and(eq(services.id, id), eq(services.tenantId, tid)))
     .returning();
@@ -1035,6 +1082,9 @@ api.post("/app/time-off", async (c) => {
       startsAt: bookings.startsAt,
       endsAt: bookings.endsAt,
       guestName: bookings.guestName,
+      guestEmail: bookings.guestEmail,
+      guestPhone: bookings.guestPhone,
+      note: bookings.note,
     })
     .from(bookings)
     .where(and(
@@ -1102,6 +1152,18 @@ api.post("/app/time-off", async (c) => {
         reason: clip(body.reason ?? "", LEN.reason),
       })
       .returning();
+    for (const next of plan) {
+      const hit = hits.find((h) => h.id === next.id);
+      if (!hit || (hit.startsAt.getTime() === next.startsAt.getTime() && hit.serviceId === next.serviceId && body.staffId === next.staffId)) continue;
+      await tellGuest(c.req.url, tid, "move", {
+        guestEmail: hit.guestEmail,
+        guestName: hit.guestName,
+        serviceId: next.serviceId,
+        staffId: next.staffId,
+        startsAt: next.startsAt,
+        endsAt: next.endsAt,
+      }, { startsAt: hit.startsAt, endsAt: hit.endsAt });
+    }
     return c.json({ timeOff: row }, 201);
   } catch (e) {
     await restore();
@@ -1229,7 +1291,7 @@ api.post("/app/bookings", async (c) => {
 api.patch("/app/bookings/:id", async (c) => {
   const tid = tenantId(c);
   const [cur] = await db
-    .select({ id: bookings.id, status: bookings.status })
+    .select()
     .from(bookings)
     .where(and(eq(bookings.id, c.req.param("id")), eq(bookings.tenantId, tid)))
     .limit(1);
@@ -1245,6 +1307,10 @@ api.patch("/app/bookings/:id", async (c) => {
       .set(parsed.fields)
       .where(and(eq(bookings.id, cur.id), eq(bookings.tenantId, tid)))
       .returning(bookingCols);
+    const moved = cur.startsAt.getTime() !== new Date(row.startsAt).getTime() || cur.staffId !== row.staffId || cur.serviceId !== row.serviceId;
+    if (moved) {
+      await tellGuest(c.req.url, tid, "move", row, { startsAt: cur.startsAt, endsAt: cur.endsAt });
+    }
     return c.json({ booking: row });
   } catch (e) {
     if (overlapError(e)) return c.json({ error: "Dieser Slot ist gerade vergeben." }, 409);
@@ -1254,12 +1320,20 @@ api.patch("/app/bookings/:id", async (c) => {
 
 api.post("/app/bookings/:id/cancel", async (c) => {
   const tid = tenantId(c);
+  const [cur] = await db
+    .select()
+    .from(bookings)
+    .where(and(eq(bookings.id, c.req.param("id")), eq(bookings.tenantId, tid)))
+    .limit(1);
+  if (!cur) return c.json({ error: "Nicht gefunden." }, 404);
+  if (cur.status === "cancelled") return c.json({ booking: cur });
   const [row] = await db
     .update(bookings)
     .set({ status: "cancelled" })
-    .where(and(eq(bookings.id, c.req.param("id")), eq(bookings.tenantId, tid)))
+    .where(and(eq(bookings.id, cur.id), eq(bookings.tenantId, tid), ne(bookings.status, "cancelled")))
     .returning(bookingCols);
-  if (!row) return c.json({ error: "Nicht gefunden." }, 404);
+  if (!row) return c.json({ booking: cur });
+  await tellGuest(c.req.url, tid, "cancel", row);
   return c.json({ booking: row });
 });
 
@@ -1314,6 +1388,9 @@ api.get("/public/:slug", async (c) => {
       bufferMin: s.bufferMin,
       categoryId: s.categoryId,
       priceCents: s.priceCents,
+      priceMaxCents: s.priceMaxCents,
+      priceFrom: s.priceFrom,
+      info: s.info,
       staffIds: links.filter((l) => l.serviceId === s.id).map((l) => l.staffId),
       crossIds: linkedIds(s.id, crosses),
     })),

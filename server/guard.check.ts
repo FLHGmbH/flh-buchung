@@ -1,4 +1,4 @@
-import { bookWindow, clientIp, clip, dbSsl, hashToken, hoursWithin, inIntRange, limited, logoKind, mailFromAddr, passwordOk, platformAdminEmail, priceCents, resetLimits, sbConfigured, securityHeaders, seedAllowed, serviceMins, siteOrigin, withinBytes, LOGO_MAX } from "./guard.ts";
+import { bookWindow, clientIp, clip, dbSsl, hashToken, hoursWithin, inIntRange, limited, logoKind, mailFromAddr, passwordOk, platformAdminEmail, priceCents, priceQuote, resetLimits, sbConfigured, securityHeaders, seedAllowed, serviceMins, siteOrigin, withinBytes, LOGO_MAX } from "./guard.ts";
 
 function assert(cond: unknown, msg: string) {
   if (!cond) throw new Error(msg);
@@ -22,6 +22,11 @@ assert(priceCents(2500) === 2500, "ok cents");
 assert(priceCents(0) === 0, "zero ok");
 assert(priceCents(-1) === false, "neg price");
 assert(priceCents(29.5) === false, "float cents");
+assert(priceQuote(null, null, false).priceCents === null, "no quote");
+assert(priceQuote(2500, null, true).priceFrom === true, "ab");
+assert(priceQuote(2500, 4000, false).priceMaxCents === 4000, "span");
+assert("error" in priceQuote(4000, 2500, false), "span order");
+assert("error" in priceQuote(2500, 4000, true), "ab and span");
 assert(logoKind("image/png", 12)?.ext === "png", "png ok");
 assert(logoKind("image/jpeg", 12)?.ext === "jpg", "jpg ok");
 assert(logoKind("image/svg+xml", 12) === null, "no svg");

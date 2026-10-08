@@ -1,5 +1,5 @@
 import { guestMail, guestPhone } from "./guest.ts";
-import { confirmIcs, dotStuff, encodeSubject, escHtml, icsEscape, icsFold, icsUtc, mailbox, mailboxAddr, mailEnding, mimeBody, newPin, PIN_MS } from "./mail.ts";
+import { confirmIcs, dotStuff, encodeSubject, escHtml, guestInfoMail, icsEscape, icsFold, icsUtc, mailbox, mailboxAddr, mailEnding, mimeBody, newPin, PIN_MS } from "./mail.ts";
 
 function assert(cond: unknown, msg: string) {
   if (!cond) throw new Error(msg);
@@ -45,4 +45,8 @@ assert(!mimeBody({ from: "a@b.de", to: "c@d.de", subject: "ok", text: "t", html:
 const end = mailEnding("Bis bald\nSalon", "https://cdn.example/logo.png");
 assert(end.text.includes("Bis bald") && end.html.includes("<br>Salon") && end.html.includes("https://cdn.example/logo.png"), "mail ending");
 assert(!mailEnding(`<b>`, "").html.includes("<b>"), "mail ending escapes");
+const moved = guestInfoMail("move", { guestName: "Lea", tenantName: "Salon", serviceName: "Schnitt", staffName: "Anna", when: "09.10.2026 12:30–13:15", before: "09.10.2026 11:00–11:45", sign: "Bis bald" });
+assert(moved.subject.startsWith("Termin verschoben") && moved.text.includes("Bisher: 09.10.2026 11:00–11:45") && moved.text.includes("Bis bald"), "move mail");
+const cancelled = guestInfoMail("cancel", { guestName: "Lea", tenantName: "Salon", serviceName: "Schnitt", staffName: "", when: "09.10.2026 11:00–11:45", sign: "Bis bald" });
+assert(cancelled.subject.startsWith("Termin storniert") && cancelled.html.includes("Bis bald") && !cancelled.html.includes("<script>"), "cancel mail");
 console.log("mail.check ok");

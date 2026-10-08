@@ -3,7 +3,7 @@ import { useParams } from "react-router-dom";
 import { api, type Pub } from "./api";
 import { guestMail, guestPhone } from "../../server/guest.ts";
 import { Fold, gsap, reduced, StepPane, useGSAP } from "./motion";
-import { euro, serviceLine } from "./ui";
+import { euro, priceLabel, serviceLine } from "./ui";
 
 function berlinDay(iso: string) {
   return new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Berlin", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date(iso));
@@ -104,12 +104,20 @@ export function BookPage() {
   function svcRow(s: (typeof pub.services)[number], keepStaff = false) {
     const on = ids.includes(s.id);
     return (
-      <div key={s.id} className={"choice svc-pick" + (on ? " on" : "")}>
+    <div key={s.id} className="svc-row">
+      <div className={"choice svc-pick" + (on ? " on" : "")}>
         <button className="choice-hit" type="button" onClick={() => toggleService(s.id, keepStaff)}>{serviceLine(s)}</button>
         <button className={"choice-mark" + (on ? " is-minus" : "")} type="button" aria-label={on ? `${s.name} entfernen` : `${s.name} hinzufügen`} onClick={() => toggleService(s.id, keepStaff)}>
           <Mark minus={on} />
         </button>
       </div>
+      {s.info?.trim() ? (
+        <details className="svc-more">
+          <summary>Weitere Infos</summary>
+          <p>{s.info}</p>
+        </details>
+      ) : null}
+    </div>
     );
   }
   const picked = ids.flatMap((id) => {
@@ -117,7 +125,7 @@ export function BookPage() {
     return s ? [s] : [];
   });
   const mins = picked.reduce((n, s) => n + s.durationMin, 0);
-  const cents = picked.length && picked.every((s) => s.priceCents != null)
+  const cents = picked.length && picked.every((s) => s.priceCents != null && s.priceMaxCents == null && !s.priceFrom)
     ? picked.reduce((n, s) => n + (s.priceCents ?? 0), 0)
     : null;
   const who = staffId ? pub.staff.find((s) => s.id === staffId)?.name ?? "Egal" : "Egal";
@@ -149,7 +157,7 @@ export function BookPage() {
                 <span className="book-cart-n">{i + 1}</span>
                 <span className="book-cart-name">
                   <strong>{s.name}</strong>
-                  <small>{s.durationMin} Min.{s.priceCents != null ? ` · ${euro(s.priceCents)}` : ""}</small>
+                  <small>{s.durationMin} Min.{priceLabel(s) ? ` · ${priceLabel(s)}` : ""}</small>
                 </span>
                 {lockMain && s.id === serviceId ? null : (
                   <button className="choice-mark is-minus" type="button" aria-label={`${s.name} entfernen`} onClick={() => toggleService(s.id, lockMain)}>
@@ -263,7 +271,7 @@ export function BookPage() {
           <div className="book-pick upsell">
             <UpsellOffer
               name={offer.name}
-              detail={offer.durationMin + " Min." + (offer.priceCents != null ? ` · ${euro(offer.priceCents)}` : "")}
+              detail={offer.durationMin + " Min." + (priceLabel(offer) ? ` · ${priceLabel(offer)}` : "")}
               line={service && service.name.length <= 32 ? `Direkt nach ${service.name}, im selben Termin.` : "Im selben Termin, direkt im Anschluss."}
               on={ids.includes(offer.id)}
               onToggle={() => toggleService(offer.id, true)}
@@ -355,6 +363,7 @@ export function BookPage() {
             {guest.guestPhone.trim() && !guestPhone(guest.guestPhone) ? <small className="err">Bitte eine gültige Telefonnummer, zum Beispiel 0151 12345678.</small> : null}
           </label>
           <label className="field"><span>Notiz</span><textarea value={guest.note} onChange={(e) => setGuest({ ...guest, note: e.target.value })} /></label>
+          <p className="legal-note">Unverbindlicher Termin. Genannte Preise können abweichen und dienen nur zur Orientierung.</p>
           <label className="check agree">
             <input type="checkbox" checked={privacy} onChange={(e) => setPrivacy(e.target.checked)} required />
             <span>

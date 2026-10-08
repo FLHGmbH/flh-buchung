@@ -366,18 +366,11 @@ export function CalendarPage() {
       }
       const hh = String(Math.floor(spot.mins / 60)).padStart(2, "0");
       const mm = String(spot.mins % 60).padStart(2, "0");
-      api.patchBooking(b.id, {
-        staffId: b.staffId,
-        serviceId: b.serviceId,
-        startsAt: new Date(`${spot.day}T${hh}:${mm}`).toISOString(),
-        guestName: b.guestName,
-        guestEmail: b.guestEmail,
-        guestPhone: b.guestPhone,
-        note: b.note,
-      }).then(() => { setDrag(null); setDragErr(""); }).catch((ex) => {
-        setDrag(null);
-        setDragErr(ex instanceof Error ? ex.message : "Verschieben fehlgeschlagen.");
-      });
+      const startsAt = new Date(`${spot.day}T${hh}:${mm}`);
+      const dur = new Date(b.endsAt).getTime() - new Date(b.startsAt).getTime();
+      setDrag(null);
+      setDragErr("");
+      setPick({ ...b, startsAt: startsAt.toISOString(), endsAt: new Date(startsAt.getTime() + dur).toISOString() });
     };
     window.addEventListener("pointermove", onMove);
     window.addEventListener("pointerup", onUp);
@@ -584,7 +577,7 @@ export function CalendarPage() {
           </div>
           </div>
           <aside className="hint">
-            <p>Zieh einen Termin auf eine freie Zeit. Er rastet in 15-Minuten-Schritten ein. Graue Flächen sind zu oder belegt.</p>
+            <p>Zieh einen Termin auf eine freie Zeit. Beim Loslassen prüfst du die neuen Daten und speicherst erst dann.</p>
           </aside>
         </div>
         </>

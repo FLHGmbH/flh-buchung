@@ -116,8 +116,16 @@ export function centsFromEuro(raw: string): number | null | false {
   return Math.round(n * 100);
 }
 
-export function serviceLine(s: { name: string; durationMin: number; priceCents?: number | null }) {
-  return s.priceCents != null ? `${s.name} · ${s.durationMin} Min. · ${euro(s.priceCents)}` : `${s.name} · ${s.durationMin} Min.`;
+export function priceLabel(s: { priceCents?: number | null; priceMaxCents?: number | null; priceFrom?: boolean }) {
+  if (s.priceCents == null) return "";
+  if (s.priceMaxCents != null) return `${euro(s.priceCents)}–${euro(s.priceMaxCents)}`;
+  if (s.priceFrom) return `ab ${euro(s.priceCents)}`;
+  return euro(s.priceCents);
+}
+
+export function serviceLine(s: { name: string; durationMin: number; priceCents?: number | null; priceMaxCents?: number | null; priceFrom?: boolean }) {
+  const price = priceLabel(s);
+  return price ? `${s.name} · ${s.durationMin} Min. · ${price}` : `${s.name} · ${s.durationMin} Min.`;
 }
 
 export function Modal({ title, onClose, wide, children }: { title: string; onClose: () => void; wide?: boolean; children: ReactNode }) {
@@ -566,9 +574,9 @@ export function BookingModal({
             </>
           ) : null}
         </fieldset>
-        <div className="modal-foot">
+        <div className={"modal-foot term-foot" + (gone ? "" : " is-split")}>
           {booking && !gone ? (
-            <button type="button" className="btn danger" disabled={pending} onClick={drop}>Stornieren</button>
+            <button type="button" className="btn danger-line" disabled={pending} onClick={drop}>Stornieren</button>
           ) : (
             <button type="button" className="btn outline" onClick={onClose}>Schließen</button>
           )}

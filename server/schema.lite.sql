@@ -52,6 +52,9 @@ CREATE TABLE IF NOT EXISTS services (
   duration_min integer NOT NULL,
   buffer_min integer NOT NULL DEFAULT 0,
   price_cents integer,
+  price_max_cents integer,
+  price_from boolean NOT NULL DEFAULT false,
+  info text NOT NULL DEFAULT '',
   active boolean NOT NULL DEFAULT true
 );
 

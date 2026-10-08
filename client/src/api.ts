@@ -223,7 +223,7 @@ export const api = {
   putMailImage: (body: FormData) => mutate("/api/app/mail-image", { method: "POST", body }),
   delMailImage: () => mutate("/api/app/mail-image", { method: "DELETE" }),
   timeOff: () => inflight<{ timeOff: TimeOff[] }>("/api/app/time-off"),
-  previewTimeOff: (body: object) => req<{ bookings: { id: string; serviceId: string | null; startsAt: string; endsAt: string; guestName: string }[] }>("/api/app/time-off", { method: "POST", body: JSON.stringify({ ...body, preview: true }) }),
+  previewTimeOff: (body: object) => req<{ bookings: { id: string; serviceId: string | null; startsAt: string; endsAt: string; guestName: string; guestEmail: string; guestPhone: string; note: string }[] }>("/api/app/time-off", { method: "POST", body: JSON.stringify({ ...body, preview: true }) }),
   addTimeOff: (body: object) => mutate("/api/app/time-off", { method: "POST", body: JSON.stringify(body) }),
   delTimeOff: (id: string) => mutate(`/api/app/time-off/${id}`, { method: "DELETE" }),
   bookings: () => inflight<{ bookings: Booking[] }>("/api/app/bookings"),
@@ -294,7 +294,7 @@ export type TenantRow = {
 export type Staff = { id: string; name: string; active: boolean; photoUrl?: string | null; color?: string | null };
 export type StaffShift = { staffId: string; weekday: number; startHm: string; endHm: string };
 export type ServiceCategory = { id: string; name: string };
-export type Service = { id: string; name: string; durationMin: number; bufferMin: number; active: boolean; staffIds: string[]; crossIds?: string[]; categoryId?: string | null; priceCents?: number | null };
+export type Service = { id: string; name: string; durationMin: number; bufferMin: number; active: boolean; staffIds: string[]; crossIds?: string[]; categoryId?: string | null; priceCents?: number | null; priceMaxCents?: number | null; priceFrom?: boolean; info?: string };
 export type Booking = {
   id: string;
   staffId: string | null;
@@ -359,5 +359,5 @@ export type Pub = {
   tenant: { name: string; slug: string; timezone: string; logoUrl?: string | null };
   staff: { id: string; name: string; photoUrl?: string | null }[];
   categories: ServiceCategory[];
-  services: { id: string; name: string; durationMin: number; bufferMin?: number; categoryId?: string | null; priceCents?: number | null; staffIds: string[]; crossIds?: string[] }[];
+  services: { id: string; name: string; durationMin: number; bufferMin?: number; categoryId?: string | null; priceCents?: number | null; priceMaxCents?: number | null; priceFrom?: boolean; info?: string; staffIds: string[]; crossIds?: string[] }[];
 };

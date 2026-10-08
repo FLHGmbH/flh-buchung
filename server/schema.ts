@@ -53,6 +53,9 @@ export const services = pgTable("services", {
   durationMin: integer("duration_min").notNull(),
   bufferMin: integer("buffer_min").notNull().default(0),
   priceCents: integer("price_cents"),
+  priceMaxCents: integer("price_max_cents"),
+  priceFrom: boolean("price_from").notNull().default(false),
+  info: text("info").notNull().default(""),
   active: boolean("active").notNull().default(true),
 });
 
