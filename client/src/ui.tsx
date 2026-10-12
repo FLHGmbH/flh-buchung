@@ -1,4 +1,4 @@
-import { useRef, useState, type FormEvent, type ReactNode } from "react";
+import { useId, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { api, type Booking, type Service, type ServiceCategory, type Staff, type StaffShift } from "./api";
 import { gsap, reduced, useGSAP } from "./motion";
@@ -130,6 +130,7 @@ export function serviceLine(s: { name: string; durationMin: number; priceCents?:
 
 export function Modal({ title, onClose, wide, children }: { title: string; onClose: () => void; wide?: boolean; children: ReactNode }) {
   const root = useRef<HTMLDivElement>(null);
+  const titleId = useId();
   const { contextSafe } = useGSAP(() => {
     const back = root.current;
     const box = back?.querySelector(".modal");
@@ -150,11 +151,13 @@ export function Modal({ title, onClose, wide, children }: { title: string; onClo
   });
   return createPortal(
     <div className="modal-back" ref={root} role="presentation">
-      <div className={"modal" + (wide ? " is-wide" : "")} role="dialog" aria-labelledby="modal-title">
+      <div className={"modal" + (wide ? " is-wide" : "")} role="dialog" aria-labelledby={titleId}>
         <div className="modal-head">
-          <h2 id="modal-title">{title}</h2>
+          <h2 id={titleId}>{title}</h2>
           <button type="button" className="modal-x" onClick={close} aria-label="Schließen">
-            ×
+            <svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true">
+              <path d="M3 3l8 8M11 3L3 11" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+            </svg>
           </button>
         </div>
         {children}
@@ -310,6 +313,7 @@ export function BookingModal({
 }) {
   const start = booking ? clock(booking.startsAt, timezone) : null;
   const gone = booking?.status === "cancelled";
+  const missed = booking?.status === "noshow";
   const [form, setForm] = useState({
     date: start?.date ?? initial?.date ?? "",
     time: start?.time ?? initial?.time ?? "09:00",
@@ -322,6 +326,8 @@ export function BookingModal({
   });
   const [err, setErr] = useState("");
   const [pending, setPending] = useState(false);
+  const [askMiss, setAskMiss] = useState(false);
+  const [askDrop, setAskDrop] = useState(false);
   const [extras, setExtras] = useState<{ key: number; serviceId: string; staffId: string }[]>([]);
   const svc = services.find((s) => s.id === form.serviceId);
   const linked = staff.filter((s) => s.active && svc?.staffIds.includes(s.id));
@@ -379,7 +385,7 @@ export function BookingModal({
 
   async function submit(e: FormEvent) {
     e.preventDefault();
-    if (gone) return;
+    if (gone || missed) return;
     if (!booking && (mineOff || extraBad)) {
       setErr(mineOff ? `${who?.name ?? "Mitarbeiter"} arbeitet zu der Zeit nicht.` : "Eine weitere Leistung passt zeitlich nicht.");
       return;
@@ -414,19 +420,38 @@ export function BookingModal({
   }
 
   async function drop() {
-    if (!booking || gone) return;
+    if (!booking || gone || missed) return;
     setErr("");
     setPending(true);
     try {
       await api.cancelBooking(booking.id);
+      setAskDrop(false);
       onSaved();
     } catch (ex) {
+      setAskDrop(false);
       setErr(ex instanceof Error ? ex.message : "Termin konnte nicht storniert werden.");
       setPending(false);
     }
   }
 
+  async function markMissed(on: boolean) {
+    if (!booking || gone) return;
+    setErr("");
+    setPending(true);
+    try {
+      await api.noshowBooking(booking.id, on);
+      setAskMiss(false);
+      onSaved(booking.startsAt);
+    } catch (ex) {
+      setAskMiss(false);
+      setErr(ex instanceof Error ? ex.message : "Status konnte nicht gespeichert werden.");
+      setPending(false);
+    }
+  }
+
+  const guest = (booking?.guestName || "Dieser Gast").trim();
   return (
+    <>
     <Modal title={booking ? "Termin" : "Neuer Termin"} onClose={onClose}>
       <form onSubmit={submit}>
         {err ? <p className="err">{err}</p> : null}
@@ -434,7 +459,8 @@ export function BookingModal({
         {!err && !mineOff && mineBusy && who ? <p className="err">{who.name} ist zu der Zeit nicht frei.</p> : null}
         {!choices.length ? <p className="err">{linked.length ? "Zu der Zeit arbeitet niemand." : "Kein Mitarbeiter für diese Leistung."}</p> : null}
         {gone ? <p className="err">Dieser Termin ist storniert.</p> : null}
-        <fieldset disabled={gone || pending}>
+        {missed ? <p className="err">Dieser Kunde ist nicht erschienen.</p> : null}
+        <fieldset disabled={gone || missed || pending}>
           <div className="fields-2">
             <label className="field">
               <span>Datum</span>
@@ -574,18 +600,45 @@ export function BookingModal({
             </>
           ) : null}
         </fieldset>
-        <div className={"modal-foot term-foot" + (gone ? "" : " is-split")}>
-          {booking && !gone ? (
-            <button type="button" className="btn danger-line" disabled={pending} onClick={drop}>Stornieren</button>
+        <div className={"modal-foot term-foot" + (gone ? "" : " is-split") + (booking && !gone && !missed ? " is-trio" : "")}>
+          {booking && missed ? (
+            <button type="button" className="btn outline" disabled={pending} onClick={() => markMissed(false)}>Doch gekommen</button>
+          ) : null}
+          {booking && !gone && !missed ? (
+            <>
+              <button type="button" className="btn amber" disabled={pending} onClick={() => setAskMiss(true)}>Nicht erschienen</button>
+              <button type="button" className="btn danger-line" disabled={pending} onClick={() => setAskDrop(true)}>Stornieren</button>
+            </>
           ) : (
             <button type="button" className="btn outline" onClick={onClose}>Schließen</button>
           )}
-          {gone ? null : (
+          {gone || missed ? null : (
             <button className="btn" disabled={pending || mineBusy || extraBad || !choices.length}>{pending ? "Speichern…" : booking ? "Speichern" : "Termin erstellen"}</button>
           )}
         </div>
       </form>
     </Modal>
+    {askMiss && booking ? (
+      <Modal title="Nicht erschienen" onClose={() => { if (!pending) setAskMiss(false); }}>
+        <p className="ask-copy">{guest} als „nicht erschienen“ markieren?</p>
+        <p className="ask-note">Der Termin bleibt sichtbar, die Uhrzeit wird frei.</p>
+        <div className="modal-foot is-split">
+          <button type="button" className="btn outline" disabled={pending} onClick={() => setAskMiss(false)}>Abbrechen</button>
+          <button type="button" className="btn amber" disabled={pending} onClick={() => markMissed(true)}>{pending ? "Speichern…" : "Nicht erschienen"}</button>
+        </div>
+      </Modal>
+    ) : null}
+    {askDrop && booking ? (
+      <Modal title="Termin stornieren" onClose={() => { if (!pending) setAskDrop(false); }}>
+        <p className="ask-copy">{guest} stornieren?</p>
+        <p className="ask-note">Der Termin wird abgesagt und verschwindet aus dem Kalender.{booking.guestEmail.trim() ? " Der Gast bekommt eine Info-Mail." : ""}</p>
+        <div className="modal-foot is-split">
+          <button type="button" className="btn outline" disabled={pending} onClick={() => setAskDrop(false)}>Abbrechen</button>
+          <button type="button" className="btn danger" disabled={pending} onClick={drop}>{pending ? "Stornieren…" : "Stornieren"}</button>
+        </div>
+      </Modal>
+    ) : null}
+    </>
   );
 }
 

@@ -7,7 +7,7 @@ import { DateTime } from "luxon";
 import { actorFrom, actorFromEmail, actorFromUserId, createSession, destroySession, dropUserSessions, ensurePlatformAdmin, hashPassword, sbEnsureUser, sbPassword, sbRecover, sbSetPassword, sbUser, verifyLogin, verifyPassword, type Actor } from "./auth.ts";
 import { db } from "./db.ts";
 import { BOOK_MAX, LEN, LOGIN_MAX, PIN_MAX, WINDOW_MS, bookWindow, clip, clientIp, hoursWithin, inIntRange, limited, logoKind, passwordOk, priceQuote, readJson, sbConfigured, serviceMins, siteOrigin } from "./guard.ts";
-import { guestMail, guestPhone } from "./guest.ts";
+import { blockedGuest, guestMail, guestPhone } from "./guest.ts";
 import { newPin, PIN_MS, sendConfirmMail, sendGuestInfo, sendPinMail } from "./mail.ts";
 import {
   bookings,
@@ -788,7 +788,7 @@ api.delete("/app/staff/:id", async (c) => {
       eq(bookings.staffId, id),
       eq(bookings.tenantId, tid),
       gt(bookings.endsAt, new Date()),
-      ne(bookings.status, "cancelled"),
+      or(eq(bookings.status, "confirmed"), eq(bookings.status, "pending")),
     ))
     .limit(1);
   if (open) return c.json({ error: "Mitarbeiter hat noch offene Termine. Bitte deaktivieren." }, 409);
@@ -920,7 +920,7 @@ api.delete("/app/services/:id", async (c) => {
   const [open] = await db
     .select({ id: bookings.id })
     .from(bookings)
-    .where(and(eq(bookings.serviceId, id), eq(bookings.tenantId, tid), gt(bookings.endsAt, new Date()), ne(bookings.status, "cancelled")))
+    .where(and(eq(bookings.serviceId, id), eq(bookings.tenantId, tid), gt(bookings.endsAt, new Date()), or(eq(bookings.status, "confirmed"), eq(bookings.status, "pending"))))
     .limit(1);
   if (open) return c.json({ error: "Leistung hat noch offene Termine. Bitte deaktivieren." }, 409);
   await db.delete(services).where(eq(services.id, id));
@@ -1297,6 +1297,7 @@ api.patch("/app/bookings/:id", async (c) => {
     .limit(1);
   if (!cur) return c.json({ error: "Nicht gefunden." }, 404);
   if (cur.status === "cancelled") return c.json({ error: "Stornierter Termin." }, 400);
+  if (cur.status === "noshow") return c.json({ error: "Nicht erschienen." }, 400);
   const parsed = await bookingFields(tid, await readJson(c));
   if ("error" in parsed) return c.json({ error: parsed.error }, parsed.status);
   const deny = await denyIfTaken(tid, parsed.fields, cur.id);
@@ -1334,6 +1335,33 @@ api.post("/app/bookings/:id/cancel", async (c) => {
     .returning(bookingCols);
   if (!row) return c.json({ booking: cur });
   await tellGuest(c.req.url, tid, "cancel", row);
+  return c.json({ booking: row });
+});
+
+api.post("/app/bookings/:id/noshow", async (c) => {
+  const tid = tenantId(c);
+  const body = await readJson<{ missed?: boolean }>(c);
+  if (!body || typeof body.missed !== "boolean") return c.json({ error: "Ungültige Anfrage." }, 400);
+  const [cur] = await db
+    .select()
+    .from(bookings)
+    .where(and(eq(bookings.id, c.req.param("id")), eq(bookings.tenantId, tid)))
+    .limit(1);
+  if (!cur) return c.json({ error: "Nicht gefunden." }, 404);
+  if (cur.status === "cancelled") return c.json({ error: "Stornierter Termin." }, 400);
+  const next = body.missed ? "noshow" : "confirmed";
+  if (!body.missed && cur.status !== "noshow") return c.json({ error: "Termin ist nicht als fehlend markiert." }, 400);
+  if (!body.missed) {
+    if (!cur.staffId || !cur.serviceId) return c.json({ error: "Termin unvollständig." }, 400);
+    const deny = await denyIfTaken(tid, { staffId: cur.staffId, serviceId: cur.serviceId, startsAt: cur.startsAt, endsAt: cur.endsAt }, cur.id);
+    if (deny) return c.json({ error: deny }, 409);
+  }
+  const [row] = await db
+    .update(bookings)
+    .set({ status: next })
+    .where(and(eq(bookings.id, cur.id), eq(bookings.tenantId, tid), ne(bookings.status, "cancelled")))
+    .returning(bookingCols);
+  if (!row) return c.json({ error: "Nicht gefunden." }, 404);
   return c.json({ booking: row });
 });
 
@@ -1467,6 +1495,14 @@ api.get("/public/:slug/slots", async (c) => {
   });
 });
 
+async function guestBlocked(tid: string, email: string, phone: string) {
+  const rows = await db
+    .select({ guestEmail: bookings.guestEmail, guestPhone: bookings.guestPhone })
+    .from(bookings)
+    .where(and(eq(bookings.tenantId, tid), eq(bookings.status, "noshow")));
+  return blockedGuest(rows, email, phone);
+}
+
 api.post("/public/:slug/book", async (c) => {
   const ip = clientIp(c.req);
   if (limited(`book:${ip}`, BOOK_MAX, WINDOW_MS)) {
@@ -1496,6 +1532,11 @@ api.post("/public/:slug/book", async (c) => {
     return c.json({ error: "Bitte alle Pflichtfelder ausfüllen (inkl. E-Mail)." }, 400);
   }
   if (!guestMail(guestEmail)) return c.json({ error: "Bitte eine gültige E-Mail angeben." }, 400);
+  const phone = clip(body.guestPhone ?? "", LEN.phone);
+  if (!guestPhone(phone)) return c.json({ error: "Bitte eine gültige Telefonnummer angeben." }, 400);
+  if (await guestBlocked(tenant.id, guestEmail, phone)) {
+    return c.json({ error: "Online-Buchung ist für diese E-Mail oder Telefonnummer nicht möglich. Bitte den Salon anrufen." }, 403);
+  }
   if (limited(`bookmail:${tenant.id}:${guestEmail}`, BOOK_MAX, WINDOW_MS)) {
     return c.json({ error: "Zu viele Buchungen. Bitte später erneut." }, 429);
   }
@@ -1565,8 +1606,6 @@ api.post("/public/:slug/book", async (c) => {
   const pin = newPin();
   const pinHash = await hashPassword(pin);
   const pinExpiresAt = new Date(Date.now() + PIN_MS);
-  const phone = clip(body.guestPhone ?? "", LEN.phone);
-  if (!guestPhone(phone)) return c.json({ error: "Bitte eine gültige Telefonnummer angeben." }, 400);
   const note = clip(body.note ?? "", LEN.note);
   const made: { id: string; startsAt: Date; endsAt: Date; guestName: string }[] = [];
   try {
@@ -1631,6 +1670,9 @@ api.post("/public/:slug/bookings/:id/confirm", async (c) => {
   }
   if (row.status !== "pending" || !row.pinHash) return c.json({ error: "Buchung unbekannt oder abgelaufen." }, 404);
   if (!(await verifyPassword(pin, row.pinHash))) return c.json({ error: "Code stimmt nicht." }, 400);
+  if (await guestBlocked(tenant.id, row.guestEmail, row.guestPhone)) {
+    return c.json({ error: "Online-Buchung ist für diese E-Mail oder Telefonnummer nicht möglich. Bitte den Salon anrufen." }, 403);
+  }
   const mates = (await db
     .select()
     .from(bookings)

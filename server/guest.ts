@@ -13,6 +13,23 @@ export function guestMail(raw: string) {
   return labels.every((l) => /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/.test(l));
 }
 
+export function phoneKey(raw: string) {
+  let d = raw.replace(/\D/g, "");
+  if (d.startsWith("00")) d = d.slice(2);
+  if (d.startsWith("0")) d = d.slice(1);
+  else if (d.startsWith("49")) d = d.slice(2);
+  return d;
+}
+
+export function blockedGuest(rows: { guestEmail: string; guestPhone: string }[], email: string, phone: string) {
+  const mail = email.trim().toLowerCase();
+  const tel = phoneKey(phone);
+  const mailOk = guestMail(mail);
+  const telOk = tel.length >= 8;
+  if (!mailOk && !telOk) return false;
+  return rows.some((r) => (mailOk && r.guestEmail.trim().toLowerCase() === mail) || (telOk && phoneKey(r.guestPhone) === tel));
+}
+
 export function guestPhone(raw: string) {
   const s = raw.trim();
   if (!s) return true;

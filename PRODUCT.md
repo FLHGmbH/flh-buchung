@@ -1,67 +1,75 @@
-# Product
+# FLH Buchung
 
-<!-- impeccable:product-schema 1 -->
+Online-Terminbuchung für die Websites von FLH-Kunden. Der Gast bucht im Fenster auf der Salon-Homepage, ohne Konto. Der Betrieb sieht den Termin sofort im eigenen Kalender und kann ihn dort pflegen. FLH legt die Betriebe an und setzt das Buchungsfenster auf die jeweilige Website.
 
-## Platform
+Ein Betrieb, ein Buchungsfenster, ein Login für den Betrieb. Die Termine gehören nur diesem Betrieb.
 
-web
+## Für wen
 
-## Stack
+**Gast.** Bucht eine Leistung auf der Website des Salons. Braucht kein Konto.
 
-React + Vite + TypeScript. Hosting: Vercel. Datenbank: Supabase Postgres. Öffentliche Buchung wird als iframe in FLH-Kunden-Homepages eingebettet.
+**Betrieb.** Pflegt Leistungen, Mitarbeiter und Zeiten. Sieht den Kalender, legt Termine selbst an und wertet aus, was gebucht wird.
 
-## Users
+**FLH.** Legt Betriebe an, gibt dem Betrieb seinen Login, sperrt oder aktiviert einen Betrieb und setzt das Buchungsfenster auf die Kundenwebsite.
 
-- **Mandanten-Admin (KD):** Inhaber oder Leitung eines Betriebs, für den FLH eine Homepage baut. Kommt aus dem Alltag (Termine, Personal, Urlaub), nicht aus der Software. Job: Kalender führen, Mitarbeiter und Sperren pflegen, alle Buchungen sehen.
-- **FLH-Admin:** FLH DIGITAL intern. Job: Mandanten anlegen, betreuen und das iframe-Snippet je Mandant holen, um es in die Kunden-HP einzubauen.
-- **Endkunde des KD:** Gast ohne Account. Job: auf der Kunden-HP einen freien Termin buchen.
+## Was der Gast macht
 
-Mitarbeiter des KD sind im MVP buchbare Ressourcen, kein eigener Login. Der KD-Admin legt Urlaub und andere Sperren für sie fest.
+Die Buchung läuft in kurzen Schritten:
 
-## Product Purpose
+1. Leistung wählen, nach Kategorie. Mehrere Leistungen können in einem Termin hintereinander liegen. Dauer, Preis und weitere Infos stehen bei der Leistung.
+2. Wunschperson wählen, oder „Egal“. Es erscheinen nur Personen, die diese Leistung machen und in den nächsten Tagen frei sind.
+3. Tag wählen, innerhalb der nächsten 14 Tage. Belegte und geschlossene Tage sind nicht wählbar.
+4. Optional eine passende Zusatzleistung im selben Termin dazunehmen, wenn der Betrieb das so hinterlegt hat. Der Gast kann sie auch weglassen.
+5. Uhrzeit wählen. Beginn und Ende der einzelnen Leistungen werden angezeigt.
+6. Name, E-Mail, Telefon und eine optionale Notiz angeben und der Datenschutzerklärung zustimmen. Preise sind eine Orientierung und können abweichen. Der Termin ist unverbindlich.
+7. Den 6-stelligen Code aus der Mail eingeben. Der Code gilt 15 Minuten. Erst danach ist der Termin bestätigt.
 
-Wiederverwendbares Terminbuchungs-Tool für FLH-Kundenwebsites. Ein Mandant = ein Betrieb. Der Mandant steuert Verfügbarkeit; Gäste sehen nur freie Slots und buchen über ein iframe auf der HP. Erfolg: FLH kann jeden neuen KD mit Account + iframe onboarden, ohne das Produkt neu zu bauen; Gäste können keinen belegten Slot wählen.
+Danach sieht der Gast die Bestätigung und eine kurze Buchungsnummer. Per Mail kommt die Bestätigung mit einer Kalenderdatei (`termin.ics`).
 
-## Positioning
+Online buchbar sind nur Zeiten, die wirklich frei sind: Öffnungszeiten, Arbeitszeit der Person, Dauer plus Nachbearbeitung, bereits gebuchte Termine und Abwesenheiten. Derselbe Zeitraum bei derselben Person kann nicht zweimal vergeben werden. Termine in den nächsten zwei Stunden sind online nicht buchbar. Wer einmal als „nicht erschienen“ markiert wurde, kann mit derselben E-Mail oder Telefonnummer nicht erneut online buchen.
 
-Kein generischer Kalender und kein öffentliches Buchungs-SaaS. Das Produkt sitzt in der FLH-Lieferkette: Homepage bauen, Mandant anlegen, iframe einsetzen. Verfügbarkeit (Öffnungszeiten minus Sperren minus bestehende Termine) ist die harte Kante.
+Der Gast kann den Termin nicht selbst verschieben oder absagen. Das macht der Betrieb.
 
-## Operating Context
+## Was der Betrieb kann
 
-FLH erstellt React/Vite-Homepages für Kunden und setzt dort ein iframe auf die öffentliche Buchungsseite (`/b/{tenant-slug}`). KD und FLH teilen eine Login-Seite; die Rolle entscheidet, ob das KD-Dashboard oder das FLH-Admin-Panel erscheint. Betrieb läuft im Browser, Hosting Vercel (Frankfurt), Datenbank Supabase.
+Nach dem Login sieht der Betrieb seinen eigenen Salon.
 
-## Capabilities and Constraints
+**Kalender.** Tag, Woche und Monat. Termine liegen farblich bei der Leistung. Ein Klick öffnet den Termin, ein freier Bereich legt einen neuen an.
 
-**Kann:**
+**Termine.** Liste aller Buchungen, durchsuchbar nach Name, E-Mail oder Telefon. Status: Code noch offen, bestätigt, storniert, nicht erschienen. Neue Termine kann der Betrieb auch selbst anlegen, inklusive weiterer Leistungen direkt im Anschluss, jeweils mit passender Person.
 
-- FLH legt Mandanten an und erhält das iframe-Embed je Mandant.
-- KD-Admin: Kalender, Mitarbeiter (Ressourcen), Urlaub/Sperren, Leistungen, Öffnungszeiten, alle Termine.
-- Gast im iframe: Leistung, optional Mitarbeiter, nur freie Tage/Slots, Kontaktdaten, Bestätigung.
-- Eine gemeinsame Login-Seite, rollenbasiert weiter.
+**Verschieben, stornieren, No-Show.** Ein bestätigter Termin lässt sich im Kalender auf eine andere Zeit, Person oder Leistung legen. Der Gast bekommt eine Mail mit bisheriger und neuer Zeit. Beim Stornieren wird die Zeit wieder frei und der Gast bekommt eine Absage-Mail, wenn eine E-Mail hinterlegt ist. „Nicht erschienen“ lässt den Termin sichtbar, gibt die Uhrzeit aber frei. „Doch gekommen“ hebt die Markierung wieder auf.
 
-**Nicht im MVP:** Mitarbeiter-Login, Endkunden-Accounts, Zahlung, Kalender-Sync, Erinnerungsmails, Gast-Storno, mehrere Standorte, Custom Domain pro Mandant.
+**Live-Hinweis.** Kommt eine neue Online-Buchung, während der Betrieb eingeloggt ist, erscheint ein kurzer Hinweis mit Name, Leistung, Person und Zeit.
 
-**Storno:** nur durch den KD-Admin. Der Gast bestätigt per PIN und hat danach keinen Storno-Weg.
+**Mitarbeiter.** Name, Foto, Farbe im Kalender, aktiv oder inaktiv. Eigene Arbeitszeiten pro Wochentag, oder die Öffnungszeiten des Betriebs. Anstehende Abwesenheit steht auf der Karte, die nächsten Termine der Person darunter.
 
-**Begriffe:** Mandant = FLH-Kunde/Betrieb. Staff = Mitarbeiter-Ressource. Gast = Endkunde ohne Login. Slot = freies Buchungsraster.
+**Sperren.** Urlaub, Krankheit oder eine andere Sperre für eine Person und einen Zeitraum. Liegen in der Zeit schon Termine, müssen die zuerst auf einen anderen Tag, eine andere Uhrzeit, eine andere Leistung oder eine andere Person gelegt werden. Erst dann gilt die Sperre.
 
-## Brand Commitments
+**Leistungen.** Kategorien, zum Beispiel Frauenhaarschnitt. Pro Leistung: Name, Dauer, Nachbearbeitung, welche Personen sie machen dürfen, optional ein Infotext, aktiv oder inaktiv. Preis als Festpreis, „ab“, Spanne oder ohne Preis. Eine Leistung kann mit genau einer anderen zusammen angeboten werden; die erscheint dem Gast als optionale Ergänzung. Beim Anlegen schlägt eine Vorlagenliste gängige Salonleistungen mit üblicher Dauer vor. Der Betrieb übernimmt den Vorschlag und kann ihn ändern.
 
-Name und Identität: **FLH DIGITAL**. Verbindliches CI aus dem Markenleitfaden (Anhang): Logo mit Hexagon-Mark und Wortmarke „FLH DIGITAL“, Primärfarben Petrol / Graphite / Amber, Hausschrift Apparat (Light, Regular, Bold), Systemschrift Segoe UI für Office-Dokumente. Gilt für Login, KD-Dashboard, FLH-Admin und das Buchungs-iframe. Keine fremde Markenwelt, kein Calendly-/SaaS-Klischee als Ersatz-CI.
+**Unternehmen.** Öffnungszeiten pro Wochentag. Logo oben im Buchungsfenster. Text und Bild am Ende jeder Mail an Gäste.
 
-## Evidence on Hand
+**Dashboard.** Für den laufenden Monat: Umsatz, Anzahl Termine, Buchungen insgesamt, Kunden insgesamt, jeweils im Vergleich zum Vormonat. Dazu Umsatz nach Monat, beliebteste Leistungen, Buchungen nach Herkunft (Kalender oder Buchungsseite) und nach Wochentag. Stornierte Termine zählen nicht. Umsatz kommt nur aus Leistungen, für die ein Preis hinterlegt ist.
 
-- CI-Seiten: Logo-Varianten, Farbtafel (Petrol `#006478`, Graphite `#253239`, Amber `#FF9600` plus Rasterwerte), Schrifttafel Apparat / Segoe UI. Dateien im Workspace unter den angehängten CI-Bildern.
-- Keine echten Mandantendaten, keine Testimonial-Zitate, keine Screenshots eines bestehenden Buchungstools. Folgearbeit darf keine erfundenen Kundenstimmen oder Kennzahlen als Beweis verwenden.
+## Was FLH kann
 
-## Product Principles
+**Mandanten.** Liste aller Betriebe, Suche nach Name, aktiv oder gesperrt. Einen Betrieb sperren heißt: das Buchungsfenster und der Login des Betriebs sind aus.
 
-1. Ein Produkt, drei Rollen, eine Login-Tür — nicht drei Apps.
-2. Gäste sehen nur, was buchbar ist; der Mandant sieht die volle Belegung.
-3. FLH onboardet Mandanten und baut das iframe in die HP; der KD betreibt den Kalender.
-4. Die App läuft auf Vercel, die Daten liegen in Supabase — nicht auf Render.
-5. CI von FLH DIGITAL ist die Identität, nicht ein Theme-Schalter.
+**Neuer Betrieb.** Name, Adresse des Buchungsfensters und der Login für den Betrieb (Name, E-Mail, Passwort). Das Passwort lässt sich später neu setzen.
 
-## Accessibility & Inclusion
+**Website.** Pro Betrieb gibt es die Buchungsadresse und ein Snippet für die Homepage. FLH kopiert das Snippet auf die Kundenwebsite. In der Verwaltung ist eine Vorschau des Buchungsfensters.
 
-Keine gesonderte Zertifizierungsvorgabe erfasst. Oberfläche deutsch. Mindeststandard für Folgearbeit: tastaturbedienbar, sichtbarer Fokus, Kontrast der CI-Volltöne gegen Weiß/Graphite prüfen (Amber als Fläche auf Weiß ist grenzwertig).
+**Dashboard über alle Betriebe.** Aktive und gesperrte Mandanten, Termine heute, Termine und Umsatz im Monat, Buchungen über das Jahr. Eine Nachschau-Liste zeigt Betriebe, die gesperrt sind, noch unvollständig eingerichtet sind oder seit 45 Tagen keine Buchung hatten.
+
+## Was bei einer Buchung passiert
+
+Der Gast wählt eine freie Zeit. Die Zeit bleibt für die Dauer des Codes reserviert, damit niemand dieselbe Lücke parallel bestätigt. Läuft der Code ab, ohne eingegeben zu werden, fällt die Reservierung weg.
+
+Mit dem richtigen Code ist der Termin bestätigt. Der Betrieb sieht ihn im Kalender und in der Terminliste. Der Gast hat die Bestätigung und die Kalenderdatei in der Mail.
+
+Verschiebt oder storniert der Betrieb den Termin, geht eine neue Mail raus. Der Kalender und die Mails zeigen denselben Stand.
+
+## Was dieses Produkt nicht ist
+
+Keine Bezahlung, keine Anzahlung, kein Gästekonto und keine Termin-Historie für den Gast. Keine Erinnerung vor dem Termin, keine Warteliste, keine Familienbuchung und kein salonübergreifendes Portal. Absage und Umbuchung laufen über den Betrieb, nicht über den Gast.

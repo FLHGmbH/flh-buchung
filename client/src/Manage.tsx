@@ -2,6 +2,7 @@ import { Fragment, useEffect, useMemo, useRef, useState, type FormEvent } from "
 import { api, useApi, type Bootstrap, type Booking, type StaffShift, type TimeOff } from "./api";
 import { matchTpl } from "./catalog";
 import { gsap, reduced, useGSAP } from "./motion";
+import { phoneKey } from "../../server/guest.ts";
 import { Avatar, BookingModal, centsFromEuro, euroInput, firstOpen, ImageDrop, Modal, PageHead, priceLabel, Skel, STAFF_COLORS, staffColor, svcTone } from "./ui";
 
 function useBoot() {
@@ -131,6 +132,29 @@ function offLabel(a: string, b: string) {
   return `${fmt.format(new Date(a))} – ${fmt.format(offLast(b))}`;
 }
 
+function noShowPeople(rows: Booking[]) {
+  const people: { id: string; name: string; email: string; phone: string; last: string; n: number }[] = [];
+  for (const b of rows) {
+    if (b.status !== "noshow") continue;
+    const mail = b.guestEmail.trim().toLowerCase();
+    const tel = phoneKey(b.guestPhone);
+    const hit = people.find((p) => (mail && p.email.trim().toLowerCase() === mail) || (tel.length >= 8 && phoneKey(p.phone) === tel));
+    if (!hit) {
+      people.push({ id: b.id, name: b.guestName, email: b.guestEmail, phone: b.guestPhone, last: b.startsAt, n: 1 });
+      continue;
+    }
+    hit.n += 1;
+    if (!hit.email && b.guestEmail) hit.email = b.guestEmail;
+    if (!hit.phone && b.guestPhone) hit.phone = b.guestPhone;
+    if (b.startsAt > hit.last) {
+      hit.last = b.startsAt;
+      hit.id = b.id;
+      if (b.guestName) hit.name = b.guestName;
+    }
+  }
+  return people.sort((a, b) => b.last.localeCompare(a.last));
+}
+
 function nextOff(staffId: string, rows: TimeOff[]) {
   const now = Date.now();
   return rows
@@ -144,19 +168,30 @@ export function BookingsPage() {
   const off = useApi<{ timeOff: TimeOff[] }>("/api/app/time-off");
   const rows = list?.bookings ?? [];
   const [q, setQ] = useState("");
+  const [tab, setTab] = useState<"all" | "noshow">("all");
   const [open, setOpen] = useState(false);
   const [pick, setPick] = useState<Booking | null>(null);
+  const people = useMemo(() => noShowPeople(rows), [rows]);
   const shown = useMemo(() => {
     const s = q.trim().toLowerCase();
     if (!s) return rows;
     return rows.filter((b) => `${b.guestName} ${b.guestEmail} ${b.guestPhone}`.toLowerCase().includes(s));
   }, [rows, q]);
+  const shownPeople = useMemo(() => {
+    const s = q.trim().toLowerCase();
+    if (!s) return people;
+    return people.filter((p) => `${p.name} ${p.email} ${p.phone}`.toLowerCase().includes(s));
+  }, [people, q]);
   if (!boot) return <Skel kind="table" />;
   return (
     <div className="page">
       <header className="page-head">
         <div className="head-tools">
           <h1>Termine</h1>
+          <div className="view-switch" role="tablist" aria-label="Termine">
+            <button type="button" className={tab === "all" ? "on" : ""} aria-pressed={tab === "all"} onClick={() => setTab("all")}>Termine</button>
+            <button type="button" className={tab === "noshow" ? "on" : ""} aria-pressed={tab === "noshow"} onClick={() => setTab("noshow")}>No Show</button>
+          </div>
           <label className="search">
             <span aria-hidden="true">⌕</span>
             <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Name oder E-Mail suchen" />
@@ -164,6 +199,51 @@ export function BookingsPage() {
         </div>
         <button className="btn" type="button" onClick={() => setOpen(true)}>+ Neuer Termin</button>
       </header>
+      {tab === "noshow" ? (
+        <>
+          <p className="hint-line">Erkannt an E-Mail oder Telefonnummer. Diese Gäste können online nicht mehr buchen.</p>
+          {shownPeople.length ? (
+            <div className="card-table">
+              <table className="table quiet click">
+                <thead>
+                  <tr>
+                    <th>Gast</th>
+                    <th>E-Mail</th>
+                    <th>Telefon</th>
+                    <th>Zuletzt</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {shownPeople.map((p) => {
+                    const w = when(p.last);
+                    return (
+                      <tr key={p.id} onClick={() => setPick(rows.find((b) => b.id === p.id) ?? null)}>
+                        <td>
+                          <div className="who-cell">
+                            <Avatar name={p.name || "Gast"} size={32} />
+                            <div>
+                              <strong>{p.name || "Gast"}</strong>
+                              {p.n > 1 ? <small>{p.n} Mal</small> : null}
+                            </div>
+                          </div>
+                        </td>
+                        <td>{p.email || "—"}</td>
+                        <td>{p.phone || "—"}</td>
+                        <td>
+                          <div className="when-day">{w.day}</div>
+                          <div className="when-time">{w.time}</div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <p className="hint-line">Noch niemand als nicht erschienen markiert.</p>
+          )}
+        </>
+      ) : (
       <div className="card-table">
         <table className="table quiet click">
           <thead>
@@ -183,6 +263,7 @@ export function BookingsPage() {
               const chip = svcTone(b.serviceId);
               const ok = b.status === "confirmed";
               const gone = b.status === "cancelled";
+              const missed = b.status === "noshow";
               return (
                 <tr key={b.id} onClick={() => setPick(b)}>
                   <td>
@@ -211,9 +292,9 @@ export function BookingsPage() {
                     ) : "—"}
                   </td>
                   <td>
-                    <span className={"status" + (ok ? " is-ok" : gone ? " is-off" : "")}>
+                    <span className={"status" + (missed ? " is-miss" : ok ? " is-ok" : gone ? " is-off" : "")}>
                       <i />
-                      {ok ? "Bestätigt" : gone ? "Storniert" : "PIN offen"}
+                      {missed ? "Nicht erschienen" : ok ? "Bestätigt" : gone ? "Storniert" : "PIN offen"}
                     </span>
                   </td>
                 </tr>
@@ -222,6 +303,7 @@ export function BookingsPage() {
           </tbody>
         </table>
       </div>
+      )}
       {pick ? (
         <BookingModal
           staff={boot.staff}
@@ -343,6 +425,7 @@ export function StaffPage() {
                     const chip = svcTone(b.serviceId);
                     const live = new Date(b.startsAt).getTime() <= Date.now();
                     const ok = b.status === "confirmed";
+                    const missed = b.status === "noshow";
                     return (
                       <tr key={b.id} onClick={() => setPick(b)}>
                         <td>
@@ -363,9 +446,9 @@ export function StaffPage() {
                           <span className="pill" style={{ background: chip.bg, color: chip.fg, borderColor: chip.bd }}>{svc?.name ?? "—"}</span>
                         </td>
                         <td>
-                          <span className={"status" + (live ? " is-look" : ok ? " is-ok" : "")}>
+                          <span className={"status" + (missed ? " is-miss" : live ? " is-look" : ok ? " is-ok" : "")}>
                             <i />
-                            {live ? "Jetzt" : ok ? "Bestätigt" : "PIN offen"}
+                            {missed ? "Nicht erschienen" : live ? "Jetzt" : ok ? "Bestätigt" : "PIN offen"}
                           </span>
                         </td>
                       </tr>

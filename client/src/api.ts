@@ -238,6 +238,11 @@ export const api = {
     return r;
   },
   cancelBooking: (id: string) => mutate(`/api/app/bookings/${id}/cancel`, { method: "POST" }),
+  noshowBooking: async (id: string, missed: boolean) => {
+    const r = await mutate<{ booking: Booking }>(`/api/app/bookings/${id}/noshow`, { method: "POST", body: JSON.stringify({ missed }) });
+    placeBooking(r.booking);
+    return r;
+  },
   sync: () => bust("/api/app"),
   pub: (slug: string) => inflight<Pub>(`/api/public/${slug}`),
   slots: (slug: string, serviceId: string, staffId?: string, extraIds?: string[]) =>

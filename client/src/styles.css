@@ -193,6 +193,9 @@ a { color: var(--petrol); }
   gap: 0.75rem;
 }
 .modal-foot.term-foot .btn { min-height: 44px; }
+.modal:has(.term-foot) { width: min(600px, 100%); }
+.modal-foot.term-foot.is-trio { grid-template-columns: 1fr 1fr 2fr; }
+.modal-foot.term-foot.is-trio .btn { padding-inline: 0.4rem; white-space: normal; line-height: 1.15; text-align: center; }
 .btn.outline {
   background: #fff;
   color: #334155;
@@ -350,6 +353,8 @@ a { color: var(--petrol); }
 .status.is-off { background: #f3f4f6; color: #6b7280; }
 .status.is-look { background: #fff4e5; color: #9a6200; }
 .status.is-look i { background: #ff9600; }
+.status.is-miss { background: #fde8e8; color: #9b2c2c; }
+.status.is-miss i { background: #9b2c2c; }
 .linkish {
   background: none;
   border: 0;
@@ -404,6 +409,21 @@ a { color: var(--petrol); }
   color: #64748b;
   font-size: 0.8rem;
 }
+.ask-copy {
+  margin: 0;
+  color: var(--ink);
+  font-size: 1rem;
+  line-height: 1.45;
+}
+.ask-note {
+  margin: 0.4rem 0 0;
+  color: #475569;
+  font-size: 0.875rem;
+  line-height: 1.5;
+}
+.modal:has(.ask-copy) { width: min(440px, 100%); padding: 1.35rem 1.45rem 1.3rem; }
+.modal:has(.ask-copy) .modal-head { margin-bottom: 0.85rem; }
+.modal:has(.ask-copy) .modal-foot { margin-top: 1.35rem; }
 .shift-week {
   display: grid;
   grid-template-columns: 1.6rem repeat(7, minmax(0, 1fr));
@@ -565,13 +585,16 @@ a { color: var(--petrol); }
   width: 40px;
   height: 40px;
   flex-shrink: 0;
+  display: grid;
+  place-items: center;
+  padding: 0;
   border: 0;
   border-radius: 999px;
   background: #f1f5f9;
   color: #64748b;
-  font-size: 1.2rem;
-  line-height: 1;
+  line-height: 0;
 }
+.modal-x svg, .live-x svg { display: block; }
 .more-svc { margin: 0.85rem 0 0; padding-top: 0.85rem; border-top: 1px solid #e6ebef; }
 .more-svc .when { margin: 0 0 0.45rem; color: #64748b; font-size: 0.8rem; }
 .more-add { width: 100%; margin-top: 0.85rem; }
@@ -907,12 +930,14 @@ a { color: var(--petrol); }
   width: 36px;
   height: 36px;
   flex-shrink: 0;
+  display: grid;
+  place-items: center;
+  padding: 0;
   border: 0;
   border-radius: 999px;
   background: #f4f5f7;
   color: var(--graphite-75);
-  font-size: 1.15rem;
-  line-height: 1;
+  line-height: 0;
 }
 .admin-grid {
   display: grid;
@@ -1169,6 +1194,9 @@ button.week-head.today {
   transition: filter 0.15s ease, transform 0.15s ease;
 }
 .ev:hover { filter: brightness(0.97); }
+.ev.is-miss { cursor: pointer; background: #f3f4f6; color: #6b7280; border-left-color: #9b2c2c; }
+.ev.is-miss strong { text-decoration: line-through; color: #6b7280; }
+.ev.is-miss span { color: #9b2c2c; }
 .ev strong, .ev span { display: block; font-size: 0.7rem; line-height: 1.2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .hint {
   background: #fff;

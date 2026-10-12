@@ -322,7 +322,7 @@ export function CalendarPage() {
   }
 
   function grab(e: ReactPointerEvent<HTMLButtonElement>, b: Booking, start: number, day: string) {
-    if (e.button !== 0 || !b.staffId) return;
+    if (e.button !== 0 || !b.staffId || b.status === "noshow") return;
     const ox = e.clientX;
     const oy = e.clientY;
     const originTop = e.currentTarget.offsetTop;
@@ -442,6 +442,7 @@ export function CalendarPage() {
                       <span className="month-num">{Number(d.slice(8))}</span>
                       {cellBooks.map((b) => {
                         const member = boot.staff.find((s) => s.id === b.staffId);
+                        const missed = b.status === "noshow";
                         const t = staffTone(member ? staffColor(member) : null);
                         const svc = boot.services.find((s) => s.id === b.serviceId)?.name ?? "Termin";
                         const who = member?.name;
@@ -449,15 +450,15 @@ export function CalendarPage() {
                           <button
                             key={b.id}
                             type="button"
-                            className="ev"
-                            style={{ background: t.bg, borderLeftColor: t.edge, color: t.title }}
+                            className={"ev" + (missed ? " is-miss" : "")}
+                            style={missed ? undefined : { background: t.bg, borderLeftColor: t.edge, color: t.title }}
                             onClick={(e) => {
                               e.stopPropagation();
                               setPick(b);
                             }}
                           >
-                            <strong style={{ color: t.title }}>{svc}</strong>
-                            <span style={{ color: t.sub }}>{who ? `${shortName(who)} · ` : ""}{shortName(b.guestName)}</span>
+                            <strong style={missed ? undefined : { color: t.title }}>{svc}</strong>
+                            <span style={missed ? undefined : { color: t.sub }}>{missed ? "Nicht erschienen · " : who ? `${shortName(who)} · ` : ""}{shortName(b.guestName)}</span>
                           </button>
                         );
                       })}
@@ -521,6 +522,7 @@ export function CalendarPage() {
                     })}
                     {placed.map(({ b, start, end, col, cols }) => {
                       const member = boot.staff.find((s) => s.id === b.staffId);
+                      const missed = b.status === "noshow";
                       const t = staffTone(member ? staffColor(member) : null);
                       const svc = boot.services.find((s) => s.id === b.serviceId)?.name ?? "Termin";
                       const who = member?.name;
@@ -539,11 +541,11 @@ export function CalendarPage() {
                         <button
                           key={b.id}
                           type="button"
-                          className={"ev" + (tight ? " is-tight" : "") + (held ? " is-drag" : "") + (bad ? " is-bad" : "")}
+                          className={"ev" + (tight ? " is-tight" : "") + (held ? " is-drag" : "") + (bad ? " is-bad" : "") + (missed ? " is-miss" : "")}
                           style={{
-                            background: t.bg,
-                            borderLeftColor: t.edge,
-                            color: t.title,
+                            background: missed ? undefined : t.bg,
+                            borderLeftColor: missed ? undefined : t.edge,
+                            color: missed ? undefined : t.title,
                             top,
                             height,
                             left: `calc(${(col / cols) * 100}% + 2px)`,
@@ -560,10 +562,10 @@ export function CalendarPage() {
                             setPick(b);
                           }}
                         >
-                          {tight ? <strong style={{ color: t.title }}>{facts}</strong> : (
+                          {tight ? <strong style={missed ? undefined : { color: t.title }}>{missed ? `${name} · nicht erschienen` : facts}</strong> : (
                             <>
-                              <strong style={{ color: t.title }}>{svc}</strong>
-                              <span style={{ color: t.sub }}>{[name, ma].filter(Boolean).join(" · ")}</span>
+                              <strong style={missed ? undefined : { color: t.title }}>{svc}</strong>
+                              <span style={missed ? undefined : { color: t.sub }}>{missed ? `Nicht erschienen · ${name}` : [name, ma].filter(Boolean).join(" · ")}</span>
                             </>
                           )}
                         </button>

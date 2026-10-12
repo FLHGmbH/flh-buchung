@@ -1,4 +1,4 @@
-import { guestMail, guestPhone } from "./guest.ts";
+import { guestMail, guestPhone, blockedGuest, phoneKey } from "./guest.ts";
 import { confirmIcs, dotStuff, encodeSubject, escHtml, guestInfoMail, icsEscape, icsFold, icsUtc, mailbox, mailboxAddr, mailEnding, mimeBody, newPin, PIN_MS } from "./mail.ts";
 
 function assert(cond: unknown, msg: string) {
@@ -23,6 +23,10 @@ assert(guestMail("Max@Mustermann.DE") && guestMail("max.m+tag@example.co.uk"), "
 assert(!guestMail("a@b") && !guestMail("a@b.c") && !guestMail("max@") && !guestMail("a@@b.de") && !guestMail("a@b.de\ncc@d.de"), "guest mail reject");
 assert(guestPhone("") && guestPhone("0151 12345678") && guestPhone("+49 151 12345678") && guestPhone("089/12345678"), "guest phone");
 assert(!guestPhone("abc") && !guestPhone("123") && !guestPhone("++49151") && !guestPhone("1234567890123456"), "guest phone reject");
+assert(phoneKey("0170 000000") === phoneKey("+49 170 000000") && phoneKey("0170 000000") === "170000000", "phone key");
+const missed = [{ guestEmail: "Lea@Example.test", guestPhone: "0170 000000" }];
+assert(blockedGuest(missed, "lea@example.test", "0151 111") && blockedGuest(missed, "other@example.test", "+49 170 000000"), "noshow match");
+assert(!blockedGuest(missed, "other@example.test", "0151 12345678") && !blockedGuest([], "lea@example.test", "0170 000000"), "noshow miss");
 assert(encodeSubject("Code") === "Code", "ascii subject");
 assert(encodeSubject("für").startsWith("=?UTF-8?B?"), "utf8 subject");
 assert(dotStuff("ok\n.\nhi") === "ok\n..\nhi", "dot stuff");
