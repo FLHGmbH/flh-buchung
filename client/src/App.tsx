@@ -13,14 +13,15 @@ import { Shell } from "./Shell";
 export function App() {
   const loc = useLocation();
   const [actor, setActor] = useState<Actor | null>(() => rememberedActor());
+  const [known, setKnown] = useState(false);
 
   useEffect(() => {
-    api.me().then((r) => setActor(r.actor)).catch(() => setActor(null));
+    api.me().then((r) => setActor(r.actor)).catch(() => setActor(null)).finally(() => setKnown(true));
   }, []);
   useEffect(() => {
-    if (!actor) return;
+    if (!known || !actor) return;
     api.prefetch(actor.role === "tenant_admin" ? "/app" : "/admin");
-  }, [actor]);
+  }, [actor, known]);
 
   if (loc.hash.includes("type=recovery") && loc.pathname !== "/reset") {
     return <Navigate to={{ pathname: "/reset", hash: loc.hash }} replace />;
@@ -44,10 +45,12 @@ export function App() {
       <Route path="/reset" element={<ResetPage />} />
       <Route path="/agb" element={<LegalPage kind="agb" />} />
       <Route path="/datenschutz" element={<LegalPage kind="privacy" />} />
-      <Route path="/login" element={actor ? <Home actor={actor} /> : <LoginPage onLogin={(a) => { setActor(a); api.prefetch(a.role === "tenant_admin" ? "/app" : "/admin"); }} />} />
+      <Route path="/login" element={!known ? null : actor ? <Home actor={actor} /> : <LoginPage onLogin={(a) => { setActor(a); api.prefetch(a.role === "tenant_admin" ? "/app" : "/admin"); }} />} />
       <Route
         element={
-          actor ? (
+          !known ? (
+            <Hold />
+          ) : actor ? (
             <Shell actor={actor} onLogout={() => api.logout().then(() => setActor(null))} />
           ) : (
             <Navigate to="/login" replace />
@@ -70,9 +73,13 @@ export function App() {
           <Route path="/admin/:id" element={<AdminDetail />} />
         </Route>
       </Route>
-      <Route path="*" element={<Home actor={actor} />} />
+      <Route path="*" element={!known ? null : <Home actor={actor} />} />
     </Routes>
   );
+}
+
+function Hold() {
+  return null;
 }
 
 function Home({ actor }: { actor: Actor | null }) {

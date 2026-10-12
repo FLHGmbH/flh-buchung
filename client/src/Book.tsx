@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useParams } from "react-router-dom";
-import { api, type Pub } from "./api";
+import { api, type ApiErr, type Pub } from "./api";
 import { guestMail, guestPhone } from "../../server/guest.ts";
 import { Fold, gsap, reduced, StepPane, useGSAP } from "./motion";
-import { euro, priceLabel, serviceLine } from "./ui";
+import { euro, Modal, priceLabel, serviceLine } from "./ui";
 
 function berlinDay(iso: string) {
   return new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Berlin", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date(iso));
@@ -15,6 +15,16 @@ export function BookPage() {
   const { slug = "" } = useParams();
   const [pub, setPub] = useState<Pub | null>(null);
   const [err, setErr] = useState("");
+  const [block, setBlock] = useState<string | null>(null);
+  function noteErr(ex: unknown) {
+    const hit = ex as ApiErr;
+    if (hit instanceof Error && hit.blocked) {
+      setErr("");
+      setBlock(hit.phone ?? "");
+      return;
+    }
+    setErr(ex instanceof Error ? ex.message : "Buchung fehlgeschlagen.");
+  }
   useEffect(() => {
     if (!slug) return;
     let on = true;
@@ -180,6 +190,19 @@ export function BookPage() {
       <h1>{pub.tenant.name}</h1>
       <p className="lead">Leistung, Zeit, dann der Code aus der Mail.</p>
       {err ? <p className="err" role="alert">{err}</p> : null}
+      {block !== null ? (
+        <Modal title="Online-Buchung nicht möglich" onClose={() => setBlock(null)}>
+          <p className="ask-copy">Online-Buchung ist für diese E-Mail oder Telefonnummer nicht möglich. Bitte den Salon anrufen.</p>
+          {block ? (
+            <a className="ask-phone" href={`tel:${block.replace(/[^\d+]/g, "")}`}>{block}</a>
+          ) : (
+            <p className="ask-note">Im Salon ist noch keine Telefonnummer hinterlegt.</p>
+          )}
+          <div className="modal-foot">
+            <button className="btn" type="button" onClick={() => setBlock(null)}>Schließen</button>
+          </div>
+        </Modal>
+      ) : null}
       <div className="book-progress">
         <div className="book-progress-top">
           <span>Schritt {at + 1} von {labels.length}</span>
@@ -329,7 +352,7 @@ export function BookPage() {
                 setHold((r as { booking: { id: string; startsAt: string } }).booking);
                 setStep(6);
               })
-              .catch((ex) => setErr(ex.message))
+              .catch((ex) => noteErr(ex))
               .finally(() => setPending(false));
           }}
         >
@@ -386,7 +409,7 @@ export function BookPage() {
                 setDone(r.booking);
                 setStep(7);
               })
-              .catch((ex) => setErr(ex.message))
+              .catch((ex) => noteErr(ex))
               .finally(() => setPending(false));
           }}
         >

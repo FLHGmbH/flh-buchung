@@ -1107,11 +1107,17 @@ export function HoursPage() {
   const boot = useBoot();
   const [rows, setRows] = useState<{ weekday: number; startHm: string; endHm: string; open: boolean }[]>([]);
   const [sign, setSign] = useState("");
+  const [address, setAddress] = useState("");
+  const [phone, setPhone] = useState("");
+  const [mail, setMail] = useState("");
   const [err, setErr] = useState("");
   const [pending, setPending] = useState(false);
   useEffect(() => {
     if (!boot || rows.length) return;
     setSign(boot.tenant.mailSign ?? "");
+    setAddress(boot.tenant.address ?? "");
+    setPhone(boot.tenant.phone ?? "");
+    setMail(boot.tenant.contactEmail ?? "");
     setRows([1, 2, 3, 4, 5, 6, 7].map((weekday) => {
       const h = boot.hours.find((x) => x.weekday === weekday);
       return { weekday, startHm: h?.startHm ?? "09:00", endHm: h?.endHm ?? (weekday === 6 ? "14:00" : "18:00"), open: Boolean(h) };
@@ -1122,6 +1128,40 @@ export function HoursPage() {
     <div className="page slim">
       <PageHead title="Unternehmen" lead="Aufklappen, ändern, speichern." />
       {err ? <p className="err" role="alert">{err}</p> : null}
+      <details className="set-fold" open>
+        <summary>Kontakt</summary>
+        <div className="card-body">
+          <label className="field">
+            <span>Adresse</span>
+            <textarea value={address} onChange={(e) => setAddress(e.target.value)} placeholder={"Musterstraße 1\n12345 Berlin"} />
+          </label>
+          <label className="field">
+            <span>Telefon</span>
+            <input type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="030 12345678" />
+          </label>
+          <label className="field">
+            <span>Kontakt-E-Mail</span>
+            <input type="email" value={mail} onChange={(e) => setMail(e.target.value)} placeholder="salon@example.de" />
+          </label>
+          <p className="hint-line">Die Telefonnummer steht im Buchungsfenster, wenn jemand online nicht mehr buchen darf.</p>
+          <div className="hours-foot">
+            <button
+              className="btn"
+              type="button"
+              disabled={pending}
+              onClick={() => {
+                setErr("");
+                setPending(true);
+                api.putContact({ address, phone, email: mail })
+                  .catch((ex) => setErr(ex instanceof Error ? ex.message : "Speichern fehlgeschlagen."))
+                  .finally(() => setPending(false));
+              }}
+            >
+              Speichern
+            </button>
+          </div>
+        </div>
+      </details>
       <details className="set-fold" open>
         <summary>Öffnungszeiten</summary>
         {rows.map((r, i) => (

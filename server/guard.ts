@@ -76,7 +76,7 @@ export function bookWindow(zone: string, now = new Date()) {
   return { from, to: from.plus({ days: BOOK_DAYS }).endOf("day") };
 }
 
-export const LEN = { name: 80, note: 500, email: 254, phone: 40, reason: 120, password: 200, sign: 800 };
+export const LEN = { name: 80, note: 500, email: 254, phone: 40, address: 300, reason: 120, password: 200, sign: 800 };
 
 export function clip(s: string, max: number) {
   return s.trim().slice(0, max);

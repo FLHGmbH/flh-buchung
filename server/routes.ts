@@ -1029,6 +1029,19 @@ api.put("/app/mail-sign", async (c) => {
   return c.json({ mailSign });
 });
 
+api.put("/app/contact", async (c) => {
+  const tid = tenantId(c);
+  const body = await readJson<{ address?: string; phone?: string; email?: string }>(c);
+  if (!body) return c.json({ error: "Ungültige Anfrage." }, 400);
+  const address = clip(body.address ?? "", LEN.address);
+  const phone = clip(body.phone ?? "", LEN.phone);
+  const email = clip((body.email ?? "").toLowerCase(), LEN.email);
+  if (phone && !guestPhone(phone)) return c.json({ error: "Bitte eine gültige Telefonnummer angeben." }, 400);
+  if (email && !guestMail(email)) return c.json({ error: "Bitte eine gültige E-Mail angeben." }, 400);
+  await db.update(tenants).set({ address, phone, contactEmail: email }).where(eq(tenants.id, tid));
+  return c.json({ address, phone, email });
+});
+
 api.post("/app/mail-image", async (c) => {
   const tid = tenantId(c);
   const [tenant] = await db.select().from(tenants).where(eq(tenants.id, tid)).limit(1);
@@ -1406,7 +1419,7 @@ api.get("/public/:slug", async (c) => {
     .where(eq(serviceCategories.tenantId, tenant.id))
     .orderBy(serviceCategories.sort);
   return c.json({
-    tenant: { name: tenant.name, slug: tenant.slug, timezone: tenant.timezone, logoUrl: tenant.logoUrl },
+    tenant: { name: tenant.name, slug: tenant.slug, timezone: tenant.timezone, logoUrl: tenant.logoUrl, phone: tenant.phone },
     staff: staffRows.map((s) => ({ id: s.id, name: s.name, photoUrl: s.photoUrl })),
     categories,
     services: serviceRows.map((s) => ({
@@ -1503,6 +1516,14 @@ async function guestBlocked(tid: string, email: string, phone: string) {
   return blockedGuest(rows, email, phone);
 }
 
+function noshowBlock(phone: string) {
+  return {
+    error: "Online-Buchung ist für diese E-Mail oder Telefonnummer nicht möglich. Bitte den Salon anrufen.",
+    blocked: true,
+    phone,
+  };
+}
+
 api.post("/public/:slug/book", async (c) => {
   const ip = clientIp(c.req);
   if (limited(`book:${ip}`, BOOK_MAX, WINDOW_MS)) {
@@ -1535,7 +1556,7 @@ api.post("/public/:slug/book", async (c) => {
   const phone = clip(body.guestPhone ?? "", LEN.phone);
   if (!guestPhone(phone)) return c.json({ error: "Bitte eine gültige Telefonnummer angeben." }, 400);
   if (await guestBlocked(tenant.id, guestEmail, phone)) {
-    return c.json({ error: "Online-Buchung ist für diese E-Mail oder Telefonnummer nicht möglich. Bitte den Salon anrufen." }, 403);
+    return c.json(noshowBlock(tenant.phone), 403);
   }
   if (limited(`bookmail:${tenant.id}:${guestEmail}`, BOOK_MAX, WINDOW_MS)) {
     return c.json({ error: "Zu viele Buchungen. Bitte später erneut." }, 429);
@@ -1671,7 +1692,7 @@ api.post("/public/:slug/bookings/:id/confirm", async (c) => {
   if (row.status !== "pending" || !row.pinHash) return c.json({ error: "Buchung unbekannt oder abgelaufen." }, 404);
   if (!(await verifyPassword(pin, row.pinHash))) return c.json({ error: "Code stimmt nicht." }, 400);
   if (await guestBlocked(tenant.id, row.guestEmail, row.guestPhone)) {
-    return c.json({ error: "Online-Buchung ist für diese E-Mail oder Telefonnummer nicht möglich. Bitte den Salon anrufen." }, 403);
+    return c.json(noshowBlock(tenant.phone), 403);
   }
   const mates = (await db
     .select()

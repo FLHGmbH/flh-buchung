@@ -415,6 +415,14 @@ a { color: var(--petrol); }
   font-size: 1rem;
   line-height: 1.45;
 }
+.ask-phone {
+  display: block;
+  margin: 0.85rem 0 0;
+  color: var(--ink);
+  font-size: 1.35rem;
+  letter-spacing: 0.01em;
+  text-decoration: none;
+}
 .ask-note {
   margin: 0.4rem 0 0;
   color: #475569;

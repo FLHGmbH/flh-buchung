@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import { tickSaved } from "./motion";
 
+export type ApiErr = Error & { blocked?: boolean; phone?: string };
+
 export type Actor = {
   id: string;
   email: string;
@@ -35,9 +37,7 @@ export function rememberedActor(): Actor | null {
   try {
     const raw = sessionStorage.getItem(ACTOR_KEY);
     if (raw == null) return null;
-    const actor = JSON.parse(raw) as Actor | null;
-    persistActor(actor);
-    return actor;
+    return JSON.parse(raw) as Actor | null;
   } catch {
     return null;
   }
@@ -157,7 +157,15 @@ async function req<T>(path: string, init?: RequestInit): Promise<T> {
     headers: init?.body instanceof FormData ? init.headers : { "content-type": "application/json", ...(init?.headers ?? {}) },
   });
   const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error((data as { error?: string }).error || res.statusText);
+  if (!res.ok) {
+    const body = data as { error?: string; blocked?: boolean; phone?: string };
+    const err = new Error(body.error || res.statusText) as ApiErr;
+    if (body.blocked) {
+      err.blocked = true;
+      err.phone = body.phone ?? "";
+    }
+    throw err;
+  }
   return data as T;
 }
 
@@ -220,6 +228,8 @@ export const api = {
   putLogo: (body: FormData) => mutate("/api/app/logo", { method: "POST", body }),
   delLogo: () => mutate("/api/app/logo", { method: "DELETE" }),
   putMailSign: (sign: string) => mutate("/api/app/mail-sign", { method: "PUT", body: JSON.stringify({ sign }) }),
+  putContact: (body: { address: string; phone: string; email: string }) =>
+    mutate("/api/app/contact", { method: "PUT", body: JSON.stringify(body) }),
   putMailImage: (body: FormData) => mutate("/api/app/mail-image", { method: "POST", body }),
   delMailImage: () => mutate("/api/app/mail-image", { method: "DELETE" }),
   timeOff: () => inflight<{ timeOff: TimeOff[] }>("/api/app/time-off"),
@@ -256,8 +266,11 @@ export const api = {
       body: JSON.stringify({ pin }),
     }),
   prefetch(to: string) {
+    const warm = (path: string) => {
+      void inflight(path).catch(() => {});
+    };
     if (to === "/app") {
-      inflight("/api/app/bootstrap");
+      warm("/api/app/bootstrap");
       const d = new Date();
       const z = new Date(d.getTime() - d.getTimezoneOffset() * 60000);
       const cur = z.toISOString().slice(0, 10);
@@ -267,23 +280,23 @@ export const api = {
         const x = new Date(mon);
         x.setDate(mon.getDate() + delta);
         const y = new Date(x.getTime() - x.getTimezoneOffset() * 60000);
-        inflight(`/api/app/week?from=${y.toISOString().slice(0, 10)}`);
+        warm(`/api/app/week?from=${y.toISOString().slice(0, 10)}`);
       }
     } else if (to === "/app/dashboard") {
-      inflight("/api/app/dashboard");
+      warm("/api/app/dashboard");
     } else if (to === "/app/termine") {
-      inflight("/api/app/bootstrap");
-      inflight("/api/app/bookings");
+      warm("/api/app/bootstrap");
+      warm("/api/app/bookings");
     } else if (to === "/app/mitarbeiter") {
-      inflight("/api/app/bootstrap");
-      inflight("/api/app/bookings");
-      inflight("/api/app/time-off");
+      warm("/api/app/bootstrap");
+      warm("/api/app/bookings");
+      warm("/api/app/time-off");
     } else if (to === "/app/sperren") {
-      inflight("/api/app/bootstrap");
-      inflight("/api/app/time-off");
-    } else if (to.startsWith("/app")) inflight("/api/app/bootstrap");
-    else if (to === "/admin/dashboard") inflight("/api/admin/dashboard");
-    else if (to === "/admin") inflight("/api/admin/tenants");
+      warm("/api/app/bootstrap");
+      warm("/api/app/time-off");
+    } else if (to.startsWith("/app")) warm("/api/app/bootstrap");
+    else if (to === "/admin/dashboard") warm("/api/admin/dashboard");
+    else if (to === "/admin") warm("/api/admin/tenants");
   },
 };
 
@@ -314,7 +327,7 @@ export type Booking = {
 };
 export type TimeOff = { id: string; staffId: string; startsAt: string; endsAt: string; reason: string };
 export type Bootstrap = {
-  tenant: { id: string; name: string; timezone: string; logoUrl?: string | null; mailSign?: string | null; mailImageUrl?: string | null };
+  tenant: { id: string; name: string; timezone: string; logoUrl?: string | null; mailSign?: string | null; mailImageUrl?: string | null; address?: string; phone?: string; contactEmail?: string };
   staff: Staff[];
   staffHours: StaffShift[];
   categories: ServiceCategory[];
@@ -361,7 +374,7 @@ export type WeekPayload = {
   timeOff: TimeOff[];
 };
 export type Pub = {
-  tenant: { name: string; slug: string; timezone: string; logoUrl?: string | null };
+  tenant: { name: string; slug: string; timezone: string; logoUrl?: string | null; phone?: string };
   staff: { id: string; name: string; photoUrl?: string | null }[];
   categories: ServiceCategory[];
   services: { id: string; name: string; durationMin: number; bufferMin?: number; categoryId?: string | null; priceCents?: number | null; priceMaxCents?: number | null; priceFrom?: boolean; info?: string; staffIds: string[]; crossIds?: string[] }[];

@@ -204,9 +204,7 @@ function shortName(name: string) {
 }
 
 function warm(mon: string) {
-  api.week(mon);
-  api.week(shift(mon, -7));
-  api.week(shift(mon, 7));
+  for (const day of [mon, shift(mon, -7), shift(mon, 7)]) void api.week(day).catch(() => {});
 }
 
 type CalView = "day" | "week" | "month";

@@ -6,6 +6,9 @@ CREATE TABLE IF NOT EXISTS tenants (
   active boolean NOT NULL DEFAULT true,
   min_notice_min integer NOT NULL DEFAULT 120,
   logo_url text,
+  address text NOT NULL DEFAULT '',
+  phone text NOT NULL DEFAULT '',
+  contact_email text NOT NULL DEFAULT '',
   mail_sign text NOT NULL DEFAULT '',
   mail_image_url text,
   created_at timestamptz NOT NULL DEFAULT now()
