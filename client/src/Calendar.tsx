@@ -382,6 +382,7 @@ export function CalendarPage() {
             <button
               className="btn"
               type="button"
+              data-tour="add-booking"
               onClick={() => {
                 const time = "09:00";
                 const hit = firstOpen(boot.staff, boot.services, today, time, books, week?.timeOff ?? [], boot.staffHours ?? []);
@@ -448,6 +449,8 @@ export function CalendarPage() {
                           <button
                             key={b.id}
                             type="button"
+                            data-tour="chip"
+                            data-id={b.id}
                             className={"ev" + (missed ? " is-miss" : "")}
                             style={missed ? undefined : { background: t.bg, borderLeftColor: t.edge, color: t.title }}
                             onClick={(e) => {
@@ -539,6 +542,8 @@ export function CalendarPage() {
                         <button
                           key={b.id}
                           type="button"
+                          data-tour="chip"
+                          data-id={b.id}
                           className={"ev" + (tight ? " is-tight" : "") + (held ? " is-drag" : "") + (bad ? " is-bad" : "") + (missed ? " is-miss" : "")}
                           style={{
                             background: missed ? undefined : t.bg,

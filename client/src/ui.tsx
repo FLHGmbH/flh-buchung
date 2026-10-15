@@ -453,7 +453,7 @@ export function BookingModal({
   return (
     <>
     <Modal title={booking ? "Termin" : "Neuer Termin"} onClose={onClose}>
-      <form onSubmit={submit}>
+      <form onSubmit={submit} data-tour="booking-form" data-id={booking?.id ?? ""}>
         {err ? <p className="err">{err}</p> : null}
         {!err && mineOff && who ? <p className="err">{who.name} arbeitet zu der Zeit nicht.</p> : null}
         {!err && !mineOff && mineBusy && who ? <p className="err">{who.name} ist zu der Zeit nicht frei.</p> : null}
@@ -521,7 +521,7 @@ export function BookingModal({
           </div>
           <label className="field">
             <span>Gast</span>
-            <input required value={form.guestName} onChange={(e) => setForm({ ...form, guestName: e.target.value })} placeholder="Max Mustermann" />
+            <input required data-tour="guest-name" value={form.guestName} onChange={(e) => setForm({ ...form, guestName: e.target.value })} placeholder="Max Mustermann" />
           </label>
           <div className="fields-2">
             <label className="field">
@@ -607,13 +607,13 @@ export function BookingModal({
           {booking && !gone && !missed ? (
             <>
               <button type="button" className="btn amber" disabled={pending} onClick={() => setAskMiss(true)}>Nicht erschienen</button>
-              <button type="button" className="btn danger-line" disabled={pending} onClick={() => setAskDrop(true)}>Stornieren</button>
+              <button type="button" className="btn danger-line" data-tour="cancel-booking" disabled={pending} onClick={() => setAskDrop(true)}>Stornieren</button>
             </>
           ) : (
             <button type="button" className="btn outline" onClick={onClose}>Schließen</button>
           )}
           {gone || missed ? null : (
-            <button className="btn" disabled={pending || mineBusy || extraBad || !choices.length}>{pending ? "Speichern…" : booking ? "Speichern" : "Termin erstellen"}</button>
+            <button className="btn" data-tour="save-booking" disabled={pending || mineBusy || extraBad || !choices.length}>{pending ? "Speichern…" : booking ? "Speichern" : "Termin erstellen"}</button>
           )}
         </div>
       </form>
@@ -634,7 +634,7 @@ export function BookingModal({
         <p className="ask-note">Der Termin wird abgesagt und verschwindet aus dem Kalender.{booking.guestEmail.trim() ? " Der Gast bekommt eine Info-Mail." : ""}</p>
         <div className="modal-foot is-split">
           <button type="button" className="btn outline" disabled={pending} onClick={() => setAskDrop(false)}>Abbrechen</button>
-          <button type="button" className="btn danger" disabled={pending} onClick={drop}>{pending ? "Stornieren…" : "Stornieren"}</button>
+          <button type="button" className="btn danger" data-tour="confirm-cancel" disabled={pending} onClick={drop}>{pending ? "Stornieren…" : "Stornieren"}</button>
         </div>
       </Modal>
     ) : null}

@@ -366,7 +366,7 @@ export function StaffPage() {
     <div className="page">
       <PageHead
         title="Mitarbeiter"
-        aside={<button className="btn" type="button" onClick={() => { setColor(STAFF_COLORS[boot.staff.length % STAFF_COLORS.length]); setOpen(true); }}>+ Mitarbeiter</button>}
+        aside={<button className="btn" type="button" data-tour="add-staff" onClick={() => { setColor(STAFF_COLORS[boot.staff.length % STAFF_COLORS.length]); setOpen(true); }}>+ Mitarbeiter</button>}
       />
       <div className="staff-grid">
         {boot.staff.map((s) => {
@@ -485,12 +485,12 @@ export function StaffPage() {
           >
             <label className="field">
               <span>Name</span>
-              <input value={name} onChange={(e) => setName(e.target.value)} required placeholder="Max Mustermann" />
+              <input data-tour="staff-name" value={name} onChange={(e) => setName(e.target.value)} required placeholder="Max Mustermann" />
             </label>
             <ColorPick value={color} onChange={setColor} />
             <div className="modal-foot">
               <button type="button" className="btn outline" onClick={() => setOpen(false)}>Abbrechen</button>
-              <button className="btn" type="submit">Mitarbeiter hinzufügen</button>
+              <button className="btn" type="submit" data-tour="save-staff">Mitarbeiter hinzufügen</button>
             </div>
           </form>
         </Modal>
@@ -827,8 +827,8 @@ export function ServicesPage() {
         title="Leistungen"
         aside={
           <div className="head-tools">
-            <button className="btn outline" type="button" onClick={() => { setErr(""); setCatForm({ name: "" }); }}>+ Kategorie</button>
-            <button className="btn" type="button" onClick={() => { setErr(""); setNameLive(false); setSlide(0); setForm({ ...blank }); }}>+ Leistung</button>
+            <button className="btn outline" type="button" data-tour="add-category" onClick={() => { setErr(""); setCatForm({ name: "" }); }}>+ Kategorie</button>
+            <button className="btn" type="button" data-tour="add-service" onClick={() => { setErr(""); setNameLive(false); setSlide(0); setForm({ ...blank }); }}>+ Leistung</button>
           </div>
         }
       />
@@ -906,7 +906,7 @@ export function ServicesPage() {
             {err ? <p className="err" role="alert">{err}</p> : null}
             <label className="field">
               <span>Name</span>
-              <input value={catForm.name} onChange={(e) => setCatForm({ ...catForm, name: e.target.value })} required placeholder="z. B. Frauenhaarschnitt" />
+              <input data-tour="cat-name" value={catForm.name} onChange={(e) => setCatForm({ ...catForm, name: e.target.value })} required placeholder="z. B. Frauenhaarschnitt" />
             </label>
             <div className="modal-foot">
               {catForm.id ? (
@@ -927,14 +927,14 @@ export function ServicesPage() {
               ) : (
                 <button type="button" className="btn outline" onClick={() => setCatForm(null)}>Abbrechen</button>
               )}
-              <button className="btn" type="submit" disabled={pending}>{pending ? "Speichern…" : "Speichern"}</button>
+              <button className="btn" type="submit" data-tour="save-category" disabled={pending}>{pending ? "Speichern…" : "Speichern"}</button>
             </div>
           </form>
         </Modal>
       ) : null}
       {form ? (
         <Modal title={form.id ? "Leistung" : "Neue Leistung"} onClose={() => { setAskDel(false); setForm(null); }}>
-          <form className="svc-form"
+          <form className="svc-form" data-tour="svc-form" data-slide={slide}
             onSubmit={(e) => {
               e.preventDefault();
               if (slide < 2) go(slide + 1);
@@ -954,6 +954,7 @@ export function ServicesPage() {
                     onChange={(e) => { setNameLive(true); setForm({ ...form, name: e.target.value }); }}
                     onBlur={() => setNameLive(false)}
                     required
+                    data-tour="svc-name"
                     placeholder="z. B. Waschen, Schneiden, Föhnen"
                   />
                 </label>
@@ -999,7 +1000,7 @@ export function ServicesPage() {
             </div>
             <div className="svc-pane" inert={slide !== 1}>
             <p className="svc-step">Schritt 2 von 3 · Mitarbeiter</p>
-              <div className="field">
+              <div className="field" data-tour="svc-staff">
                 <span>Wer darf die Leistung machen?</span>
                 {boot.staff.length ? boot.staff.map((s) => (
                   <label className="check" key={s.id}>
@@ -1068,7 +1069,7 @@ export function ServicesPage() {
               ) : (
                 <button type="button" className="btn outline" onClick={() => { setErr(""); setSlide(slide - 1); }}>Zurück</button>
               )}
-              <button type="button" className="btn" disabled={pending} onClick={() => (slide < 2 ? go(slide + 1) : save())}>
+              <button type="button" className="btn" data-tour="save-service" disabled={pending} onClick={() => (slide < 2 ? go(slide + 1) : save())}>
                 {pending ? "Speichern…" : slide < 2 ? "Weiter" : "Speichern"}
               </button>
             </div>

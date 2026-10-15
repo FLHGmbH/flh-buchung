@@ -1,10 +1,11 @@
-import { useEffect, useRef, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { NavLink } from "react-router-dom";
 import { api, type Actor } from "./api";
 import { gsap, PageMotion, reduced, useGSAP } from "./motion";
 import { Avatar } from "./ui";
 import { LiveBookings } from "./Live";
 import { Mark } from "./Mark";
+import { Tour } from "./Tour";
 
 function Ico({ children }: { children: ReactNode }) {
   return (
@@ -81,9 +82,9 @@ const ICONS: Record<string, ReactNode> = {
   ),
 };
 
-function link(to: string, label: string) {
+function link(to: string, label: string, tour?: string) {
   return (
-    <NavLink to={to} end={to === "/app" || to === "/admin"} onMouseEnter={() => api.prefetch(to)} onFocus={() => api.prefetch(to)}>
+    <NavLink to={to} end={to === "/app" || to === "/admin"} data-tour={tour} onMouseEnter={() => api.prefetch(to)} onFocus={() => api.prefetch(to)}>
       {ICONS[label]}
       <span>{label}</span>
     </NavLink>
@@ -92,6 +93,7 @@ function link(to: string, label: string) {
 
 export function Shell({ actor, onLogout }: { actor: Actor; onLogout: () => void }) {
   const kd = actor.role === "tenant_admin";
+  const [tour, setTour] = useState(0);
   const side = useRef<HTMLAsideElement>(null);
   useEffect(() => { api.prefetch(kd ? "/app" : "/admin"); }, [kd]);
   useGSAP(() => {
@@ -108,11 +110,11 @@ export function Shell({ actor, onLogout }: { actor: Actor; onLogout: () => void 
           {kd ? (
             <>
               {link("/app/dashboard", "Dashboard")}
-              {link("/app", "Kalender")}
+              {link("/app", "Kalender", "nav-calendar")}
               {link("/app/termine", "Termine")}
-              {link("/app/mitarbeiter", "Mitarbeiter")}
+              {link("/app/mitarbeiter", "Mitarbeiter", "nav-staff")}
               {link("/app/sperren", "Sperren")}
-              {link("/app/leistungen", "Leistungen")}
+              {link("/app/leistungen", "Leistungen", "nav-services")}
               {link("/app/zeiten", "Unternehmen")}
             </>
           ) : (
@@ -125,7 +127,22 @@ export function Shell({ actor, onLogout }: { actor: Actor; onLogout: () => void 
         </nav>
         <div className="grow" />
         <div className="who">
-          <Avatar name={actor.name} size={40} />
+          {kd ? (
+            <button
+              type="button"
+              className="who-pic"
+              aria-label="Rundgang starten"
+              onClick={() => {
+                api.bootstrap();
+                api.bookings();
+                setTour((n) => n + 1);
+              }}
+            >
+              <Avatar name={actor.name} size={40} />
+            </button>
+          ) : (
+            <Avatar name={actor.name} size={40} />
+          )}
           <div>
             <strong>{actor.name}</strong>
             <span>{actor.tenantName || "FLH DIGITAL"}</span>
@@ -145,6 +162,7 @@ export function Shell({ actor, onLogout }: { actor: Actor; onLogout: () => void 
         <PageMotion />
       </div>
       {kd ? <LiveBookings /> : null}
+      {tour ? <Tour key={tour} onClose={() => setTour(0)} /> : null}
     </div>
   );
 }

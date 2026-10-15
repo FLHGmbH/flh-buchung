@@ -81,6 +81,15 @@ a { color: var(--petrol); }
   padding: 0 1.25rem 1.1rem;
   min-width: 0;
 }
+.who-pic {
+  border: 0;
+  padding: 0;
+  background: transparent;
+  border-radius: 999px;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.who-pic:focus-visible { outline: 2px solid #fff; outline-offset: 3px; }
 .sidebar .who > div { min-width: 0; }
 .sidebar .who strong,
 .sidebar .who strong + span {
@@ -1891,8 +1900,79 @@ button.week-head.today {
   50% { opacity: 0.42; }
 }
 
+.tour-dim {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 120;
+  opacity: 0;
+}
+.tour-ring {
+  position: fixed;
+  left: 0;
+  top: 0;
+  border-radius: 14px;
+  pointer-events: none;
+  z-index: 121;
+  opacity: 0;
+  visibility: hidden;
+  box-shadow: 0 0 0 2px #fff, 0 0 22px 4px rgba(255, 255, 255, 0.3);
+  transition: box-shadow 0.25s ease;
+}
+.tour-ring.is-lit { box-shadow: 0 0 0 2px #fff, 0 0 0 5px rgba(23, 82, 93, 0.55), 0 0 26px 6px rgba(255, 255, 255, 0.4); }
+.tour-ring.is-ok { box-shadow: 0 0 0 3px #2e9e6b, 0 0 0 7px rgba(46, 158, 107, 0.28), 0 0 28px 8px rgba(46, 158, 107, 0.35); }
+.tour-ring::after {
+  content: "";
+  position: absolute;
+  inset: -2px;
+  border-radius: inherit;
+  border: 2px solid rgba(255, 255, 255, 0.85);
+  animation: tour-pulse 1.9s ease-out infinite;
+}
+.tour-ring.is-ok::after { border-color: rgba(46, 158, 107, 0.9); }
+@keyframes tour-pulse {
+  from { transform: scale(1); opacity: 0.85; }
+  to { transform: scale(1.1, 1.3); opacity: 0; }
+}
+.tour-ring i { position: absolute; width: 16px; height: 16px; border: 0 solid #fff; }
+.tour-ring i:nth-of-type(1) { top: -6px; left: -6px; border-top-width: 3px; border-left-width: 3px; border-top-left-radius: 10px; }
+.tour-ring i:nth-of-type(2) { top: -6px; right: -6px; border-top-width: 3px; border-right-width: 3px; border-top-right-radius: 10px; }
+.tour-ring i:nth-of-type(3) { bottom: -6px; left: -6px; border-bottom-width: 3px; border-left-width: 3px; border-bottom-left-radius: 10px; }
+.tour-ring i:nth-of-type(4) { bottom: -6px; right: -6px; border-bottom-width: 3px; border-right-width: 3px; border-bottom-right-radius: 10px; }
+.tour-glint { position: absolute; inset: 0; border-radius: inherit; overflow: hidden; }
+.tour-glint b { position: absolute; top: 0; bottom: 0; left: 0; width: 40%; opacity: 0; background: linear-gradient(100deg, transparent, rgba(255, 255, 255, 0.55), transparent); }
+.tour-card {
+  position: fixed;
+  left: 0;
+  top: 0;
+  z-index: 130;
+  opacity: 0;
+  visibility: hidden;
+  width: min(340px, calc(100vw - 24px));
+  background: #fff;
+  color: var(--ink);
+  border-radius: 18px;
+  padding: 1.1rem 1.15rem 1rem;
+  box-shadow: 0 24px 56px rgba(13, 59, 67, 0.35), 0 0 0 1px rgba(13, 59, 67, 0.08);
+}
+.tour-arrow { position: absolute; width: 14px; height: 14px; background: #fff; transform: rotate(45deg); border-radius: 3px; display: none; }
+.tour-arrow[data-side="top"], .tour-arrow[data-side="bottom"], .tour-arrow[data-side="left"], .tour-arrow[data-side="right"] { display: block; }
+.tour-dots { display: flex; gap: 5px; margin-bottom: 0.7rem; }
+.tour-dots span { height: 5px; width: 5px; border-radius: 999px; background: #cbd5e1; transition: width 0.35s ease, background 0.35s ease; transform-origin: left center; }
+.tour-dots .is-done { background: var(--btn); }
+.tour-dots .is-on { width: 22px; background: var(--btn); }
+.tour-count { margin: 0; color: #475569; font-size: 0.75rem; font-weight: 600; letter-spacing: 0.02em; }
+.tour-title { margin: 0.35rem 0 0; font-size: 1.05rem; font-weight: 700; line-height: 1.3; }
+.tour-why { margin: 0.35rem 0 0; color: #475569; font-size: 0.88rem; line-height: 1.5; }
+.tour-text { margin: 0.6rem 0 0; padding-top: 0.6rem; border-top: 1px solid #e2e8f0; font-size: 0.95rem; font-weight: 600; line-height: 1.5; }
+.tour-actions { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 1rem; }
+.tour-actions .btn { min-height: 44px; }
+.tour-actions .btn:last-child { margin-left: auto; }
+
 @media (prefers-reduced-motion: reduce) {
-  .btn, .cat-fold-h .chev, .sidebar a, .table.click tbody tr, .staff-card, .choice, .choice-mark, .ev, .day-col .ev.is-drag, .drag-shade, .book-bar i, .days button { transition: none; animation: none; }
+  .btn, .cat-fold-h .chev, .sidebar a, .table.click tbody tr, .staff-card, .choice, .choice-mark, .ev, .day-col .ev.is-drag, .drag-shade, .book-bar i, .days button, .tour-ring, .tour-ring::after, .tour-dots span { transition: none; animation: none; }
   .btn:hover, .staff-card:hover, .choice:active { transform: none; }
   .btn:disabled, .lead.wait, .bone { animation: none; }
 }

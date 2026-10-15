@@ -84,7 +84,7 @@ export function DashboardPage() {
   return (
     <div className="page wide">
       <PageHead title="Dashboard" lead={`${data.monthLabel}. Stornierte Termine zählen nicht.`} />
-      <div className="stat-row four">
+      <div className="stat-row four" data-tour="dashboard">
         <div className="stat">
           <strong>{euro(data.revenueCents)}</strong>
           <span>Umsatz im {data.monthLabel.split(" ")[0]}</span>
