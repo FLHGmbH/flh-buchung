@@ -109,7 +109,7 @@ export function Shell({ actor, onLogout }: { actor: Actor; onLogout: () => void 
         <nav>
           {kd ? (
             <>
-              {link("/app/dashboard", "Dashboard")}
+              {link("/app/dashboard", "Dashboard", "nav-dashboard")}
               {link("/app", "Kalender", "nav-calendar")}
               {link("/app/termine", "Termine")}
               {link("/app/mitarbeiter", "Mitarbeiter", "nav-staff")}

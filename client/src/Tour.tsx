@@ -1,10 +1,10 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { useLocation, useNavigate } from "react-router-dom";
+import { useLocation } from "react-router-dom";
 import { useApi, type Booking, type Bootstrap } from "./api";
 import { gsap, reduced } from "./motion";
 
-type Step = { id: string; path: string; title: string; why: string; text: string; free?: boolean };
+type Step = { id: string; path: string; title: string; why: string; text: string; free?: boolean; nav?: string };
 type Rect = { x: number; y: number; w: number; h: number };
 type Base = { staff: number; cats: number; svcs: number; ids: Set<string> };
 
@@ -12,14 +12,26 @@ const STEPS: Step[] = [
   {
     id: "intro", path: "", free: true,
     title: "Hallo und herzlich willkommen!",
-    why: "Wir richten jetzt gemeinsam in vier kurzen Schritten alles ein, damit Gäste bei dir buchen können: Mitarbeiter, Kategorie, Leistung und dein erster Termin. Das dauert etwa zwei Minuten.",
-    text: "Du legst alles selbst an, ich zeige dir nur den Weg. Klick auf Los geht's.",
+    why: "Wir richten jetzt gemeinsam alles ein, damit Gäste bei dir buchen können: Mitarbeiter, Kategorie, Leistung und dein erster Termin. Die Seiten wechselst du selbst.",
+    text: "Du legst alles selbst an und klickst die Seiten in der Leiste selbst an. Klick auf Los geht's.",
+  },
+  {
+    id: "go-staff", path: "/app/mitarbeiter", nav: "nav-staff",
+    title: "Zu den Mitarbeitern",
+    why: "Zuerst brauchst du eine Person, der Termine gehören.",
+    text: "Klick in der Seitenleiste auf Mitarbeiter.",
   },
   {
     id: "staff", path: "/app/mitarbeiter",
     title: "Mitarbeiter anlegen",
     why: "Jeder Termin gehört einer Person. Ohne Mitarbeiter kann niemand gebucht werden.",
     text: "Klick auf + Mitarbeiter und lege dich oder dein Team an.",
+  },
+  {
+    id: "go-services", path: "/app/leistungen", nav: "nav-services",
+    title: "Zu den Leistungen",
+    why: "Kategorien und Leistungen liegen auf einer eigenen Seite.",
+    text: "Klick in der Seitenleiste auf Leistungen.",
   },
   {
     id: "category", path: "/app/leistungen",
@@ -34,10 +46,22 @@ const STEPS: Step[] = [
     text: "Klick auf + Leistung und lege deine erste an.",
   },
   {
+    id: "go-calendar", path: "/app", nav: "nav-calendar",
+    title: "Zum Kalender",
+    why: "Den ersten Termin legst du im Kalender an.",
+    text: "Klick in der Seitenleiste auf Kalender.",
+  },
+  {
     id: "booking", path: "/app",
     title: "Ersten Termin anlegen",
     why: "So siehst du, wie ein Termin im Kalender landet. Gäste buchen später genauso über deine Buchungsseite.",
     text: "Klick auf + Neuer Termin und lege einen Termin an.",
+  },
+  {
+    id: "go-dashboard", path: "/app/dashboard", nav: "nav-dashboard",
+    title: "Zum Dashboard",
+    why: "Zum Schluss siehst du die Übersicht deines Salons.",
+    text: "Klick in der Seitenleiste auf Dashboard.",
   },
   {
     id: "dashboard", path: "/app/dashboard",
@@ -70,6 +94,7 @@ function done(name: string) {
 
 function spot(step: Step) {
   if (step.free) return null;
+  if (step.nav) return qs(step.nav);
   if (step.id === "dashboard") return qs("dashboard");
   if (step.id === "booking") {
     if (formId() !== "") return qs("add-booking");
@@ -90,7 +115,8 @@ function spot(step: Step) {
   return qs("add-staff");
 }
 
-function cue(step: Step) {
+function cue(step: Step, path: string) {
+  if (step.nav) return path === step.path ? "Du bist schon auf der richtigen Seite. Klick auf Weiter." : step.text;
   if (step.id === "staff" && qs("staff-name")) {
     return done("staff-name") ? "Speichern legt die Person an." : val("staff-name") ? "Passt der Name? Dann klick auf Speichern." : "Trag den Namen der Person ein.";
   }
@@ -109,7 +135,8 @@ function cue(step: Step) {
   return step.text;
 }
 
-function finished(step: Step, boot: Bootstrap, rows: Booking[], base: Base) {
+function finished(step: Step, boot: Bootstrap, rows: Booking[], base: Base, path: string) {
+  if (step.nav) return path === step.path;
   if (step.id === "dashboard" || step.free) return true;
   if (step.id === "staff") return boot.staff.length > base.staff;
   if (step.id === "category") return boot.categories.length > base.cats;
@@ -136,7 +163,6 @@ function place(r: Rect, w: number, h: number) {
 
 export function Tour({ onClose }: { onClose: () => void }) {
   const loc = useLocation();
-  const go = useNavigate();
   const boot = useApi<Bootstrap>("/api/app/bootstrap");
   const list = useApi<{ bookings: Booking[] }>("/api/app/bookings");
   const [steps, setSteps] = useState<Step[] | null>(null);
@@ -244,7 +270,7 @@ export function Tour({ onClose }: { onClose: () => void }) {
       const p = pos.current;
       const f = fly.current;
       const free = Boolean(c.step.free);
-      const here = free || c.path === c.step.path;
+      const here = free || Boolean(c.step.nav) || c.path === c.step.path;
       if (!here) since.current = 0;
       else if (!since.current) since.current = performance.now();
       const el = here ? spot(c.step) : null;
@@ -381,10 +407,9 @@ export function Tour({ onClose }: { onClose: () => void }) {
     };
   }, []);
 
-  // Step change: fade out, short beat, navigate, wait for the target, fly in.
+  // Step change: fade out, short beat, wait for the target, fly in. The user changes pages.
   useEffect(() => {
     if (!steps) return;
-    const target = steps[i];
     const first = !started.current;
     started.current = true;
     const quick = reduced();
@@ -398,12 +423,11 @@ export function Tour({ onClose }: { onClose: () => void }) {
       setShown(i);
       since.current = 0;
       phase.current = "wait";
-      if (!target.free && ctx.current.path !== target.path) go(target.path);
     });
     return () => {
       call.kill();
     };
-  }, [i, steps, go]);
+  }, [i, steps]);
 
   useLayoutEffect(() => {
     const card = cardRef.current;
@@ -420,7 +444,7 @@ export function Tour({ onClose }: { onClose: () => void }) {
     unready.current = false;
   }, [i]);
 
-  const ready = Boolean(step && boot && base.current && finished(step, boot, rows, base.current));
+  const ready = Boolean(step && boot && base.current && finished(step, boot, rows, base.current, loc.pathname));
   if (!ready) unready.current = true;
 
   // Done: a short green beat, then the tour moves on by itself.
@@ -445,7 +469,7 @@ export function Tour({ onClose }: { onClose: () => void }) {
     }
   }, [ready, step?.id]);
 
-  const hint = view ? cue(view) : "";
+  const hint = view ? cue(view, loc.pathname) : "";
   useEffect(() => {
     if (swapping.current) {
       swapping.current = false;
