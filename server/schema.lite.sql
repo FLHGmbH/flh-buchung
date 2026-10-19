@@ -113,7 +113,17 @@ CREATE TABLE IF NOT EXISTS bookings (
   status text NOT NULL DEFAULT 'confirmed',
   pin_hash text NOT NULL DEFAULT '',
   pin_expires_at timestamptz,
+  google_event_id text,
+  google_dirty boolean NOT NULL DEFAULT false,
   created_at timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS google_links (
+  tenant_id uuid PRIMARY KEY REFERENCES tenants(id) ON DELETE CASCADE,
+  refresh_token text NOT NULL,
+  email text NOT NULL DEFAULT '',
+  calendar_id text NOT NULL DEFAULT '',
+  calendar_name text NOT NULL DEFAULT ''
 );
 
 ALTER TABLE staff ADD CONSTRAINT staff_id_tenant UNIQUE (id, tenant_id);

@@ -1,5 +1,6 @@
 import { Fragment, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
-import { api, useApi, type Bootstrap, type Booking, type StaffShift, type TimeOff } from "./api";
+import { useSearchParams } from "react-router-dom";
+import { api, useApi, type Bootstrap, type Booking, type GoogleLink, type StaffShift, type TimeOff } from "./api";
 import { matchTpl } from "./catalog";
 import { gsap, reduced, useGSAP } from "./motion";
 import { phoneKey } from "../../server/guest.ts";
@@ -1104,6 +1105,105 @@ export function ServicesPage() {
   );
 }
 
+function GoogleSync() {
+  const [params] = useSearchParams();
+  const flag = params.get("google");
+  const [row, setRow] = useState<GoogleLink | null>(null);
+  const [cals, setCals] = useState<{ id: string; summary: string }[]>([]);
+  const [pick, setPick] = useState("");
+  const [err, setErr] = useState("");
+  const [pending, setPending] = useState(false);
+  useEffect(() => {
+    api.google()
+      .then((r) => {
+        setRow(r);
+        setPick(r.calendarId);
+        if (r.email || r.calendarId) {
+          api.googleCalendars().then((list) => setCals(list.calendars)).catch(() => setErr("Kalenderliste nicht geladen."));
+        }
+      })
+      .catch(() => setErr("Google-Status nicht geladen."));
+  }, []);
+  if (!row) return err ? <p className="err" role="alert">{err}</p> : null;
+  const note = flag === "verbunden"
+    ? "Google ist verbunden. Bestehende bestätigte Termine werden nachgetragen."
+    : flag === "abgebrochen"
+      ? "Google-Anmeldung abgebrochen."
+      : flag === "fehler"
+        ? "Google-Verbindung fehlgeschlagen."
+        : "";
+  const linked = Boolean(row.email || row.calendarId);
+  return (
+    <>
+      {note ? <p className="hint-line">{note}</p> : null}
+      {err ? <p className="err" role="alert">{err}</p> : null}
+      {linked ? (
+        <>
+          <p className="hint-line">
+            Verbunden{row.email ? ` als ${row.email}` : ""}{row.calendarName ? `, Kalender ${row.calendarName}` : ""}.
+          </p>
+          {cals.length > 1 || (!row.calendarId && cals.length > 0) ? (
+            <label className="field">
+              <span>Kalender</span>
+              <select value={pick} onChange={(e) => setPick(e.target.value)}>
+                {cals.map((c) => <option key={c.id} value={c.id}>{c.summary}</option>)}
+              </select>
+            </label>
+          ) : null}
+          <div className="hours-foot">
+            {pick && pick !== row.calendarId ? (
+              <button
+                type="button"
+                className="btn"
+                disabled={pending}
+                onClick={() => {
+                  setPending(true);
+                  setErr("");
+                  api.putGoogleCalendar(pick)
+                    .then((r) => { setRow(r); setPick(r.calendarId); })
+                    .catch((ex) => setErr(ex instanceof Error ? ex.message : "Speichern fehlgeschlagen."))
+                    .finally(() => setPending(false));
+                }}
+              >
+                Kalender übernehmen
+              </button>
+            ) : null}
+            <button
+              type="button"
+              className="btn outline"
+              disabled={pending}
+              onClick={() => {
+                setPending(true);
+                setErr("");
+                api.dropGoogle()
+                  .then((r) => { setRow(r); setCals([]); setPick(""); })
+                  .catch((ex) => setErr(ex instanceof Error ? ex.message : "Trennen fehlgeschlagen."))
+                  .finally(() => setPending(false));
+              }}
+            >
+              Trennen
+            </button>
+          </div>
+        </>
+      ) : row.configured ? (
+        <>
+          <p className="hint-line">Termine dieses Betriebs landen im Google-Kalender des Kontos, mit dem du dich anmeldest.</p>
+          <div className="hours-foot">
+            <a className="btn" href="/api/app/google/start">Google Kalender synchronisieren</a>
+          </div>
+        </>
+      ) : (
+        <>
+          <p className="hint-line">Der Server hat noch keine Google-Client-Daten.</p>
+          <div className="hours-foot">
+            <button type="button" className="btn" disabled>Google Kalender synchronisieren</button>
+          </div>
+        </>
+      )}
+    </>
+  );
+}
+
 export function HoursPage() {
   const boot = useBoot();
   const [rows, setRows] = useState<{ weekday: number; startHm: string; endHm: string; open: boolean }[]>([]);
@@ -1270,6 +1370,12 @@ export function HoursPage() {
               Speichern
             </button>
           </div>
+        </div>
+      </details>
+      <details className="set-fold" open>
+        <summary>Google Kalender</summary>
+        <div className="card-body">
+          <GoogleSync />
         </div>
       </details>
     </div>

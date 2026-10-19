@@ -16,6 +16,14 @@ export const tenants = pgTable("tenants", {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
+export const googleLinks = pgTable("google_links", {
+  tenantId: uuid("tenant_id").primaryKey().references(() => tenants.id, { onDelete: "cascade" }),
+  refreshToken: text("refresh_token").notNull(),
+  email: text("email").notNull().default(""),
+  calendarId: text("calendar_id").notNull().default(""),
+  calendarName: text("calendar_name").notNull().default(""),
+});
+
 export const users = pgTable("users", {
   id: uuid("id").primaryKey().defaultRandom(),
   email: text("email").notNull().unique(),
@@ -120,6 +128,8 @@ export const bookings = pgTable("bookings", {
   status: text("status").notNull().default("confirmed"),
   pinHash: text("pin_hash").notNull().default(""),
   pinExpiresAt: timestamp("pin_expires_at", { withTimezone: true }),
+  googleEventId: text("google_event_id"),
+  googleDirty: boolean("google_dirty").notNull().default(false),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 

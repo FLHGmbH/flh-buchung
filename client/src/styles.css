@@ -806,7 +806,7 @@ a { color: var(--petrol); }
   background: #fff;
 }
 .hours-row input[type="time"]:disabled { background: #f1f5f9; color: #94a3b8; }
-.hours-foot { display: flex; justify-content: flex-end; padding: 1rem 1.5rem; }
+.hours-foot { display: flex; justify-content: flex-end; gap: 0.5rem; padding: 1rem 1.5rem; }
 .card-head {
   padding: 1rem 1.5rem;
   border-bottom: 1px solid #f3f4f6;

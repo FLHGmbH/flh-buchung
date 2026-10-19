@@ -84,6 +84,17 @@ export async function migrate() {
   `).catch(ignoreExists);
   await execSql(`ALTER TABLE bookings ADD COLUMN IF NOT EXISTS pin_hash text NOT NULL DEFAULT ''`).catch(ignoreExists);
   await execSql(`ALTER TABLE bookings ADD COLUMN IF NOT EXISTS pin_expires_at timestamptz`).catch(ignoreExists);
+  await execSql(`ALTER TABLE bookings ADD COLUMN IF NOT EXISTS google_event_id text`).catch(ignoreExists);
+  await execSql(`ALTER TABLE bookings ADD COLUMN IF NOT EXISTS google_dirty boolean NOT NULL DEFAULT false`).catch(ignoreExists);
+  await execSql(`
+    CREATE TABLE IF NOT EXISTS google_links (
+      tenant_id uuid PRIMARY KEY REFERENCES tenants(id) ON DELETE CASCADE,
+      refresh_token text NOT NULL,
+      email text NOT NULL DEFAULT '',
+      calendar_id text NOT NULL DEFAULT '',
+      calendar_name text NOT NULL DEFAULT ''
+    )
+  `).catch(ignoreExists);
   await execSql(`
     CREATE TABLE IF NOT EXISTS service_categories (
       id uuid PRIMARY KEY DEFAULT gen_random_uuid(),

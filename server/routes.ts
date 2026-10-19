@@ -7,6 +7,7 @@ import { DateTime } from "luxon";
 import { actorFrom, actorFromEmail, actorFromUserId, createSession, destroySession, dropUserSessions, ensurePlatformAdmin, hashPassword, sbEnsureUser, sbPassword, sbRecover, sbSetPassword, sbUser, verifyLogin, verifyPassword, type Actor } from "./auth.ts";
 import { db } from "./db.ts";
 import { BOOK_MAX, LEN, LOGIN_MAX, PIN_MAX, WINDOW_MS, bookWindow, clip, clientIp, hoursWithin, inIntRange, limited, logoKind, passwordOk, priceQuote, readJson, sbConfigured, serviceMins, siteOrigin } from "./guard.ts";
+import { chooseCalendar, connectGoogle, disconnectGoogle, drainGoogle, googleAuthUrl, googleCalendars, googleConfigured, googleStatus, readState, syncBooking } from "./google.ts";
 import { blockedGuest, guestMail, guestPhone } from "./guest.ts";
 import { newPin, PIN_MS, sendConfirmMail, sendGuestInfo, sendPinMail } from "./mail.ts";
 import {
@@ -686,6 +687,58 @@ async function tellGuest(reqUrl: string, tid: string, kind: "move" | "cancel", r
   }
 }
 
+async function mirror(id: string, tid: string) {
+  if (!googleConfigured()) return;
+  await syncBooking(id);
+  await drainGoogle(tid, 3);
+}
+
+api.get("/app/google", async (c) => {
+  return c.json(await googleStatus(tenantId(c)));
+});
+
+api.get("/app/google/calendars", async (c) => {
+  try {
+    return c.json({ calendars: await googleCalendars(tenantId(c)) });
+  } catch {
+    return c.json({ error: "Kalenderliste nicht geladen." }, 502);
+  }
+});
+
+api.post("/app/google/calendar", async (c) => {
+  const body = await readJson<{ calendarId?: string }>(c);
+  const calendarId = body?.calendarId?.trim() ?? "";
+  if (!calendarId || calendarId.length > 200) return c.json({ error: "Kalender fehlt." }, 400);
+  const ok = await chooseCalendar(tenantId(c), calendarId).catch(() => false);
+  if (!ok) return c.json({ error: "Kalender nicht übernommen." }, 400);
+  return c.json(await googleStatus(tenantId(c)));
+});
+
+api.delete("/app/google", async (c) => {
+  await disconnectGoogle(tenantId(c));
+  return c.json(await googleStatus(tenantId(c)));
+});
+
+api.get("/app/google/start", (c) => {
+  if (!googleConfigured()) return c.json({ error: "Google ist auf dem Server nicht eingerichtet." }, 503);
+  const origin = siteOrigin(c.req.url);
+  if (!origin) return c.json({ error: "PUBLIC_ORIGIN fehlt." }, 503);
+  return c.redirect(googleAuthUrl(origin, tenantId(c)));
+});
+
+api.get("/app/google/callback", async (c) => {
+  const origin = siteOrigin(c.req.url);
+  const back = (q: string) => c.redirect(`${origin}/app/zeiten?google=${q}`);
+  if (!origin || !googleConfigured()) return c.json({ error: "Google ist auf dem Server nicht eingerichtet." }, 503);
+  if (c.req.query("error")) return back("abgebrochen");
+  const code = c.req.query("code") ?? "";
+  const secret = process.env.GOOGLE_CLIENT_SECRET?.trim() ?? "";
+  const tid = readState(c.req.query("state") ?? "", secret);
+  if (!code || tid !== tenantId(c)) return back("fehler");
+  const ok = await connectGoogle(tid, code, origin).catch(() => false);
+  return back(ok ? "verbunden" : "fehler");
+});
+
 api.get("/app/bootstrap", async (c) => {
   const tid = tenantId(c);
   const [tenant] = await db.select().from(tenants).where(eq(tenants.id, tid)).limit(1);
@@ -1294,6 +1347,7 @@ api.post("/app/bookings", async (c) => {
   if (deny) return c.json({ error: deny }, 409);
   try {
     const [row] = await db.insert(bookings).values({ tenantId: tid, ...parsed.fields }).returning(bookingCols);
+    await mirror(row.id, tid);
     return c.json({ booking: row }, 201);
   } catch (e) {
     if (overlapError(e)) return c.json({ error: "Dieser Slot ist gerade vergeben." }, 409);
@@ -1325,6 +1379,7 @@ api.patch("/app/bookings/:id", async (c) => {
     if (moved) {
       await tellGuest(c.req.url, tid, "move", row, { startsAt: cur.startsAt, endsAt: cur.endsAt });
     }
+    await mirror(row.id, tid);
     return c.json({ booking: row });
   } catch (e) {
     if (overlapError(e)) return c.json({ error: "Dieser Slot ist gerade vergeben." }, 409);
@@ -1348,6 +1403,7 @@ api.post("/app/bookings/:id/cancel", async (c) => {
     .returning(bookingCols);
   if (!row) return c.json({ booking: cur });
   await tellGuest(c.req.url, tid, "cancel", row);
+  await mirror(row.id, tid);
   return c.json({ booking: row });
 });
 
@@ -1375,6 +1431,7 @@ api.post("/app/bookings/:id/noshow", async (c) => {
     .where(and(eq(bookings.id, cur.id), eq(bookings.tenantId, tid), ne(bookings.status, "cancelled")))
     .returning(bookingCols);
   if (!row) return c.json({ error: "Nicht gefunden." }, 404);
+  await mirror(row.id, tid);
   return c.json({ booking: row });
 });
 
@@ -1751,5 +1808,9 @@ api.post("/public/:slug/bookings/:id/confirm", async (c) => {
     ))
     .returning();
   if (!updated.length) return c.json({ error: "Buchung unbekannt oder abgelaufen." }, 404);
+  if (googleConfigured()) {
+    for (const made of updated) await syncBooking(made.id);
+    await drainGoogle(tenant.id, 3);
+  }
   return c.json({ booking: { id: row.id, startsAt: row.startsAt, endsAt: row.endsAt, guestName: row.guestName } });
 });
