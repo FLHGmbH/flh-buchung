@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Navigate, Outlet, Route, Routes, useLocation } from "react-router-dom";
 import { api, rememberedActor, type Actor } from "./api";
 import { AdminDashboard, AdminDetail, AdminList, AdminNew } from "./Admin";
-import { BookPage } from "./Book";
+import { BookPage, CancelPage } from "./Book";
 import { CalendarPage } from "./Calendar";
 import { DashboardPage } from "./Dashboard";
 import { BookingsPage, HoursPage, ServicesPage, StaffPage, TimeOffPage } from "./Manage";
@@ -32,6 +32,7 @@ export function App() {
     return (
       <Routes>
         <Route path="/b/:slug/datenschutz" element={<GuestPrivacyPage />} />
+        <Route path="/b/:slug/storno/:token" element={<CancelPage />} />
         <Route path="/b/:slug" element={<BookPage />} />
       </Routes>
     );

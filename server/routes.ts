@@ -9,7 +9,7 @@ import { db } from "./db.ts";
 import { BOOK_MAX, LEN, LOGIN_MAX, PIN_MAX, WINDOW_MS, bookWindow, clip, clientIp, hoursWithin, inIntRange, limited, logoKind, passwordOk, priceQuote, readJson, sbConfigured, serviceMins, siteOrigin } from "./guard.ts";
 import { chooseCalendar, connectGoogle, disconnectGoogle, drainGoogle, googleAuthUrl, googleCalendars, googleConfigured, googleStatus, pullGoogle, readState, syncBooking } from "./google.ts";
 import { blockedGuest, guestMail, guestPhone } from "./guest.ts";
-import { newPin, PIN_MS, sendConfirmMail, sendGuestInfo, sendPinMail } from "./mail.ts";
+import { newCancelToken, newPin, PIN_MS, sendConfirmMail, sendGuestInfo, sendPinMail } from "./mail.ts";
 import {
   bookings,
   memberships,
@@ -1402,24 +1402,29 @@ api.patch("/app/bookings/:id", async (c) => {
   }
 });
 
+async function dropBooking(reqUrl: string, tid: string, id: string) {
+  const [row] = await db
+    .update(bookings)
+    .set({ status: "cancelled" })
+    .where(and(eq(bookings.id, id), eq(bookings.tenantId, tid), ne(bookings.status, "cancelled")))
+    .returning(bookingCols);
+  if (!row) return null;
+  await tellGuest(reqUrl, tid, "cancel", row);
+  await mirror(row.id, tid);
+  return row;
+}
+
 api.post("/app/bookings/:id/cancel", async (c) => {
   const tid = tenantId(c);
   const [cur] = await db
-    .select()
+    .select(bookingCols)
     .from(bookings)
     .where(and(eq(bookings.id, c.req.param("id")), eq(bookings.tenantId, tid)))
     .limit(1);
   if (!cur) return c.json({ error: "Nicht gefunden." }, 404);
   if (cur.status === "cancelled") return c.json({ booking: cur });
-  const [row] = await db
-    .update(bookings)
-    .set({ status: "cancelled" })
-    .where(and(eq(bookings.id, cur.id), eq(bookings.tenantId, tid), ne(bookings.status, "cancelled")))
-    .returning(bookingCols);
-  if (!row) return c.json({ booking: cur });
-  await tellGuest(c.req.url, tid, "cancel", row);
-  await mirror(row.id, tid);
-  return c.json({ booking: row });
+  const row = await dropBooking(c.req.url, tid, cur.id);
+  return c.json({ booking: row ?? cur });
 });
 
 api.post("/app/bookings/:id/noshow", async (c) => {
@@ -1798,7 +1803,13 @@ api.post("/public/:slug/bookings/:id/confirm", async (c) => {
       end: m.endsAt,
     };
   };
-  const [head, ...rest] = mates.map(line);
+  const tokens = mates.map(() => newCancelToken());
+  const origin = siteOrigin(c.req.url);
+  const linked = mates.map((m, i) => ({
+    ...line(m),
+    cancelUrl: origin ? `${origin}/b/${tenant.slug}/storno/${tokens[i]}` : "",
+  }));
+  const [head, ...rest] = linked;
   if (!head) return c.json({ error: "Buchung unbekannt oder abgelaufen." }, 404);
   try {
     await sendConfirmMail({
@@ -1812,20 +1823,68 @@ api.post("/public/:slug/bookings/:id/confirm", async (c) => {
   } catch {
     return c.json({ error: "Bestätigung konnte nicht gesendet werden. Bitte den Code erneut eingeben." }, 502);
   }
-  const updated = await db
-    .update(bookings)
-    .set({ status: "confirmed", pinHash: "", pinExpiresAt: null })
-    .where(and(
-      eq(bookings.tenantId, tenant.id),
-      eq(bookings.guestEmail, row.guestEmail),
-      eq(bookings.pinHash, row.pinHash),
-      eq(bookings.status, "pending"),
-    ))
-    .returning();
+  const updated = [];
+  for (let i = 0; i < mates.length; i++) {
+    const [saved] = await db
+      .update(bookings)
+      .set({ status: "confirmed", pinHash: "", pinExpiresAt: null, cancelToken: tokens[i] })
+      .where(and(
+        eq(bookings.id, mates[i].id),
+        eq(bookings.tenantId, tenant.id),
+        eq(bookings.pinHash, row.pinHash),
+        eq(bookings.status, "pending"),
+      ))
+      .returning();
+    if (saved) updated.push(saved);
+  }
   if (!updated.length) return c.json({ error: "Buchung unbekannt oder abgelaufen." }, 404);
   if (googleConfigured()) {
     for (const made of updated) await syncBooking(made.id);
     await drainGoogle(tenant.id, 3);
   }
   return c.json({ booking: { id: row.id, startsAt: row.startsAt, endsAt: row.endsAt, guestName: row.guestName } });
+});
+
+const CANCEL_TOKEN = /^[A-Za-z0-9_-]{20,64}$/;
+
+async function stornoHit(slug: string, token: string) {
+  if (!CANCEL_TOKEN.test(token)) return null;
+  const [tenant] = await db.select().from(tenants).where(eq(tenants.slug, slug)).limit(1);
+  if (!tenant || !tenant.active) return null;
+  const [cur] = await db
+    .select()
+    .from(bookings)
+    .where(and(eq(bookings.tenantId, tenant.id), eq(bookings.cancelToken, token)))
+    .limit(1);
+  if (!cur) return null;
+  const [svc] = cur.serviceId
+    ? await db.select({ name: services.name }).from(services).where(eq(services.id, cur.serviceId)).limit(1)
+    : [];
+  const [who] = cur.staffId
+    ? await db.select({ name: staff.name }).from(staff).where(eq(staff.id, cur.staffId)).limit(1)
+    : [];
+  const service = who?.name ? `${svc?.name || "Termin"} bei ${who.name}` : (svc?.name || "Termin");
+  const state = cur.status === "confirmed" ? "open" : cur.status === "cancelled" ? "gone" : "closed";
+  return {
+    tenant,
+    cur,
+    view: { service, when: whenLabel(cur.startsAt, cur.endsAt, tenant.timezone || "Europe/Berlin"), state },
+  };
+}
+
+api.get("/public/:slug/storno/:token", async (c) => {
+  const hit = await stornoHit(c.req.param("slug"), c.req.param("token"));
+  if (!hit) return c.json({ error: "Dieser Link ist ungültig." }, 404);
+  return c.json(hit.view);
+});
+
+api.post("/public/:slug/storno/:token", async (c) => {
+  if (limited(`storno:${clientIp(c.req)}`, 20, WINDOW_MS)) {
+    return c.json({ error: "Zu viele Versuche. Bitte später erneut." }, 429);
+  }
+  const hit = await stornoHit(c.req.param("slug"), c.req.param("token"));
+  if (!hit) return c.json({ error: "Dieser Link ist ungültig." }, 404);
+  if (hit.cur.status !== "confirmed") return c.json(hit.view);
+  const row = await dropBooking(c.req.url, hit.tenant.id, hit.cur.id);
+  return c.json(row ? { ...hit.view, state: "gone" } : hit.view);
 });

@@ -1,4 +1,4 @@
-import { randomInt } from "node:crypto";
+import { randomBytes, randomInt } from "node:crypto";
 import { connect } from "node:tls";
 import { mailFromAddr } from "./guard.ts";
 
@@ -6,6 +6,10 @@ export const PIN_MS = 15 * 60 * 1000;
 
 export function newPin() {
   return String(randomInt(0, 1_000_000)).padStart(6, "0");
+}
+
+export function newCancelToken() {
+  return randomBytes(18).toString("base64url");
 }
 
 export function escHtml(s: string) {
@@ -316,62 +320,69 @@ export async function sendPinMail(opts: { to: string; pin: string; tenantName: s
   }
 }
 
-export async function sendConfirmMail(opts: {
-  to: string;
-  guestName: string;
-  tenantName: string;
+type ConfirmStop = {
   serviceName: string;
   staffName: string;
   when: string;
   uid: string;
   start: Date;
   end: Date;
-  also?: { uid: string; serviceName: string; staffName: string; when: string; start: Date; end: Date }[];
+  cancelUrl?: string;
+};
+
+export function confirmMail(opts: {
+  guestName: string;
+  tenantName: string;
   sign?: string;
   imageUrl?: string;
-}) {
-  const from = mailFromAddr(process.env.MAIL_FROM);
-  if (!from) throw new Error("MAIL_FROM muss eine eigene Domain sein.");
+} & ConfirmStop & { also?: ConfirmStop[] }) {
   const name = escHtml(opts.guestName);
   const tenant = escHtml(opts.tenantName);
   const summary = opts.staffName ? `${opts.serviceName} bei ${opts.staffName}` : opts.serviceName;
-  const lines = [
-    { serviceName: opts.serviceName, staffName: opts.staffName, when: opts.when, summary },
-    ...(opts.also ?? []).map((ev) => ({
-      serviceName: ev.serviceName,
-      staffName: ev.staffName,
-      when: ev.when,
-      summary: ev.staffName ? `${ev.serviceName} bei ${ev.staffName}` : ev.serviceName,
-    })),
-  ];
-  const block = lines.map((l) => `${l.summary}\n${l.when}`).join("\n\n");
+  const lines = [opts, ...(opts.also ?? [])].map((ev) => ({
+    summary: ev.staffName ? `${ev.serviceName} bei ${ev.staffName}` : ev.serviceName,
+    when: ev.when,
+    cancelUrl: ev.cancelUrl ?? "",
+    uid: ev.uid,
+    start: ev.start,
+    end: ev.end,
+  }));
+  const block = lines
+    .map((l) => `${l.summary}\n${l.when}${l.cancelUrl ? `\nTermin stornieren: ${l.cancelUrl}` : ""}`)
+    .join("\n\n");
   const htmlBlock = lines
-    .map((l) => `<p><strong>${escHtml(l.summary)}</strong><br>${escHtml(l.when)}</p>`)
+    .map((l) => {
+      const link = l.cancelUrl ? `<br><a href="${escHtml(l.cancelUrl)}">Termin stornieren</a>` : "";
+      return `<p><strong>${escHtml(l.summary)}</strong><br>${escHtml(l.when)}${link}</p>`;
+    })
     .join("");
   const end = mailEnding(opts.sign ?? "", opts.imageUrl ?? "");
-  const text = `Hallo ${opts.guestName},\n\ndein Termin ist bestätigt.\n\n${block}\n${opts.tenantName}\n\nIm Anhang liegt termin.ics zum Speichern in deinem Kalender.${end.text}`;
+  return {
+    subject: `Termin bestätigt – ${opts.tenantName}`,
+    text: `Hallo ${opts.guestName},\n\ndein Termin ist bestätigt.\n\n${block}\n${opts.tenantName}\n\nIm Anhang liegt termin.ics zum Speichern in deinem Kalender.${end.text}`,
+    html: `<p>Hallo ${name},</p><p>dein Termin ist bestätigt.</p>${htmlBlock}<p>${tenant}</p><p>Im Anhang liegt <strong>termin.ics</strong> zum Speichern in deinem Kalender.</p>${end.html}`,
+    ics: confirmIcs({
+      uid: opts.uid,
+      start: opts.start,
+      end: opts.end,
+      summary,
+      description: `${opts.tenantName}. ${opts.when}.`,
+      also: (opts.also ?? []).map((ev) => ({
+        uid: ev.uid,
+        start: ev.start,
+        end: ev.end,
+        summary: ev.staffName ? `${ev.serviceName} bei ${ev.staffName}` : ev.serviceName,
+        description: `${opts.tenantName}. ${ev.when}.`,
+      })),
+    }),
+  };
+}
+
+export async function sendConfirmMail(opts: { to: string } & Parameters<typeof confirmMail>[0]) {
+  const from = mailFromAddr(process.env.MAIL_FROM);
+  if (!from) throw new Error("MAIL_FROM muss eine eigene Domain sein.");
   try {
-    await smtpSend({
-      from,
-      to: opts.to,
-      subject: `Termin bestätigt – ${opts.tenantName}`,
-      text,
-      html: `<p>Hallo ${name},</p><p>dein Termin ist bestätigt.</p>${htmlBlock}<p>${tenant}</p><p>Im Anhang liegt <strong>termin.ics</strong> zum Speichern in deinem Kalender.</p>${end.html}`,
-      ics: confirmIcs({
-        uid: opts.uid,
-        start: opts.start,
-        end: opts.end,
-        summary,
-        description: `${opts.tenantName}. ${opts.when}.`,
-        also: (opts.also ?? []).map((ev) => ({
-          uid: ev.uid,
-          start: ev.start,
-          end: ev.end,
-          summary: ev.staffName ? `${ev.serviceName} bei ${ev.staffName}` : ev.serviceName,
-          description: `${opts.tenantName}. ${ev.when}.`,
-        })),
-      }),
-    });
+    await smtpSend({ from, to: opts.to, ...confirmMail(opts) });
   } catch (e) {
     console.error("smtp failed", e instanceof Error ? e.message : e);
     throw new Error("Mailversand fehlgeschlagen.");

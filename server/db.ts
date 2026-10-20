@@ -84,6 +84,7 @@ export async function migrate() {
   `).catch(ignoreExists);
   await execSql(`ALTER TABLE bookings ADD COLUMN IF NOT EXISTS pin_hash text NOT NULL DEFAULT ''`).catch(ignoreExists);
   await execSql(`ALTER TABLE bookings ADD COLUMN IF NOT EXISTS pin_expires_at timestamptz`).catch(ignoreExists);
+  await execSql(`ALTER TABLE bookings ADD COLUMN IF NOT EXISTS cancel_token text NOT NULL DEFAULT ''`).catch(ignoreExists);
   await execSql(`ALTER TABLE bookings ADD COLUMN IF NOT EXISTS google_event_id text`).catch(ignoreExists);
   await execSql(`ALTER TABLE bookings ADD COLUMN IF NOT EXISTS google_dirty boolean NOT NULL DEFAULT false`).catch(ignoreExists);
   await execSql(`

@@ -1550,7 +1550,36 @@ button.week-head.today {
 }
 .cat-fold .choice:hover { background: #f7fafb; }
 .cat-fold .choice.on { background: color-mix(in srgb, var(--petrol) 6%, white); }
-.days { display: grid; grid-template-columns: repeat(7, 1fr); gap: 0.4rem; margin-bottom: 0.75rem; }
+.book-cal-bar { display: flex; align-items: center; gap: 0.35rem; margin-bottom: 0.65rem; }
+.book-cal-bar strong { flex: 1; min-width: 0; text-align: center; font-size: 0.95rem; }
+.book-cal-bar button {
+  width: 44px;
+  height: 44px;
+  font-family: inherit;
+  border: 0;
+  border-radius: 8px;
+  background: #f3f6f7;
+  color: var(--petrol);
+  font-size: 1.4rem;
+  line-height: 1;
+}
+.book-cal-bar button:disabled { opacity: 0.35; }
+.book-cal-switch { display: flex; background: #f3f6f7; border-radius: 8px; padding: 0.2rem; margin-bottom: 0.65rem; }
+.book-cal-switch button {
+  flex: 1;
+  min-height: 44px;
+  font-family: inherit;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  font-weight: 600;
+  color: #64748b;
+}
+.book-cal-switch button.on { background: var(--petrol); color: #fff; }
+.book-cal-wd, .days { display: grid; grid-template-columns: repeat(7, 1fr); }
+.book-cal-wd { margin-bottom: 0.3rem; text-align: center; font-size: 0.68rem; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: var(--graphite-75); }
+.book-cal-pick { margin: 0.2rem 0 0.75rem; text-align: center; font-weight: 700; }
+.days { gap: 0.4rem; margin-bottom: 0.75rem; }
 .days button {
   border: 1px solid var(--graphite-25);
   background: var(--white);
@@ -1566,13 +1595,18 @@ button.week-head.today {
   transition: border-color 0.18s ease, background 0.18s ease, transform 0.16s ease;
 }
 .days button small { font-size: 0.68rem; letter-spacing: 0.04em; text-transform: uppercase; color: var(--graphite-75); font-weight: 600; }
-.days button strong { font-size: 1.05rem; line-height: 1.1; }
+.days button strong { font-size: 1.2rem; line-height: 1.1; }
 .days button:disabled { color: var(--graphite-25); background: #fafafa; }
 .days button:disabled small { color: var(--graphite-25); }
 .days button:hover:not(:disabled) { border-color: var(--petrol); }
 .days button:active:not(:disabled) { transform: scale(0.98); }
-.days button.on { background: var(--amber); border-color: var(--amber); }
-.days button.on small, .days button.on strong { color: var(--graphite); }
+.days button.is-today:not(.on) { border-color: var(--petrol); box-shadow: inset 0 -3px 0 var(--petrol); }
+.days button.is-out { opacity: 0.4; }
+.days button.on { background: var(--petrol); border-color: var(--petrol); color: #fff; box-shadow: 0 0 0 3px var(--petrol-25); }
+.days button.on small, .days button.on strong { color: #fff; }
+.choice.person.is-any { border-style: dashed; background: #f4f7f8; }
+.choice.person.is-any small { display: block; margin-top: 0.1rem; font-weight: 500; font-size: 0.8rem; color: var(--graphite-75); }
+.book-or { margin: 0.35rem 0 0.5rem; text-align: center; color: var(--graphite-75); font-size: 0.8rem; }
 .slots { display: grid; grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); gap: 0.45rem; }
 .slots .choice { margin: 0; text-align: center; font-variant-numeric: tabular-nums; font-weight: 700; }
 .book-page { background: var(--white); }
@@ -1583,6 +1617,7 @@ button.week-head.today {
   background: transparent;
 }
 .book h1 { overflow-wrap: anywhere; margin: 0.5rem 0 0.25rem; font-size: 1.65rem; letter-spacing: -0.02em; text-align: center; }
+.storno-ask { margin: 0.75rem 0 1.25rem; text-align: center; font-size: 1.05rem; line-height: 1.45; }
 .book .lead { margin: 0 0 1.5rem; color: var(--graphite-75); text-align: center; }
 .book .btn { width: 100%; margin-top: 0.25rem; }
 .book .book-back { width: auto; margin-top: 0.85rem; }
@@ -1810,7 +1845,7 @@ button.week-head.today {
   .view-switch button { flex: 1; }
   .week-switch { width: 100%; }
   .page { padding: 1rem; }
-  .days { grid-template-columns: repeat(4, 1fr); }
+  .days, .book-cal-wd { grid-template-columns: repeat(7, 1fr); }
   .search input { width: 12rem; }
   .fields-2 { grid-template-columns: 1fr; }
   .admin-grid, .stat-row, .dash-grid { grid-template-columns: 1fr; }

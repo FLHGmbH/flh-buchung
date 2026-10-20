@@ -1,5 +1,5 @@
 import { guestMail, guestPhone, blockedGuest, phoneKey } from "./guest.ts";
-import { confirmIcs, dotStuff, encodeSubject, escHtml, guestInfoMail, icsEscape, icsFold, icsUtc, mailbox, mailboxAddr, mailEnding, mimeBody, newPin, PIN_MS } from "./mail.ts";
+import { confirmIcs, confirmMail, dotStuff, encodeSubject, escHtml, guestInfoMail, icsEscape, icsFold, icsUtc, mailbox, mailboxAddr, mailEnding, mimeBody, newCancelToken, newPin, PIN_MS } from "./mail.ts";
 
 function assert(cond: unknown, msg: string) {
   if (!cond) throw new Error(msg);
@@ -53,4 +53,20 @@ const moved = guestInfoMail("move", { guestName: "Lea", tenantName: "Salon", ser
 assert(moved.subject.startsWith("Termin verschoben") && moved.text.includes("Bisher: 09.10.2026 11:00–11:45") && moved.text.includes("Bis bald"), "move mail");
 const cancelled = guestInfoMail("cancel", { guestName: "Lea", tenantName: "Salon", serviceName: "Schnitt", staffName: "", when: "09.10.2026 11:00–11:45", sign: "Bis bald" });
 assert(cancelled.subject.startsWith("Termin storniert") && cancelled.html.includes("Bis bald") && !cancelled.html.includes("<script>"), "cancel mail");
+const token = newCancelToken();
+assert(/^[A-Za-z0-9_-]{24}$/.test(token) && newCancelToken() !== token, "cancel token");
+const stop = "https://flh.example/b/salon/storno/abc?x=1&y=2";
+const confirmed = confirmMail({
+  guestName: "Lea",
+  tenantName: "Salon",
+  serviceName: "Schnitt",
+  staffName: "Anna",
+  when: "20.10.2026 14:00–14:45",
+  uid: "b1@flh-kalender",
+  start: new Date("2026-10-20T12:00:00.000Z"),
+  end: new Date("2026-10-20T12:45:00.000Z"),
+  cancelUrl: stop,
+});
+assert(confirmed.text.includes(`Termin stornieren: ${stop}`), "confirm link text");
+assert(confirmed.html.includes(`href="${escHtml(stop)}"`) && confirmed.html.includes("Termin stornieren"), "confirm link html");
 console.log("mail.check ok");

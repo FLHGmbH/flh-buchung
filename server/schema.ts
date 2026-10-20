@@ -129,6 +129,7 @@ export const bookings = pgTable("bookings", {
   status: text("status").notNull().default("confirmed"),
   pinHash: text("pin_hash").notNull().default(""),
   pinExpiresAt: timestamp("pin_expires_at", { withTimezone: true }),
+  cancelToken: text("cancel_token").notNull().default(""),
   googleEventId: text("google_event_id"),
   googleDirty: boolean("google_dirty").notNull().default(false),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),

@@ -116,6 +116,7 @@ CREATE TABLE IF NOT EXISTS bookings (
   status text NOT NULL DEFAULT 'confirmed',
   pin_hash text NOT NULL DEFAULT '',
   pin_expires_at timestamptz,
+  cancel_token text NOT NULL DEFAULT '',
   google_event_id text,
   google_dirty boolean NOT NULL DEFAULT false,
   created_at timestamptz NOT NULL DEFAULT now()
