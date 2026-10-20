@@ -645,7 +645,8 @@ export function CancelPage() {
 
   return (
     <div className="login">
-      <div className="panel storno-card" ref={box}>
+      <div className="storno-stack" ref={box}>
+      <div className="panel storno-card">
         {row?.logoUrl ? <img className="book-logo" src={row.logoUrl} alt={row.salon} /> : null}
         <h1>{title}</h1>
         <p className={err && !row ? "err" : undefined}>{lead}</p>
@@ -689,6 +690,11 @@ export function CancelPage() {
             {row.email ? <p><a href={`mailto:${row.email}`}>{row.email}</a></p> : null}
           </div>
         ) : null}
+      </div>
+      <a className="flh-credit" href="https://www.flh-digital.de/" target="_blank" rel="noreferrer">
+        <img src="/kalendaa.svg" alt="" width={28} height={31} />
+        Powered by FLH - Kalender
+      </a>
       </div>
     </div>
   );

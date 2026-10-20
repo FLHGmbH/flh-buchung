@@ -249,6 +249,26 @@ async function smtpSend(opts: { from: string; to: string; subject: string; text:
   }
 }
 
+const FLH_URL = "https://www.flh-digital.de/";
+
+function flhMark() {
+  const o = process.env.PUBLIC_ORIGIN?.trim().replace(/\/$/, "");
+  if (o) return `${o}/kalendaa.png`;
+  const vercel = process.env.VERCEL_URL?.trim().replace(/^https?:\/\//, "").replace(/\/$/, "");
+  return vercel ? `https://${vercel}/kalendaa.png` : "";
+}
+
+export function flhCredit() {
+  const mark = flhMark();
+  const img = mark
+    ? `<img src="${escHtml(mark)}" alt="" width="40" height="45" style="display:block;border:0;height:auto;">`
+    : "";
+  return {
+    text: `\n\nPowered by FLH - Kalender: ${FLH_URL}`,
+    html: `<tr><td align="center" style="padding:16px 12px 8px;"><table role="presentation" cellpadding="0" cellspacing="0"><tr>${img ? `<td style="padding:0 10px 0 0;vertical-align:middle;"><a href="${FLH_URL}">${img}</a></td>` : ""}<td style="vertical-align:middle;font-family:Segoe UI,system-ui,sans-serif;font-size:13px;line-height:1.3;font-weight:700;"><a href="${FLH_URL}" style="color:#ffffff;text-decoration:none;">Powered by FLH - Kalender</a></td></tr></table></td></tr>`,
+  };
+}
+
 export function mailEnding(sign: string, imageUrl: string) {
   const text = sign.trim() ? `\n\n${sign.trim()}` : "";
   const safe = escHtml(sign.trim()).replace(/\n/g, "<br>");
@@ -316,7 +336,9 @@ ${logo}
 <p style="margin:8px 0 0;font-size:15px;line-height:1.45;color:#5c656b;">${escHtml(opts.lead)}</p>
 ${code}${table}${note}${site}${links}${end.html}
 </td></tr></table>
-</td></tr></table>
+</td></tr>
+${flhCredit().html}
+</table>
 </body></html>`;
 }
 
@@ -339,7 +361,7 @@ export function guestInfoMail(kind: "move" | "cancel", opts: {
   if (kind === "cancel") {
     return {
       subject: `Termin storniert – ${opts.tenantName}`,
-      text: `Hallo ${opts.guestName},\n\ndein Termin wurde storniert.\n\n${summary}\n${opts.when}\n\n${opts.tenantName}${home.text}${end.text}`,
+      text: `Hallo ${opts.guestName},\n\ndein Termin wurde storniert.\n\n${summary}\n${opts.when}\n\n${opts.tenantName}${home.text}${end.text}${flhCredit().text}`,
       html: mailCard({
         salon: opts.tenantName,
         lead: `Hallo ${opts.guestName}, dein Termin wurde storniert.`,
@@ -350,7 +372,7 @@ export function guestInfoMail(kind: "move" | "cancel", opts: {
   }
   return {
     subject: `Termin verschoben – ${opts.tenantName}`,
-    text: `Hallo ${opts.guestName},\n\ndein Termin wurde verschoben.\n\nBisher: ${opts.before ?? ""}\nNeu: ${summary}\n${opts.when}\n\n${opts.tenantName}${home.text}${end.text}`,
+    text: `Hallo ${opts.guestName},\n\ndein Termin wurde verschoben.\n\nBisher: ${opts.before ?? ""}\nNeu: ${summary}\n${opts.when}\n\n${opts.tenantName}${home.text}${end.text}${flhCredit().text}`,
     html: mailCard({
       salon: opts.tenantName,
       lead: `Hallo ${opts.guestName}, dein Termin wurde verschoben.`,
@@ -381,7 +403,7 @@ export function pinMail(opts: { pin: string; tenantName: string; when: string; l
   const home = siteLine(opts.site);
   return {
     subject: `Dein Code für ${opts.tenantName}`,
-    text: `Dein Bestätigungscode: ${opts.pin}\nTermin: ${opts.when}\nGültig 15 Minuten.${home.text}${end.text}`,
+    text: `Dein Bestätigungscode: ${opts.pin}\nTermin: ${opts.when}\nGültig 15 Minuten.${home.text}${end.text}${flhCredit().text}`,
     html: mailCard({
       salon: opts.tenantName,
       lead: "Dein Bestätigungscode. Er gilt 15 Minuten.",
@@ -450,7 +472,7 @@ export function confirmMail(opts: {
   const calNote = "Mit einem Klick auf termin.ics im Anhang trägst du den Termin in deinen Kalender ein.";
   return {
     subject: `Termin bestätigt – ${opts.tenantName}`,
-    text: `Hallo ${opts.guestName},\n\ndein Termin ist bestätigt.\n\n${block}\n${opts.tenantName}\n\n${calNote}${home.text}${end.text}`,
+    text: `Hallo ${opts.guestName},\n\ndein Termin ist bestätigt.\n\n${block}\n${opts.tenantName}\n\n${calNote}${home.text}${end.text}${flhCredit().text}`,
     html: mailCard({
       salon: opts.tenantName,
       lead: `Hallo ${opts.guestName}, dein Termin ist bestätigt.`,

@@ -85,4 +85,11 @@ const withSite = confirmMail({
 assert(withSite.html.includes("Unsere Homepage") && withSite.html.includes(">salon.example/team<") && withSite.text.includes("https://www.salon.example/team"), "homepage link");
 const coded = pinMail({ pin: "123456", tenantName: "Salon", when: "20.10.2026 14:00", logoUrl: "https://cdn.example/logo.png", sign: "Bis bald" });
 assert(coded.html.includes("123456") && coded.html.includes("https://cdn.example/logo.png") && coded.html.includes("Bis bald") && coded.text.includes("123456"), "pin card");
+const prevOrigin = process.env.PUBLIC_ORIGIN;
+process.env.PUBLIC_ORIGIN = "https://book.example";
+const branded = pinMail({ pin: "123456", tenantName: "Salon", when: "20.10.2026 14:00" });
+assert(branded.html.includes("https://book.example/kalendaa.png") && branded.html.includes('href="https://www.flh-digital.de/"') && branded.text.includes("Powered by FLH - Kalender"), "flh credit");
+assert(cancelled.text.includes("Powered by FLH - Kalender") && confirmed.text.includes("https://www.flh-digital.de/") && moved.html.includes("Powered by FLH - Kalender"), "flh credit on every mail");
+if (prevOrigin) process.env.PUBLIC_ORIGIN = prevOrigin;
+else delete process.env.PUBLIC_ORIGIN;
 console.log("mail.check ok");
