@@ -1565,8 +1565,19 @@ button.week-head.today {
 }
 .book-cal-bar button:disabled { opacity: 0.35; }
 .book-cal { overflow: hidden; padding: 2px; margin: 0; }
-.book-cal-wd, .days { display: grid; grid-template-columns: repeat(7, 1fr); }
-.book-cal-wd { margin-bottom: 0.3rem; text-align: center; font-size: 0.68rem; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: var(--graphite-75); }
+.book-cal-wd, .days { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); }
+.book-cal-wd, .book-cal .days { grid-template-columns: 1.45rem repeat(7, minmax(0, 1fr)); }
+.book-cal-wd { margin-bottom: 0.3rem; gap: 0.4rem; text-align: center; font-size: 0.68rem; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: var(--graphite-75); }
+.book-kw {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 0;
+  font-size: clamp(0.55rem, 1.4vh, 0.68rem);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--graphite-50);
+}
 .book-cal-pick { margin: 0.2rem 0 0.75rem; text-align: center; font-weight: 700; }
 .days { gap: 0.4rem; margin-bottom: 0.75rem; }
 .days button {
@@ -1633,9 +1644,8 @@ body:has(.book-fit) #root {
 .book-step.is-cal .book-cal { flex: 1; min-height: 0; display: flex; flex-direction: column; }
 .book-step.is-cal .book-cal-bar,
 .book-step.is-cal .book-cal-wd,
-.book-step.is-cal .book-cal-pick,
-.book-step.is-cal .book-back { flex-shrink: 0; }
-.book-step.is-cal .book-back { margin-top: 0.2rem; }
+.book-step.is-cal .book-cal-pick { flex-shrink: 0; }
+.book-step.is-cal .book-cal-wd { gap: 0.25rem; }
 .book-step.is-cal .days {
   flex: 1;
   min-height: 0;
@@ -1689,7 +1699,14 @@ body:has(.book-fit) #root {
 .storno-addr { white-space: pre-line; }
 .book .lead { margin: 0 0 1.5rem; color: var(--graphite-75); text-align: center; }
 .book .btn { width: 100%; margin-top: 0.25rem; }
-.book .book-back { width: auto; margin-top: 0.85rem; }
+.book .book-back {
+  width: auto;
+  align-self: flex-start;
+  flex-shrink: 0;
+  margin: 0.45rem 0 0;
+  min-height: 36px;
+  padding: 0.35rem 0.9rem;
+}
 .book-progress { margin-bottom: 1rem; }
 .book-progress-top {
   display: flex;
@@ -1914,7 +1931,8 @@ body:has(.book-fit) #root {
   .view-switch button { flex: 1; }
   .week-switch { width: 100%; }
   .page { padding: 1rem; }
-  .days, .book-cal-wd { grid-template-columns: repeat(7, 1fr); }
+  .days, .book-cal-wd { grid-template-columns: repeat(7, minmax(0, 1fr)); }
+  .book-cal-wd, .book-cal .days { grid-template-columns: 1.45rem repeat(7, minmax(0, 1fr)); }
   .search input { width: 12rem; }
   .fields-2 { grid-template-columns: 1fr; }
   .admin-grid, .stat-row, .dash-grid { grid-template-columns: 1fr; }

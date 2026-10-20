@@ -46,7 +46,7 @@ export function StepPane({ id, children }: { id: string | number; children: Reac
   useGSAP(() => {
     const root = ref.current;
     if (!root || reduced()) return;
-    const items = root.querySelectorAll(".cat-fold, .choice, .book-cal-bar, .book-cal-wd span, .days button, .book-cal-pick, .field, .book-done");
+    const items = root.querySelectorAll(".cat-fold, .choice, .book-cal-bar, .book-cal-wd span, .book-kw, .days button, .book-cal-pick, .field, .book-done");
     gsap.fromTo(root, { opacity: 0 }, { opacity: 1, duration: 0.2, ease: "power2.out" });
     if (items.length) {
       gsap.fromTo(items, { opacity: 0, y: 8 }, { opacity: 1, y: 0, duration: 0.32, stagger: 0.03, ease: "power2.out", clearProps: "transform" });

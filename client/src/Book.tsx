@@ -22,6 +22,15 @@ function mondayOf(key: string) {
   return shiftKey(key, wd === 0 ? -6 : 1 - wd);
 }
 
+function isoWeek(key: string) {
+  const mon = mondayOf(key);
+  const year = Number(shiftKey(mon, 3).slice(0, 4));
+  const start = mondayOf(`${year}-01-04`);
+  const [y1, m1, d1] = start.split("-").map(Number);
+  const [y2, m2, d2] = mon.split("-").map(Number);
+  return 1 + Math.round((Date.UTC(y2, m2 - 1, d2) - Date.UTC(y1, m1 - 1, d1)) / 86400000 / 7);
+}
+
 function monthEnd(ym: string) {
   const [y, m] = ym.split("-").map(Number);
   return `${ym}-${String(new Date(Date.UTC(y, m, 0)).getUTCDate()).padStart(2, "0")}`;
@@ -320,7 +329,6 @@ export function BookPage() {
             </>
           ) : null}
           {!pending && !offered.length ? <p>In den nächsten 4 Wochen ist niemand frei.</p> : null}
-          <button className="btn quiet book-back" type="button" onClick={() => setStep(0)}>Zurück</button>
         </>
       )}
 
@@ -347,13 +355,17 @@ export function BookPage() {
                   ›
                 </button>
               </div>
-              <div className="book-cal-wd" aria-hidden="true">{WEEKDAYS.map((w) => <span key={w}>{w}</span>)}</div>
+              <div className="book-cal-wd" aria-hidden="true">
+                <span className="book-kw">KW</span>
+                {WEEKDAYS.map((w) => <span key={w}>{w}</span>)}
+              </div>
               <div className="days">
-                {cells.map((key) => {
+                {cells.flatMap((key, i) => {
                   const inRange = key >= todayKey && key <= horizon;
                   const open = inRange && openDays.has(key);
                   const outside = key.slice(0, 7) !== month;
-                  return (
+                  const week = isoWeek(key);
+                  const btn = (
                     <button
                       key={key}
                       type="button"
@@ -371,13 +383,13 @@ export function BookPage() {
                       {key === todayKey ? <small>Heute</small> : null}
                     </button>
                   );
+                  return i % 7 === 0 ? [<span key={`kw-${key}`} className="book-kw" aria-label={`Kalenderwoche ${week}`}>{week}</span>, btn] : [btn];
                 })}
               </div>
               {day ? <p className="book-cal-pick">{dayLabel(day, { weekday: "long", day: "numeric", month: "long" })}</p> : null}
             </BookMonth>
           )}
           {!pending && !slots.length ? <p>In den nächsten 4 Wochen kein freier Slot.</p> : null}
-          <button className="btn quiet book-back" type="button" onClick={() => setStep(staffForService.length === 1 || (!pending && offered.length <= 1) ? 0 : 1)}>Zurück</button>
         </div>
       )}
 
@@ -393,7 +405,6 @@ export function BookPage() {
             />
             {cart({ go: () => setStep(4), on: true, label: ids.includes(offer.id) ? "Weiter" : "Ohne weiter" }, true)}
           </div>
-          <button className="btn quiet book-back" type="button" onClick={() => setStep(2)}>Zurück</button>
         </>
       )}
 
@@ -413,7 +424,6 @@ export function BookPage() {
             ))}
           </div>
           {!pending && !daySlots.length ? <p>An dem Tag ist dafür nichts frei.</p> : null}
-          <button className="btn quiet book-back" type="button" onClick={() => setStep(withUpsell ? 3 : 2)}>Zurück</button>
         </>
       )}
 
@@ -486,7 +496,6 @@ export function BookPage() {
             </span>
           </label>
           <button className={privacy && guestMail(guest.guestEmail) && guestPhone(guest.guestPhone) ? "btn" : "btn is-hold"} disabled={pending || !privacy || !guestMail(guest.guestEmail) || !guestPhone(guest.guestPhone)} type="submit">{pending ? "Sendet Code…" : "Code per Mail"}</button>
-          <button className="btn quiet book-back" type="button" onClick={() => setStep(4)}>Zurück</button>
         </form>
       )}
 
@@ -537,6 +546,16 @@ export function BookPage() {
         </div>
       )}
       </StepPane>
+
+      {step > 0 && step < 6 ? (
+        <button
+          className="btn outline book-back"
+          type="button"
+          onClick={() => setStep(step === 1 ? 0 : step === 2 ? (staffForService.length === 1 || (!pending && offered.length <= 1) ? 0 : 1) : step === 3 ? 2 : step === 4 ? (withUpsell ? 3 : 2) : 4)}
+        >
+          Zurück
+        </button>
+      ) : null}
 
       <footer className="book-foot">
         Buchung von FLH DIGITAL
@@ -758,7 +777,7 @@ function BookMonth({ month, children }: { month: string; children: ReactNode }) 
       return;
     }
     if (reduced()) return;
-    const items = root.querySelectorAll(".book-cal-bar, .book-cal-wd span, .days button");
+    const items = root.querySelectorAll(".book-cal-bar, .book-cal-wd span, .book-kw, .days button");
     if (!items.length) return;
     gsap.fromTo(items, { opacity: 0, y: 8 }, { opacity: 1, y: 0, duration: 0.32, stagger: 0.03, ease: "power2.out", clearProps: "transform" });
   }, { dependencies: [month], scope: ref });
