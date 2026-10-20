@@ -9,6 +9,10 @@ export type StornoView = {
   service: string;
   when: string;
   state: "open" | "gone" | "closed";
+  website?: string;
+  address?: string;
+  phone?: string;
+  email?: string;
 };
 
 export type Actor = {

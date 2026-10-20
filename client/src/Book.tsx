@@ -595,6 +595,16 @@ function BookShell({ children, slug }: { children: ReactNode; slug: string }) {
   );
 }
 
+function siteLabel(url: string) {
+  try {
+    const u = new URL(url);
+    const path = u.pathname === "/" ? "" : u.pathname.replace(/\/$/, "");
+    return `${u.host.replace(/^www\./, "")}${path}`;
+  } catch {
+    return url.replace(/^https?:\/\//i, "").replace(/\/$/, "");
+  }
+}
+
 export function CancelPage() {
   const { slug = "", token = "" } = useParams();
   const [row, setRow] = useState<StornoView | null>(null);
@@ -665,6 +675,19 @@ export function CancelPage() {
             </button>
             <button className="btn quiet" type="button" disabled={pending} onClick={() => setKept(true)}>Nein, behalten</button>
           </>
+        ) : null}
+        {row && (row.website || row.address || row.phone || row.email) ? (
+          <div className="storno-foot">
+            {row.website ? (
+              <p className="storno-site">
+                Unsere Homepage
+                <a href={row.website} target="_blank" rel="noreferrer">{siteLabel(row.website)}</a>
+              </p>
+            ) : null}
+            {row.address ? <p className="storno-addr">{row.address}</p> : null}
+            {row.phone ? <p><a href={`tel:${row.phone.replace(/[^\d+]/g, "")}`}>{row.phone}</a></p> : null}
+            {row.email ? <p><a href={`mailto:${row.email}`}>{row.email}</a></p> : null}
+          </div>
         ) : null}
       </div>
     </div>

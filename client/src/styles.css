@@ -1240,7 +1240,7 @@ button.week-head.today {
   min-height: 100vh;
   background: var(--petrol);
   display: grid;
-  place-items: center;
+  place-items: safe center;
   padding: 1.5rem;
 }
 .login .panel { width: min(420px, 100%); }
@@ -1661,6 +1661,18 @@ body:has(.book-fit) #root {
 }
 .storno-when strong { display: block; }
 .storno-when span { display: block; margin-top: 0.15rem; color: var(--graphite-75); font-size: 0.9rem; }
+.storno-foot {
+  margin-top: 1.35rem;
+  padding-top: 1rem;
+  border-top: 1px solid #e4eaec;
+  text-align: center;
+  font-size: 0.9rem;
+  line-height: 1.45;
+}
+.login .storno-foot p { margin: 0.35rem 0 0; color: var(--graphite-75); }
+.login .storno-foot a { color: var(--petrol); font-weight: 700; }
+.storno-site { display: flex; flex-direction: column; gap: 0.1rem; }
+.storno-addr { white-space: pre-line; }
 .book .lead { margin: 0 0 1.5rem; color: var(--graphite-75); text-align: center; }
 .book .btn { width: 100%; margin-top: 0.25rem; }
 .book .book-back { width: auto; margin-top: 0.85rem; }

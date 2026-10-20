@@ -1897,6 +1897,10 @@ async function stornoHit(slug: string, token: string) {
       service,
       when: `${a.toFormat("cccc, d. LLLL yyyy")}, ${a.toFormat("HH:mm")}–${b.toFormat("HH:mm")}`,
       state,
+      website: tenant.website || "",
+      address: tenant.address || "",
+      phone: tenant.phone || "",
+      email: tenant.contactEmail || "",
     },
   };
 }
