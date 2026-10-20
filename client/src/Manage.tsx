@@ -1212,6 +1212,7 @@ export function HoursPage() {
   const [address, setAddress] = useState("");
   const [phone, setPhone] = useState("");
   const [mail, setMail] = useState("");
+  const [website, setWebsite] = useState("");
   const [err, setErr] = useState("");
   const [pending, setPending] = useState(false);
   useEffect(() => {
@@ -1220,6 +1221,7 @@ export function HoursPage() {
     setAddress(boot.tenant.address ?? "");
     setPhone(boot.tenant.phone ?? "");
     setMail(boot.tenant.contactEmail ?? "");
+    setWebsite(boot.tenant.website ?? "");
     setRows([1, 2, 3, 4, 5, 6, 7].map((weekday) => {
       const h = boot.hours.find((x) => x.weekday === weekday);
       return { weekday, startHm: h?.startHm ?? "09:00", endHm: h?.endHm ?? (weekday === 6 ? "14:00" : "18:00"), open: Boolean(h) };
@@ -1245,6 +1247,10 @@ export function HoursPage() {
             <span>Kontakt-E-Mail</span>
             <input type="email" value={mail} onChange={(e) => setMail(e.target.value)} placeholder="salon@example.de" />
           </label>
+          <label className="field">
+            <span>Homepage</span>
+            <input type="url" value={website} onChange={(e) => setWebsite(e.target.value)} placeholder="https://salon.de" />
+          </label>
           <p className="hint-line">Die Telefonnummer steht im Buchungsfenster, wenn jemand online nicht mehr buchen darf.</p>
           <div className="hours-foot">
             <button
@@ -1254,7 +1260,7 @@ export function HoursPage() {
               onClick={() => {
                 setErr("");
                 setPending(true);
-                api.putContact({ address, phone, email: mail })
+                api.putContact({ address, phone, email: mail, website })
                   .catch((ex) => setErr(ex instanceof Error ? ex.message : "Speichern fehlgeschlagen."))
                   .finally(() => setPending(false));
               }}

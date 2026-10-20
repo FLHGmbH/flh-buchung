@@ -52,7 +52,7 @@ export function StepPane({ id, children }: { id: string | number; children: Reac
       gsap.fromTo(items, { opacity: 0, y: 8 }, { opacity: 1, y: 0, duration: 0.32, stagger: 0.03, ease: "power2.out", clearProps: "transform" });
     }
   }, { dependencies: [id], scope: ref });
-  return <div ref={ref}>{children}</div>;
+  return <div className="step-pane" ref={ref}>{children}</div>;
 }
 
 export function PageMotion() {

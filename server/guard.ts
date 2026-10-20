@@ -4,7 +4,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { DateTime } from "luxon";
 
-export const BOOK_DAYS = 14;
+export const BOOK_DAYS = 28;
 export const LOGIN_MAX = 10;
 export const BOOK_MAX = 8;
 export const PIN_MAX = 5;
@@ -76,7 +76,7 @@ export function bookWindow(zone: string, now = new Date()) {
   return { from, to: from.plus({ days: BOOK_DAYS }).endOf("day") };
 }
 
-export const LEN = { name: 80, note: 500, email: 254, phone: 40, address: 300, reason: 120, password: 200, sign: 800 };
+export const LEN = { name: 80, note: 500, email: 254, phone: 40, address: 300, website: 200, reason: 120, password: 200, sign: 800 };
 
 export function clip(s: string, max: number) {
   return s.trim().slice(0, max);

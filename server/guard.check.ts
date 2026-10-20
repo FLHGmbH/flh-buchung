@@ -36,7 +36,7 @@ assert(logoKind("image/png", 5_000_001) === null, "too big");
 assert(inIntRange(5, 5, 480) && !inIntRange(4, 5, 480), "range");
 
 const w = bookWindow("Europe/Berlin", new Date("2026-09-17T10:00:00+02:00"));
-assert(w.to.diff(w.from, "days").days > 13.9, "14 day horizon");
+assert(w.to.diff(w.from, "days").days > 27.9, "4 week horizon");
 
 assert(clientIp({ get: (n) => (n === "x-forwarded-for" ? "203.0.113.5, 198.51.100.8" : undefined) }) === "198.51.100.8", "last forwarded hop");
 assert(clientIp({ get: (n) => (n === "x-real-ip" ? "198.51.100.9" : undefined) }) === "198.51.100.9", "real ip fallback");

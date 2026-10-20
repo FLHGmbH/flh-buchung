@@ -640,7 +640,7 @@ function storeMailImage(tenant: { id: string; slug: string }, mime: string, byte
   return storeImage(`mail-${tenant.id}`, `${tenant.id}/mail`, `/api/public/${tenant.slug}/mail-image`, mime, bytes);
 }
 
-function mailFootOf(tenant: { mailSign: string; mailImageUrl: string | null; logoUrl: string | null }, reqUrl: string) {
+function mailFootOf(tenant: { mailSign: string; mailImageUrl: string | null; logoUrl: string | null; website: string }, reqUrl: string) {
   const origin = siteOrigin(reqUrl);
   const abs = (raw: string | null) => {
     const v = raw?.trim() ?? "";
@@ -649,7 +649,20 @@ function mailFootOf(tenant: { mailSign: string; mailImageUrl: string | null; log
     if (!origin) return "";
     return `${origin}${v.startsWith("/") ? v : `/${v}`}`;
   };
-  return { sign: tenant.mailSign ?? "", logoUrl: abs(tenant.logoUrl), imageUrl: abs(tenant.mailImageUrl) };
+  return { sign: tenant.mailSign ?? "", logoUrl: abs(tenant.logoUrl), imageUrl: abs(tenant.mailImageUrl), site: tenant.website ?? "" };
+}
+
+function websiteOf(raw: string) {
+  const v = raw.trim();
+  if (!v) return "";
+  try {
+    const url = new URL(/^https?:\/\//i.test(v) ? v : `https://${v}`);
+    if (url.protocol !== "http:" && url.protocol !== "https:") return null;
+    if (!url.hostname.includes(".")) return null;
+    return url.toString();
+  } catch {
+    return null;
+  }
 }
 
 function whenLabel(start: Date, end: Date, zone: string) {
@@ -1102,15 +1115,17 @@ api.put("/app/mail-sign", async (c) => {
 
 api.put("/app/contact", async (c) => {
   const tid = tenantId(c);
-  const body = await readJson<{ address?: string; phone?: string; email?: string }>(c);
+  const body = await readJson<{ address?: string; phone?: string; email?: string; website?: string }>(c);
   if (!body) return c.json({ error: "Ungültige Anfrage." }, 400);
   const address = clip(body.address ?? "", LEN.address);
   const phone = clip(body.phone ?? "", LEN.phone);
   const email = clip((body.email ?? "").toLowerCase(), LEN.email);
+  const website = websiteOf(clip(body.website ?? "", LEN.website));
   if (phone && !guestPhone(phone)) return c.json({ error: "Bitte eine gültige Telefonnummer angeben." }, 400);
   if (email && !guestMail(email)) return c.json({ error: "Bitte eine gültige E-Mail angeben." }, 400);
-  await db.update(tenants).set({ address, phone, contactEmail: email }).where(eq(tenants.id, tid));
-  return c.json({ address, phone, email });
+  if (website == null) return c.json({ error: "Bitte eine gültige Homepage angeben, zum Beispiel https://salon.de" }, 400);
+  await db.update(tenants).set({ address, phone, contactEmail: email, website }).where(eq(tenants.id, tid));
+  return c.json({ address, phone, email, website });
 });
 
 api.post("/app/mail-image", async (c) => {

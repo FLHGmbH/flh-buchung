@@ -68,7 +68,6 @@ export function BookPage() {
   const [slots, setSlots] = useState<{ start: string; end: string; staffId: string }[]>([]);
   const [day, setDay] = useState("");
   const [monthYm, setMonthYm] = useState("");
-  const monthSlide = useRef(1);
   const [slot, setSlot] = useState<{ start: string; end: string; staffId: string } | null>(null);
   const [guest, setGuest] = useState({ guestName: "", guestEmail: "", guestPhone: "", note: "" });
   const [done, setDone] = useState<{ id: string; startsAt: string } | null>(null);
@@ -106,7 +105,7 @@ export function BookPage() {
     return map;
   }, [slots, staffId]);
   const todayKey = berlinDay(new Date().toISOString());
-  const horizon = shiftKey(todayKey, 13);
+  const horizon = shiftKey(todayKey, 27);
   const month = monthYm || (day || todayKey).slice(0, 7);
   const months: string[] = [];
   for (let k = todayKey; k <= horizon; k = shiftKey(k, 1)) {
@@ -320,24 +319,21 @@ export function BookPage() {
               </button>
             </>
           ) : null}
-          {!pending && !offered.length ? <p>In den nächsten 14 Tagen ist niemand frei.</p> : null}
+          {!pending && !offered.length ? <p>In den nächsten 4 Wochen ist niemand frei.</p> : null}
           <button className="btn quiet book-back" type="button" onClick={() => setStep(0)}>Zurück</button>
         </>
       )}
 
       {step === 2 && (
-        <>
+        <div className="book-step is-cal">
           {pending && !slots.length ? <DayBones /> : (
-            <BookMonth month={month} slide={monthSlide.current}>
+            <BookMonth month={month}>
               <div className="book-cal-bar">
                 <button
                   type="button"
                   aria-label="Vorheriger Monat"
                   disabled={!canPrev}
-                  onClick={() => {
-                    monthSlide.current = -1;
-                    setMonthYm(months[months.indexOf(month) - 1] ?? month);
-                  }}
+                  onClick={() => setMonthYm(months[months.indexOf(month) - 1] ?? month)}
                 >
                   ‹
                 </button>
@@ -346,10 +342,7 @@ export function BookPage() {
                   type="button"
                   aria-label="Nächster Monat"
                   disabled={!canNext}
-                  onClick={() => {
-                    monthSlide.current = 1;
-                    setMonthYm(months[months.indexOf(month) + 1] ?? month);
-                  }}
+                  onClick={() => setMonthYm(months[months.indexOf(month) + 1] ?? month)}
                 >
                   ›
                 </button>
@@ -383,9 +376,9 @@ export function BookPage() {
               {day ? <p className="book-cal-pick">{dayLabel(day, { weekday: "long", day: "numeric", month: "long" })}</p> : null}
             </BookMonth>
           )}
-          {!pending && !slots.length ? <p>In den nächsten 14 Tagen kein freier Slot.</p> : null}
+          {!pending && !slots.length ? <p>In den nächsten 4 Wochen kein freier Slot.</p> : null}
           <button className="btn quiet book-back" type="button" onClick={() => setStep(staffForService.length === 1 || (!pending && offered.length <= 1) ? 0 : 1)}>Zurück</button>
-        </>
+        </div>
       )}
 
       {step === 3 && offer && (
@@ -595,7 +588,7 @@ function BookShell({ children, slug }: { children: ReactNode; slug: string }) {
     gsap.fromTo(ref.current, { opacity: 0, y: 12 }, { opacity: 1, y: 0, duration: 0.4, ease: "power3.out" });
   }, { scope: ref });
   return (
-    <div className={"book-page" + (cookies ? " has-cookie" : "")}>
+    <div className={"book-page book-fit" + (cookies ? " has-cookie" : "")}>
       <div className="book" ref={ref}>{children}</div>
       {cookies ? <CookieBar privacyHref={`/b/${slug}/datenschutz`} onOk={() => setCookies(false)} /> : null}
     </div>
@@ -725,7 +718,7 @@ function BookBones() {
   );
 }
 
-function BookMonth({ month, slide, children }: { month: string; slide: number; children: ReactNode }) {
+function BookMonth({ month, children }: { month: string; children: ReactNode }) {
   const ref = useRef<HTMLDivElement>(null);
   const seen = useRef(false);
   useGSAP(() => {
@@ -736,18 +729,9 @@ function BookMonth({ month, slide, children }: { month: string; slide: number; c
       return;
     }
     if (reduced()) return;
-    const grid = root.querySelector(".days");
-    const buttons = root.querySelectorAll(".days button");
-    if (grid) gsap.fromTo(grid, { x: slide * 28 }, { x: 0, duration: 0.32, ease: "power2.out", clearProps: "transform" });
-    if (buttons.length) {
-      gsap.fromTo(buttons, { y: 8 }, {
-        y: 0,
-        duration: 0.28,
-        stagger: { each: 0.012, grid: "auto", from: slide < 0 ? "end" : "start" },
-        ease: "power2.out",
-        clearProps: "transform",
-      });
-    }
+    const items = root.querySelectorAll(".book-cal-bar, .book-cal-wd span, .days button");
+    if (!items.length) return;
+    gsap.fromTo(items, { opacity: 0, y: 8 }, { opacity: 1, y: 0, duration: 0.32, stagger: 0.03, ease: "power2.out", clearProps: "transform" });
   }, { dependencies: [month], scope: ref });
   return <div className="book-cal" ref={ref}>{children}</div>;
 }

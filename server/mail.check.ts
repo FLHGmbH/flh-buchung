@@ -70,6 +70,19 @@ const confirmed = confirmMail({
 assert(confirmed.text.includes(`Termin stornieren: ${stop}`), "confirm link text");
 assert(confirmed.html.includes(`href="${escHtml(stop)}"`) && confirmed.html.includes("Termin stornieren"), "confirm link html");
 assert(confirmed.html.includes("background:#006478") && confirmed.html.includes(">Salon<"), "confirm card");
+assert(confirmed.html.includes("color:#9b2c2c") && confirmed.text.includes("Mit einem Klick auf termin.ics"), "cancel link and calendar note");
+const withSite = confirmMail({
+  guestName: "Lea",
+  tenantName: "Salon",
+  serviceName: "Schnitt",
+  staffName: "",
+  when: "20.10.2026 14:00–14:45",
+  uid: "b1@flh-kalender",
+  start: new Date("2026-10-20T12:00:00.000Z"),
+  end: new Date("2026-10-20T12:45:00.000Z"),
+  site: "https://www.salon.example/team",
+});
+assert(withSite.html.includes("Unsere Homepage") && withSite.html.includes(">salon.example/team<") && withSite.text.includes("https://www.salon.example/team"), "homepage link");
 const coded = pinMail({ pin: "123456", tenantName: "Salon", when: "20.10.2026 14:00", logoUrl: "https://cdn.example/logo.png", sign: "Bis bald" });
 assert(coded.html.includes("123456") && coded.html.includes("https://cdn.example/logo.png") && coded.html.includes("Bis bald") && coded.text.includes("123456"), "pin card");
 console.log("mail.check ok");

@@ -116,6 +116,7 @@ export async function migrate() {
   await execSql(`ALTER TABLE tenants ADD COLUMN IF NOT EXISTS address text NOT NULL DEFAULT ''`).catch(ignoreExists);
   await execSql(`ALTER TABLE tenants ADD COLUMN IF NOT EXISTS phone text NOT NULL DEFAULT ''`).catch(ignoreExists);
   await execSql(`ALTER TABLE tenants ADD COLUMN IF NOT EXISTS contact_email text NOT NULL DEFAULT ''`).catch(ignoreExists);
+  await execSql(`ALTER TABLE tenants ADD COLUMN IF NOT EXISTS website text NOT NULL DEFAULT ''`).catch(ignoreExists);
   await execSql(`ALTER TABLE staff ADD COLUMN IF NOT EXISTS color text`).catch(ignoreExists);
   await execSql(`ALTER TABLE staff ADD COLUMN IF NOT EXISTS photo_url text`).catch(ignoreExists);
   await execSql(`ALTER TABLE bookings ALTER COLUMN staff_id DROP NOT NULL`).catch(ignoreExists);

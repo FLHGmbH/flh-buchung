@@ -256,13 +256,31 @@ export function mailEnding(sign: string, imageUrl: string) {
   return { text, html };
 }
 
+export function siteLine(url?: string) {
+  const v = url?.trim() ?? "";
+  if (!v) return { text: "", html: "" };
+  let label = v.replace(/^https?:\/\//i, "").replace(/\/$/, "");
+  try {
+    const u = new URL(v);
+    const path = u.pathname === "/" ? "" : u.pathname.replace(/\/$/, "");
+    label = `${u.host.replace(/^www\./, "")}${path}`;
+  } catch {
+    /* keep the trimmed address */
+  }
+  return {
+    text: `\nUnsere Homepage: ${v}`,
+    html: `<p style="margin:16px 0 0;font-size:14px;line-height:1.45;color:#253239;">Unsere Homepage<br><a href="${escHtml(v)}" style="color:#006478;font-weight:700;">${escHtml(label)}</a></p>`,
+  };
+}
+
 export function mailCard(opts: {
   salon: string;
   lead: string;
   rows: { label: string; value: string }[];
   code?: string;
-  links?: { href: string; label: string }[];
+  links?: { href: string; label: string; tone?: "stop" }[];
   note?: string;
+  site?: string;
   logoUrl?: string;
   sign?: string;
   imageUrl?: string;
@@ -280,9 +298,13 @@ export function mailCard(opts: {
     ? `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" bgcolor="#f4f7f8" style="margin:16px 0 0;background:#f4f7f8;border-radius:8px;">${rows}</table>`
     : "";
   const links = (opts.links ?? [])
-    .map((l) => `<p style="margin:16px 0 0;text-align:center;"><a href="${escHtml(l.href)}" style="color:#006478;font-weight:700;">${escHtml(l.label)}</a></p>`)
+    .map((l) => {
+      const color = l.tone === "stop" ? "#9b2c2c" : "#006478";
+      return `<p style="margin:16px 0 0;text-align:center;"><a href="${escHtml(l.href)}" style="color:${color};font-weight:700;">${escHtml(l.label)}</a></p>`;
+    })
     .join("");
   const note = opts.note ? `<p style="margin:16px 0 0;font-size:13px;line-height:1.45;color:#5c656b;">${escHtml(opts.note)}</p>` : "";
+  const site = siteLine(opts.site).html;
   const end = mailEnding(opts.sign ?? "", opts.imageUrl ?? "");
   return `<!DOCTYPE html><html lang="de"><body style="margin:0;padding:0;background:#006478;">
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" bgcolor="#006478" style="background:#006478;">
@@ -292,7 +314,7 @@ export function mailCard(opts: {
 ${logo}
 <p style="margin:0;font-size:22px;line-height:1.25;font-weight:700;">${escHtml(opts.salon)}</p>
 <p style="margin:8px 0 0;font-size:15px;line-height:1.45;color:#5c656b;">${escHtml(opts.lead)}</p>
-${code}${table}${note}${links}${end.html}
+${code}${table}${note}${site}${links}${end.html}
 </td></tr></table>
 </td></tr></table>
 </body></html>`;
@@ -308,14 +330,16 @@ export function guestInfoMail(kind: "move" | "cancel", opts: {
   logoUrl?: string;
   sign?: string;
   imageUrl?: string;
+  site?: string;
 }) {
   const end = mailEnding(opts.sign ?? "", opts.imageUrl ?? "");
+  const home = siteLine(opts.site);
   const summary = opts.staffName ? `${opts.serviceName} bei ${opts.staffName}` : opts.serviceName;
-  const foot = { logoUrl: opts.logoUrl, sign: opts.sign, imageUrl: opts.imageUrl };
+  const foot = { logoUrl: opts.logoUrl, sign: opts.sign, imageUrl: opts.imageUrl, site: opts.site };
   if (kind === "cancel") {
     return {
       subject: `Termin storniert – ${opts.tenantName}`,
-      text: `Hallo ${opts.guestName},\n\ndein Termin wurde storniert.\n\n${summary}\n${opts.when}\n\n${opts.tenantName}${end.text}`,
+      text: `Hallo ${opts.guestName},\n\ndein Termin wurde storniert.\n\n${summary}\n${opts.when}\n\n${opts.tenantName}${home.text}${end.text}`,
       html: mailCard({
         salon: opts.tenantName,
         lead: `Hallo ${opts.guestName}, dein Termin wurde storniert.`,
@@ -326,7 +350,7 @@ export function guestInfoMail(kind: "move" | "cancel", opts: {
   }
   return {
     subject: `Termin verschoben – ${opts.tenantName}`,
-    text: `Hallo ${opts.guestName},\n\ndein Termin wurde verschoben.\n\nBisher: ${opts.before ?? ""}\nNeu: ${summary}\n${opts.when}\n\n${opts.tenantName}${end.text}`,
+    text: `Hallo ${opts.guestName},\n\ndein Termin wurde verschoben.\n\nBisher: ${opts.before ?? ""}\nNeu: ${summary}\n${opts.when}\n\n${opts.tenantName}${home.text}${end.text}`,
     html: mailCard({
       salon: opts.tenantName,
       lead: `Hallo ${opts.guestName}, dein Termin wurde verschoben.`,
@@ -352,11 +376,12 @@ export async function sendGuestInfo(kind: "move" | "cancel", opts: { to: string 
   }
 }
 
-export function pinMail(opts: { pin: string; tenantName: string; when: string; logoUrl?: string; sign?: string; imageUrl?: string }) {
+export function pinMail(opts: { pin: string; tenantName: string; when: string; logoUrl?: string; sign?: string; imageUrl?: string; site?: string }) {
   const end = mailEnding(opts.sign ?? "", opts.imageUrl ?? "");
+  const home = siteLine(opts.site);
   return {
     subject: `Dein Code für ${opts.tenantName}`,
-    text: `Dein Bestätigungscode: ${opts.pin}\nTermin: ${opts.when}\nGültig 15 Minuten.${end.text}`,
+    text: `Dein Bestätigungscode: ${opts.pin}\nTermin: ${opts.when}\nGültig 15 Minuten.${home.text}${end.text}`,
     html: mailCard({
       salon: opts.tenantName,
       lead: "Dein Bestätigungscode. Er gilt 15 Minuten.",
@@ -365,6 +390,7 @@ export function pinMail(opts: { pin: string; tenantName: string; when: string; l
       logoUrl: opts.logoUrl,
       sign: opts.sign,
       imageUrl: opts.imageUrl,
+      site: opts.site,
     }),
   };
 }
@@ -396,6 +422,7 @@ export function confirmMail(opts: {
   logoUrl?: string;
   sign?: string;
   imageUrl?: string;
+  site?: string;
 } & ConfirmStop & { also?: ConfirmStop[] }) {
   const summary = opts.staffName ? `${opts.serviceName} bei ${opts.staffName}` : opts.serviceName;
   const lines = [opts, ...(opts.also ?? [])].map((ev) => ({
@@ -410,6 +437,7 @@ export function confirmMail(opts: {
     .map((l) => `${l.summary}\n${l.when}${l.cancelUrl ? `\nTermin stornieren: ${l.cancelUrl}` : ""}`)
     .join("\n\n");
   const end = mailEnding(opts.sign ?? "", opts.imageUrl ?? "");
+  const home = siteLine(opts.site);
   const rows = lines.flatMap((l) => [
     { label: "Leistung", value: l.summary },
     { label: "Zeit", value: l.when },
@@ -417,16 +445,19 @@ export function confirmMail(opts: {
   const links = lines.filter((l) => l.cancelUrl).map((l) => ({
     href: l.cancelUrl,
     label: lines.length > 1 ? `${l.summary} stornieren` : "Termin stornieren",
+    tone: "stop" as const,
   }));
+  const calNote = "Mit einem Klick auf termin.ics im Anhang trägst du den Termin in deinen Kalender ein.";
   return {
     subject: `Termin bestätigt – ${opts.tenantName}`,
-    text: `Hallo ${opts.guestName},\n\ndein Termin ist bestätigt.\n\n${block}\n${opts.tenantName}\n\nIm Anhang liegt termin.ics zum Speichern in deinem Kalender.${end.text}`,
+    text: `Hallo ${opts.guestName},\n\ndein Termin ist bestätigt.\n\n${block}\n${opts.tenantName}\n\n${calNote}${home.text}${end.text}`,
     html: mailCard({
       salon: opts.tenantName,
       lead: `Hallo ${opts.guestName}, dein Termin ist bestätigt.`,
       rows,
       links,
-      note: "Im Anhang liegt termin.ics für deinen Kalender.",
+      note: calNote,
+      site: opts.site,
       logoUrl: opts.logoUrl,
       sign: opts.sign,
       imageUrl: opts.imageUrl,

@@ -9,6 +9,7 @@ CREATE TABLE IF NOT EXISTS tenants (
   address text NOT NULL DEFAULT '',
   phone text NOT NULL DEFAULT '',
   contact_email text NOT NULL DEFAULT '',
+  website text NOT NULL DEFAULT '',
   mail_sign text NOT NULL DEFAULT '',
   mail_image_url text,
   created_at timestamptz NOT NULL DEFAULT now()

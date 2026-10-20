@@ -1564,7 +1564,7 @@ button.week-head.today {
   line-height: 1;
 }
 .book-cal-bar button:disabled { opacity: 0.35; }
-.book-cal { overflow: hidden; padding: 3px; margin: -3px; }
+.book-cal { overflow: hidden; padding: 2px; margin: 0; }
 .book-cal-wd, .days { display: grid; grid-template-columns: repeat(7, 1fr); }
 .book-cal-wd { margin-bottom: 0.3rem; text-align: center; font-size: 0.68rem; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: var(--graphite-75); }
 .book-cal-pick { margin: 0.2rem 0 0.75rem; text-align: center; font-weight: 700; }
@@ -1572,8 +1572,9 @@ button.week-head.today {
 .days button {
   border: 1px solid var(--graphite-25);
   background: var(--white);
-  min-height: 72px;
-  padding: 0.4rem 0.15rem;
+  min-height: 0;
+  height: 100%;
+  padding: 0.15rem 0.1rem;
   border-radius: 12px;
   display: flex;
   flex-direction: column;
@@ -1599,6 +1600,51 @@ button.week-head.today {
 .slots { display: grid; grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); gap: 0.45rem; }
 .slots .choice { margin: 0; text-align: center; font-variant-numeric: tabular-nums; font-weight: 700; }
 .book-page { background: var(--white); }
+body:has(.book-fit),
+body:has(.book-fit) #root {
+  height: 100dvh;
+  overflow: hidden;
+}
+.book-page.book-fit {
+  height: 100dvh;
+  max-height: 100dvh;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+.book-page.book-fit .book {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  padding: 0.65rem 0.85rem 0.4rem;
+}
+.book-page.book-fit h1 { margin: 0.15rem 0; font-size: clamp(1.05rem, 3vh, 1.45rem); }
+.book-page.book-fit .lead { margin: 0 0 0.45rem; font-size: 0.85rem; }
+.book-page.book-fit .book-logo { max-height: 36px; margin: 0 auto; }
+.book-page.book-fit .book-progress { margin-bottom: 0.4rem; }
+.book-page.book-fit .book-recap { margin-bottom: 0.4rem; }
+.book-page.book-fit .book-foot { margin-top: 0.35rem; flex-shrink: 0; }
+.book-page.book-fit.has-cookie { padding-bottom: 4.75rem; }
+.step-pane { flex: 1; min-height: 0; display: flex; flex-direction: column; overflow: auto; }
+.step-pane:has(.is-cal) { overflow: hidden; }
+.book-step.is-cal { flex: 1; min-height: 0; display: flex; flex-direction: column; overflow: hidden; }
+.book-step.is-cal .book-cal { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.book-step.is-cal .book-cal-bar,
+.book-step.is-cal .book-cal-wd,
+.book-step.is-cal .book-cal-pick,
+.book-step.is-cal .book-back { flex-shrink: 0; }
+.book-step.is-cal .book-back { margin-top: 0.2rem; }
+.book-step.is-cal .days {
+  flex: 1;
+  min-height: 0;
+  margin-bottom: 0.3rem;
+  gap: 0.25rem;
+  grid-auto-rows: minmax(0, 1fr);
+}
+.book-step.is-cal .days button strong { font-size: clamp(0.72rem, 2.2vh, 1.05rem); }
+.book-step.is-cal .days button small { font-size: clamp(0.48rem, 1.3vh, 0.62rem); }
 .book {
   width: 100%;
   margin: 0;

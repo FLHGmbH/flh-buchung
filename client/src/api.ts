@@ -255,7 +255,7 @@ export const api = {
   putLogo: (body: FormData) => mutate("/api/app/logo", { method: "POST", body }),
   delLogo: () => mutate("/api/app/logo", { method: "DELETE" }),
   putMailSign: (sign: string) => mutate("/api/app/mail-sign", { method: "PUT", body: JSON.stringify({ sign }) }),
-  putContact: (body: { address: string; phone: string; email: string }) =>
+  putContact: (body: { address: string; phone: string; email: string; website: string }) =>
     mutate("/api/app/contact", { method: "PUT", body: JSON.stringify(body) }),
   google: () => req<GoogleLink>("/api/app/google"),
   googleCalendars: () => req<{ calendars: { id: string; summary: string }[] }>("/api/app/google/calendars"),
@@ -364,7 +364,7 @@ export type Booking = {
 export type TimeOff = { id: string; staffId: string; startsAt: string; endsAt: string; reason: string };
 export type GoogleLink = { configured: boolean; email: string; calendarId: string; calendarName: string };
 export type Bootstrap = {
-  tenant: { id: string; name: string; timezone: string; logoUrl?: string | null; mailSign?: string | null; mailImageUrl?: string | null; address?: string; phone?: string; contactEmail?: string };
+  tenant: { id: string; name: string; timezone: string; logoUrl?: string | null; mailSign?: string | null; mailImageUrl?: string | null; address?: string; phone?: string; contactEmail?: string; website?: string };
   staff: Staff[];
   staffHours: StaffShift[];
   categories: ServiceCategory[];
