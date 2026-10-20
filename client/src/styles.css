@@ -1564,18 +1564,7 @@ button.week-head.today {
   line-height: 1;
 }
 .book-cal-bar button:disabled { opacity: 0.35; }
-.book-cal-switch { display: flex; background: #f3f6f7; border-radius: 8px; padding: 0.2rem; margin-bottom: 0.65rem; }
-.book-cal-switch button {
-  flex: 1;
-  min-height: 44px;
-  font-family: inherit;
-  border: 0;
-  border-radius: 6px;
-  background: transparent;
-  font-weight: 600;
-  color: #64748b;
-}
-.book-cal-switch button.on { background: var(--petrol); color: #fff; }
+.book-cal { overflow: hidden; padding: 3px; margin: -3px; }
 .book-cal-wd, .days { display: grid; grid-template-columns: repeat(7, 1fr); }
 .book-cal-wd { margin-bottom: 0.3rem; text-align: center; font-size: 0.68rem; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: var(--graphite-75); }
 .book-cal-pick { margin: 0.2rem 0 0.75rem; text-align: center; font-weight: 700; }
@@ -1617,7 +1606,15 @@ button.week-head.today {
   background: transparent;
 }
 .book h1 { overflow-wrap: anywhere; margin: 0.5rem 0 0.25rem; font-size: 1.65rem; letter-spacing: -0.02em; text-align: center; }
-.storno-ask { margin: 0.75rem 0 1.25rem; text-align: center; font-size: 1.05rem; line-height: 1.45; }
+.storno-card .book-logo { max-height: 72px; max-width: 180px; margin: 0.15rem auto 0; }
+.storno-when {
+  background: #f4f7f8;
+  border-radius: 8px;
+  padding: 0.85rem 1rem;
+  margin: 0 0 1.25rem;
+}
+.storno-when strong { display: block; }
+.storno-when span { display: block; margin-top: 0.15rem; color: var(--graphite-75); font-size: 0.9rem; }
 .book .lead { margin: 0 0 1.5rem; color: var(--graphite-75); text-align: center; }
 .book .btn { width: 100%; margin-top: 0.25rem; }
 .book .book-back { width: auto; margin-top: 0.85rem; }

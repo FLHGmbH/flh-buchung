@@ -252,8 +252,50 @@ async function smtpSend(opts: { from: string; to: string; subject: string; text:
 export function mailEnding(sign: string, imageUrl: string) {
   const text = sign.trim() ? `\n\n${sign.trim()}` : "";
   const safe = escHtml(sign.trim()).replace(/\n/g, "<br>");
-  const html = `${safe ? `<p style="margin:1.25rem 0 0">${safe}</p>` : ""}${imageUrl ? `<p style="margin:0.75rem 0 0"><img src="${escHtml(imageUrl)}" alt="" width="180" style="max-width:180px;height:auto"></p>` : ""}`;
+  const html = `${safe ? `<p style="margin:20px 0 0;padding-top:16px;border-top:1px solid #e4e7e9;font-size:13px;line-height:1.5;color:#5c656b;">${safe}</p>` : ""}${imageUrl ? `<img src="${escHtml(imageUrl)}" alt="" width="160" style="display:block;margin:12px 0 0;border:0;max-width:160px;height:auto;">` : ""}`;
   return { text, html };
+}
+
+export function mailCard(opts: {
+  salon: string;
+  lead: string;
+  rows: { label: string; value: string }[];
+  code?: string;
+  links?: { href: string; label: string }[];
+  note?: string;
+  logoUrl?: string;
+  sign?: string;
+  imageUrl?: string;
+}) {
+  const logo = opts.logoUrl
+    ? `<img src="${escHtml(opts.logoUrl)}" alt="${escHtml(opts.salon)}" width="160" style="display:block;margin:0 auto 16px;border:0;max-width:160px;height:auto;">`
+    : "";
+  const code = opts.code
+    ? `<p style="margin:18px 0 0;font-size:32px;line-height:1.2;letter-spacing:6px;font-weight:700;text-align:center;">${escHtml(opts.code)}</p>`
+    : "";
+  const rows = opts.rows
+    .map((r) => `<tr><td style="padding:10px 12px;font-size:12px;line-height:1.3;color:#5c656b;">${escHtml(r.label)}</td><td style="padding:10px 12px;font-size:14px;line-height:1.35;font-weight:700;color:#253239;">${escHtml(r.value)}</td></tr>`)
+    .join("");
+  const table = rows
+    ? `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" bgcolor="#f4f7f8" style="margin:16px 0 0;background:#f4f7f8;border-radius:8px;">${rows}</table>`
+    : "";
+  const links = (opts.links ?? [])
+    .map((l) => `<p style="margin:16px 0 0;text-align:center;"><a href="${escHtml(l.href)}" style="color:#006478;font-weight:700;">${escHtml(l.label)}</a></p>`)
+    .join("");
+  const note = opts.note ? `<p style="margin:16px 0 0;font-size:13px;line-height:1.45;color:#5c656b;">${escHtml(opts.note)}</p>` : "";
+  const end = mailEnding(opts.sign ?? "", opts.imageUrl ?? "");
+  return `<!DOCTYPE html><html lang="de"><body style="margin:0;padding:0;background:#006478;">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" bgcolor="#006478" style="background:#006478;">
+<tr><td align="center" style="padding:24px 12px;">
+<table role="presentation" width="420" cellpadding="0" cellspacing="0" bgcolor="#ffffff" style="width:100%;max-width:420px;background:#ffffff;border-radius:16px;">
+<tr><td style="padding:28px 24px;font-family:Segoe UI,system-ui,sans-serif;color:#253239;">
+${logo}
+<p style="margin:0;font-size:22px;line-height:1.25;font-weight:700;">${escHtml(opts.salon)}</p>
+<p style="margin:8px 0 0;font-size:15px;line-height:1.45;color:#5c656b;">${escHtml(opts.lead)}</p>
+${code}${table}${note}${links}${end.html}
+</td></tr></table>
+</td></tr></table>
+</body></html>`;
 }
 
 export function guestInfoMail(kind: "move" | "cancel", opts: {
@@ -263,27 +305,38 @@ export function guestInfoMail(kind: "move" | "cancel", opts: {
   staffName: string;
   when: string;
   before?: string;
+  logoUrl?: string;
   sign?: string;
   imageUrl?: string;
 }) {
   const end = mailEnding(opts.sign ?? "", opts.imageUrl ?? "");
   const summary = opts.staffName ? `${opts.serviceName} bei ${opts.staffName}` : opts.serviceName;
-  const name = escHtml(opts.guestName);
-  const tenant = escHtml(opts.tenantName);
-  const what = escHtml(summary);
-  const when = escHtml(opts.when);
+  const foot = { logoUrl: opts.logoUrl, sign: opts.sign, imageUrl: opts.imageUrl };
   if (kind === "cancel") {
     return {
       subject: `Termin storniert – ${opts.tenantName}`,
       text: `Hallo ${opts.guestName},\n\ndein Termin wurde storniert.\n\n${summary}\n${opts.when}\n\n${opts.tenantName}${end.text}`,
-      html: `<p>Hallo ${name},</p><p>dein Termin wurde storniert.</p><p><strong>${what}</strong><br>${when}</p><p>${tenant}</p>${end.html}`,
+      html: mailCard({
+        salon: opts.tenantName,
+        lead: `Hallo ${opts.guestName}, dein Termin wurde storniert.`,
+        rows: [{ label: "Leistung", value: summary }, { label: "Zeit", value: opts.when }],
+        ...foot,
+      }),
     };
   }
-  const before = escHtml(opts.before ?? "");
   return {
     subject: `Termin verschoben – ${opts.tenantName}`,
     text: `Hallo ${opts.guestName},\n\ndein Termin wurde verschoben.\n\nBisher: ${opts.before ?? ""}\nNeu: ${summary}\n${opts.when}\n\n${opts.tenantName}${end.text}`,
-    html: `<p>Hallo ${name},</p><p>dein Termin wurde verschoben.</p><p>Bisher: ${before}<br>Neu: <strong>${what}</strong><br>${when}</p><p>${tenant}</p>${end.html}`,
+    html: mailCard({
+      salon: opts.tenantName,
+      lead: `Hallo ${opts.guestName}, dein Termin wurde verschoben.`,
+      rows: [
+        { label: "Bisher", value: opts.before ?? "" },
+        { label: "Neu", value: summary },
+        { label: "Zeit", value: opts.when },
+      ],
+      ...foot,
+    }),
   };
 }
 
@@ -299,21 +352,28 @@ export async function sendGuestInfo(kind: "move" | "cancel", opts: { to: string 
   }
 }
 
-export async function sendPinMail(opts: { to: string; pin: string; tenantName: string; when: string; sign?: string; imageUrl?: string }) {
+export function pinMail(opts: { pin: string; tenantName: string; when: string; logoUrl?: string; sign?: string; imageUrl?: string }) {
+  const end = mailEnding(opts.sign ?? "", opts.imageUrl ?? "");
+  return {
+    subject: `Dein Code für ${opts.tenantName}`,
+    text: `Dein Bestätigungscode: ${opts.pin}\nTermin: ${opts.when}\nGültig 15 Minuten.${end.text}`,
+    html: mailCard({
+      salon: opts.tenantName,
+      lead: "Dein Bestätigungscode. Er gilt 15 Minuten.",
+      code: opts.pin,
+      rows: [{ label: "Termin", value: opts.when }],
+      logoUrl: opts.logoUrl,
+      sign: opts.sign,
+      imageUrl: opts.imageUrl,
+    }),
+  };
+}
+
+export async function sendPinMail(opts: { to: string } & Parameters<typeof pinMail>[0]) {
   const from = mailFromAddr(process.env.MAIL_FROM);
   if (!from) throw new Error("MAIL_FROM muss eine eigene Domain sein.");
-  const when = escHtml(opts.when);
-  const pin = escHtml(opts.pin);
-  const name = escHtml(opts.tenantName);
-  const end = mailEnding(opts.sign ?? "", opts.imageUrl ?? "");
   try {
-    await smtpSend({
-      from,
-      to: opts.to,
-      subject: `Dein Code für ${opts.tenantName}`,
-      text: `Dein Bestätigungscode: ${opts.pin}\nTermin: ${opts.when}\nGültig 15 Minuten.${end.text}`,
-      html: `<p>Dein Bestätigungscode für ${name}: <strong>${pin}</strong></p><p>Termin: ${when}</p><p>Gültig 15 Minuten.</p>${end.html}`,
-    });
+    await smtpSend({ from, to: opts.to, ...pinMail(opts) });
   } catch (e) {
     console.error("smtp failed", e instanceof Error ? e.message : e);
     throw new Error("Mailversand fehlgeschlagen.");
@@ -333,11 +393,10 @@ type ConfirmStop = {
 export function confirmMail(opts: {
   guestName: string;
   tenantName: string;
+  logoUrl?: string;
   sign?: string;
   imageUrl?: string;
 } & ConfirmStop & { also?: ConfirmStop[] }) {
-  const name = escHtml(opts.guestName);
-  const tenant = escHtml(opts.tenantName);
   const summary = opts.staffName ? `${opts.serviceName} bei ${opts.staffName}` : opts.serviceName;
   const lines = [opts, ...(opts.also ?? [])].map((ev) => ({
     summary: ev.staffName ? `${ev.serviceName} bei ${ev.staffName}` : ev.serviceName,
@@ -350,17 +409,28 @@ export function confirmMail(opts: {
   const block = lines
     .map((l) => `${l.summary}\n${l.when}${l.cancelUrl ? `\nTermin stornieren: ${l.cancelUrl}` : ""}`)
     .join("\n\n");
-  const htmlBlock = lines
-    .map((l) => {
-      const link = l.cancelUrl ? `<br><a href="${escHtml(l.cancelUrl)}">Termin stornieren</a>` : "";
-      return `<p><strong>${escHtml(l.summary)}</strong><br>${escHtml(l.when)}${link}</p>`;
-    })
-    .join("");
   const end = mailEnding(opts.sign ?? "", opts.imageUrl ?? "");
+  const rows = lines.flatMap((l) => [
+    { label: "Leistung", value: l.summary },
+    { label: "Zeit", value: l.when },
+  ]);
+  const links = lines.filter((l) => l.cancelUrl).map((l) => ({
+    href: l.cancelUrl,
+    label: lines.length > 1 ? `${l.summary} stornieren` : "Termin stornieren",
+  }));
   return {
     subject: `Termin bestätigt – ${opts.tenantName}`,
     text: `Hallo ${opts.guestName},\n\ndein Termin ist bestätigt.\n\n${block}\n${opts.tenantName}\n\nIm Anhang liegt termin.ics zum Speichern in deinem Kalender.${end.text}`,
-    html: `<p>Hallo ${name},</p><p>dein Termin ist bestätigt.</p>${htmlBlock}<p>${tenant}</p><p>Im Anhang liegt <strong>termin.ics</strong> zum Speichern in deinem Kalender.</p>${end.html}`,
+    html: mailCard({
+      salon: opts.tenantName,
+      lead: `Hallo ${opts.guestName}, dein Termin ist bestätigt.`,
+      rows,
+      links,
+      note: "Im Anhang liegt termin.ics für deinen Kalender.",
+      logoUrl: opts.logoUrl,
+      sign: opts.sign,
+      imageUrl: opts.imageUrl,
+    }),
     ics: confirmIcs({
       uid: opts.uid,
       start: opts.start,

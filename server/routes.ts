@@ -642,9 +642,14 @@ function storeMailImage(tenant: { id: string; slug: string }, mime: string, byte
 
 function mailFootOf(tenant: { mailSign: string; mailImageUrl: string | null; logoUrl: string | null }, reqUrl: string) {
   const origin = siteOrigin(reqUrl);
-  const raw = tenant.mailImageUrl || tenant.logoUrl || "";
-  const imageUrl = !raw ? "" : /^https?:\/\//.test(raw) ? raw : origin ? `${origin}${raw.startsWith("/") ? raw : `/${raw}`}` : "";
-  return { sign: tenant.mailSign ?? "", imageUrl };
+  const abs = (raw: string | null) => {
+    const v = raw?.trim() ?? "";
+    if (!v) return "";
+    if (/^https?:\/\//.test(v)) return v;
+    if (!origin) return "";
+    return `${origin}${v.startsWith("/") ? v : `/${v}`}`;
+  };
+  return { sign: tenant.mailSign ?? "", logoUrl: abs(tenant.logoUrl), imageUrl: abs(tenant.mailImageUrl) };
 }
 
 function whenLabel(start: Date, end: Date, zone: string) {
@@ -1864,11 +1869,20 @@ async function stornoHit(slug: string, token: string) {
     ? await db.select({ name: staff.name }).from(staff).where(eq(staff.id, cur.staffId)).limit(1)
     : [];
   const service = who?.name ? `${svc?.name || "Termin"} bei ${who.name}` : (svc?.name || "Termin");
+  const zone = tenant.timezone || "Europe/Berlin";
+  const a = DateTime.fromJSDate(cur.startsAt).setZone(zone).setLocale("de");
+  const b = DateTime.fromJSDate(cur.endsAt).setZone(zone);
   const state = cur.status === "confirmed" ? "open" : cur.status === "cancelled" ? "gone" : "closed";
   return {
     tenant,
     cur,
-    view: { service, when: whenLabel(cur.startsAt, cur.endsAt, tenant.timezone || "Europe/Berlin"), state },
+    view: {
+      salon: tenant.name,
+      logoUrl: tenant.logoUrl || null,
+      service,
+      when: `${a.toFormat("cccc, d. LLLL yyyy")}, ${a.toFormat("HH:mm")}–${b.toFormat("HH:mm")}`,
+      state,
+    },
   };
 }
 

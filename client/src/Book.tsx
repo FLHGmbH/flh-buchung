@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useParams } from "react-router-dom";
-import { api, type ApiErr, type Pub } from "./api";
+import { api, type ApiErr, type Pub, type StornoView } from "./api";
 import { guestMail, guestPhone } from "../../server/guest.ts";
 import { Fold, gsap, reduced, StepPane, useGSAP } from "./motion";
 import { euro, Modal, priceLabel, serviceLine } from "./ui";
@@ -67,9 +67,8 @@ export function BookPage() {
   const [staffId, setStaffId] = useState("");
   const [slots, setSlots] = useState<{ start: string; end: string; staffId: string }[]>([]);
   const [day, setDay] = useState("");
-  const [calMode, setCalMode] = useState<"week" | "month">("week");
-  const [weekMon, setWeekMon] = useState("");
   const [monthYm, setMonthYm] = useState("");
+  const monthSlide = useRef(1);
   const [slot, setSlot] = useState<{ start: string; end: string; staffId: string } | null>(null);
   const [guest, setGuest] = useState({ guestName: "", guestEmail: "", guestPhone: "", note: "" });
   const [done, setDone] = useState<{ id: string; startsAt: string } | null>(null);
@@ -108,26 +107,18 @@ export function BookPage() {
   }, [slots, staffId]);
   const todayKey = berlinDay(new Date().toISOString());
   const horizon = shiftKey(todayKey, 13);
-  const week = weekMon || mondayOf(day && day >= todayKey ? day : todayKey);
   const month = monthYm || (day || todayKey).slice(0, 7);
   const months: string[] = [];
   for (let k = todayKey; k <= horizon; k = shiftKey(k, 1)) {
     const ym = k.slice(0, 7);
     if (!months.includes(ym)) months.push(ym);
   }
-  const cells = calMode === "week"
-    ? Array.from({ length: 7 }, (_, i) => shiftKey(week, i))
-    : (() => {
-        const out: string[] = [];
-        const end = shiftKey(mondayOf(monthEnd(month)), 6);
-        for (let k = mondayOf(`${month}-01`); k <= end; k = shiftKey(k, 1)) out.push(k);
-        return out;
-      })();
-  const canPrev = calMode === "week" ? week > mondayOf(todayKey) : months.indexOf(month) > 0;
-  const canNext = calMode === "week" ? week < mondayOf(horizon) : months.indexOf(month) < months.length - 1;
-  const calTitle = calMode === "month"
-    ? dayLabel(`${month}-01`, { month: "long", year: "numeric" })
-    : `${dayLabel(week, { day: "numeric", month: "short" })} – ${dayLabel(shiftKey(week, 6), { day: "numeric", month: "short" })}`;
+  const cells: string[] = [];
+  const monthStop = shiftKey(mondayOf(monthEnd(month)), 6);
+  for (let k = mondayOf(`${month}-01`); k <= monthStop; k = shiftKey(k, 1)) cells.push(k);
+  const canPrev = months.indexOf(month) > 0;
+  const canNext = months.indexOf(month) < months.length - 1;
+  const calTitle = dayLabel(`${month}-01`, { month: "long", year: "numeric" });
 
   const mine = staffId ? slots.filter((s) => s.staffId === staffId) : slots;
   const daySlots = mine.filter((s) => berlinDay(s.start) === day).sort((a, b) => a.start.localeCompare(b.start));
@@ -337,15 +328,15 @@ export function BookPage() {
       {step === 2 && (
         <>
           {pending && !slots.length ? <DayBones /> : (
-            <div className="book-cal">
+            <BookMonth month={month} slide={monthSlide.current}>
               <div className="book-cal-bar">
                 <button
                   type="button"
-                  aria-label={calMode === "month" ? "Vorheriger Monat" : "Vorherige Woche"}
+                  aria-label="Vorheriger Monat"
                   disabled={!canPrev}
                   onClick={() => {
-                    if (calMode === "week") setWeekMon(shiftKey(week, -7));
-                    else setMonthYm(months[months.indexOf(month) - 1] ?? month);
+                    monthSlide.current = -1;
+                    setMonthYm(months[months.indexOf(month) - 1] ?? month);
                   }}
                 >
                   ‹
@@ -353,26 +344,22 @@ export function BookPage() {
                 <strong>{calTitle}</strong>
                 <button
                   type="button"
-                  aria-label={calMode === "month" ? "Nächster Monat" : "Nächste Woche"}
+                  aria-label="Nächster Monat"
                   disabled={!canNext}
                   onClick={() => {
-                    if (calMode === "week") setWeekMon(shiftKey(week, 7));
-                    else setMonthYm(months[months.indexOf(month) + 1] ?? month);
+                    monthSlide.current = 1;
+                    setMonthYm(months[months.indexOf(month) + 1] ?? month);
                   }}
                 >
                   ›
                 </button>
-              </div>
-              <div className="book-cal-switch" role="group" aria-label="Ansicht">
-                <button type="button" className={calMode === "week" ? "on" : ""} onClick={() => { setCalMode("week"); setWeekMon(mondayOf(day || todayKey)); }}>Woche</button>
-                <button type="button" className={calMode === "month" ? "on" : ""} onClick={() => { setCalMode("month"); setMonthYm((day || todayKey).slice(0, 7)); }}>Monat</button>
               </div>
               <div className="book-cal-wd" aria-hidden="true">{WEEKDAYS.map((w) => <span key={w}>{w}</span>)}</div>
               <div className="days">
                 {cells.map((key) => {
                   const inRange = key >= todayKey && key <= horizon;
                   const open = inRange && openDays.has(key);
-                  const outside = calMode === "month" && key.slice(0, 7) !== month;
+                  const outside = key.slice(0, 7) !== month;
                   return (
                     <button
                       key={key}
@@ -383,7 +370,6 @@ export function BookPage() {
                       aria-label={dayLabel(key, { weekday: "long", day: "numeric", month: "long" })}
                       onClick={() => {
                         setDay(key);
-                        setWeekMon(mondayOf(key));
                         setMonthYm(key.slice(0, 7));
                         setStep(ids.length === 1 && offer ? 3 : 4);
                       }}
@@ -395,7 +381,7 @@ export function BookPage() {
                 })}
               </div>
               {day ? <p className="book-cal-pick">{dayLabel(day, { weekday: "long", day: "numeric", month: "long" })}</p> : null}
-            </div>
+            </BookMonth>
           )}
           {!pending && !slots.length ? <p>In den nächsten 14 Tagen kein freier Slot.</p> : null}
           <button className="btn quiet book-back" type="button" onClick={() => setStep(staffForService.length === 1 || (!pending && offered.length <= 1) ? 0 : 1)}>Zurück</button>
@@ -618,51 +604,77 @@ function BookShell({ children, slug }: { children: ReactNode; slug: string }) {
 
 export function CancelPage() {
   const { slug = "", token = "" } = useParams();
-  const [row, setRow] = useState<{ service: string; when: string; state: "open" | "gone" | "closed" } | null>(null);
+  const [row, setRow] = useState<StornoView | null>(null);
   const [err, setErr] = useState("");
   const [kept, setKept] = useState(false);
   const [pending, setPending] = useState(false);
+  const box = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     api.storno(slug, token).then(setRow).catch((e: Error) => setErr(e.message));
   }, [slug, token]);
 
-  const fail = err ? <p className="err" role="alert">{err}</p> : null;
-  let body: ReactNode = <p>Laden…</p>;
-  if (!row && err) body = fail;
-  else if (kept && row) body = <p className="storno-ask">Der Termin {row.service} am {row.when} bleibt bestehen.</p>;
-  else if (row?.state === "gone") body = <p className="storno-ask">Der Termin {row.service} am {row.when} ist storniert.</p>;
-  else if (row?.state === "closed") body = <p className="storno-ask">Dieser Termin kann nicht mehr storniert werden.</p>;
-  else if (row) {
-    body = (
-      <>
-        {fail}
-        <p className="storno-ask">Willst du wirklich den Termin {row.service} am {row.when} stornieren?</p>
-        <button
-          className="btn danger"
-          type="button"
-          disabled={pending}
-          onClick={() => {
-            setPending(true);
-            setErr("");
-            api.dropStorno(slug, token)
-              .then(setRow)
-              .catch((e: Error) => setErr(e.message))
-              .finally(() => setPending(false));
-          }}
-        >
-          {pending ? "Stornieren…" : "Stornieren"}
-        </button>
-        <button className="btn quiet" type="button" disabled={pending} onClick={() => setKept(true)}>Abbrechen</button>
-      </>
-    );
-  }
+  useGSAP(() => {
+    if (reduced() || !box.current) return;
+    gsap.fromTo(box.current, { opacity: 0, y: 16 }, { opacity: 1, y: 0, duration: 0.42, ease: "power3.out" });
+  }, { scope: box });
+
+  const title = !row && err
+    ? "Link ungültig"
+    : kept
+      ? "Termin bleibt"
+      : row?.state === "gone"
+        ? "Termin abgesagt"
+        : row?.state === "closed"
+          ? "Absagen nicht möglich"
+          : "Termin absagen?";
+  const lead = !row && err
+    ? err
+    : kept && row
+      ? `Bei ${row.salon} hat sich nichts geändert.`
+      : row?.state === "gone"
+        ? `Bei ${row.salon} ist der Platz wieder frei.`
+        : row?.state === "closed"
+          ? "Dieser Termin ist vorbei oder schon abgeschlossen."
+          : row
+            ? `Bei ${row.salon}. Wenn du absagst, ist der Platz sofort wieder frei.`
+            : "Einen Moment.";
 
   return (
-    <BookShell slug={slug}>
-      <h1>Termin stornieren</h1>
-      {body}
-    </BookShell>
+    <div className="login">
+      <div className="panel storno-card" ref={box}>
+        {row?.logoUrl ? <img className="book-logo" src={row.logoUrl} alt={row.salon} /> : null}
+        <h1>{title}</h1>
+        <p className={err && !row ? "err" : undefined}>{lead}</p>
+        {row ? (
+          <div className="storno-when">
+            <strong>{row.service}</strong>
+            <span>{row.when}</span>
+          </div>
+        ) : null}
+        {err && row ? <p className="err" role="alert">{err}</p> : null}
+        {row && !kept && row.state === "open" ? (
+          <>
+            <button
+              className="btn danger"
+              type="button"
+              disabled={pending}
+              onClick={() => {
+                setPending(true);
+                setErr("");
+                api.dropStorno(slug, token)
+                  .then(setRow)
+                  .catch((e: Error) => setErr(e.message))
+                  .finally(() => setPending(false));
+              }}
+            >
+              {pending ? "Wird abgesagt…" : "Ja, absagen"}
+            </button>
+            <button className="btn quiet" type="button" disabled={pending} onClick={() => setKept(true)}>Nein, behalten</button>
+          </>
+        ) : null}
+      </div>
+    </div>
   );
 }
 
@@ -711,6 +723,33 @@ function BookBones() {
       </div>
     </div>
   );
+}
+
+function BookMonth({ month, slide, children }: { month: string; slide: number; children: ReactNode }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const seen = useRef(false);
+  useGSAP(() => {
+    const root = ref.current;
+    if (!root) return;
+    if (!seen.current) {
+      seen.current = true;
+      return;
+    }
+    if (reduced()) return;
+    const grid = root.querySelector(".days");
+    const buttons = root.querySelectorAll(".days button");
+    if (grid) gsap.fromTo(grid, { x: slide * 28 }, { x: 0, duration: 0.32, ease: "power2.out", clearProps: "transform" });
+    if (buttons.length) {
+      gsap.fromTo(buttons, { y: 8 }, {
+        y: 0,
+        duration: 0.28,
+        stagger: { each: 0.012, grid: "auto", from: slide < 0 ? "end" : "start" },
+        ease: "power2.out",
+        clearProps: "transform",
+      });
+    }
+  }, { dependencies: [month], scope: ref });
+  return <div className="book-cal" ref={ref}>{children}</div>;
 }
 
 function DayBones() {

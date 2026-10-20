@@ -1,5 +1,5 @@
 import { guestMail, guestPhone, blockedGuest, phoneKey } from "./guest.ts";
-import { confirmIcs, confirmMail, dotStuff, encodeSubject, escHtml, guestInfoMail, icsEscape, icsFold, icsUtc, mailbox, mailboxAddr, mailEnding, mimeBody, newCancelToken, newPin, PIN_MS } from "./mail.ts";
+import { confirmIcs, confirmMail, dotStuff, encodeSubject, escHtml, guestInfoMail, icsEscape, icsFold, icsUtc, mailbox, mailboxAddr, mailEnding, mimeBody, newCancelToken, newPin, PIN_MS, pinMail } from "./mail.ts";
 
 function assert(cond: unknown, msg: string) {
   if (!cond) throw new Error(msg);
@@ -69,4 +69,7 @@ const confirmed = confirmMail({
 });
 assert(confirmed.text.includes(`Termin stornieren: ${stop}`), "confirm link text");
 assert(confirmed.html.includes(`href="${escHtml(stop)}"`) && confirmed.html.includes("Termin stornieren"), "confirm link html");
+assert(confirmed.html.includes("background:#006478") && confirmed.html.includes(">Salon<"), "confirm card");
+const coded = pinMail({ pin: "123456", tenantName: "Salon", when: "20.10.2026 14:00", logoUrl: "https://cdn.example/logo.png", sign: "Bis bald" });
+assert(coded.html.includes("123456") && coded.html.includes("https://cdn.example/logo.png") && coded.html.includes("Bis bald") && coded.text.includes("123456"), "pin card");
 console.log("mail.check ok");

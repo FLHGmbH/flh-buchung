@@ -3,6 +3,14 @@ import { tickSaved } from "./motion";
 
 export type ApiErr = Error & { blocked?: boolean; phone?: string };
 
+export type StornoView = {
+  salon: string;
+  logoUrl: string | null;
+  service: string;
+  when: string;
+  state: "open" | "gone" | "closed";
+};
+
 export type Actor = {
   id: string;
   email: string;
@@ -285,9 +293,9 @@ export const api = {
     ),
   book: (slug: string, body: object) => req(`/api/public/${slug}/book`, { method: "POST", body: JSON.stringify(body) }),
   storno: (slug: string, token: string) =>
-    req<{ service: string; when: string; state: "open" | "gone" | "closed" }>(`/api/public/${slug}/storno/${encodeURIComponent(token)}`),
+    req<StornoView>(`/api/public/${slug}/storno/${encodeURIComponent(token)}`),
   dropStorno: (slug: string, token: string) =>
-    req<{ service: string; when: string; state: "open" | "gone" | "closed" }>(`/api/public/${slug}/storno/${encodeURIComponent(token)}`, { method: "POST" }),
+    req<StornoView>(`/api/public/${slug}/storno/${encodeURIComponent(token)}`, { method: "POST" }),
   confirm: (slug: string, id: string, pin: string) =>
     req<{ booking: { id: string; startsAt: string } }>(`/api/public/${slug}/bookings/${id}/confirm`, {
       method: "POST",
