@@ -7,7 +7,7 @@ import { DateTime } from "luxon";
 import { actorFrom, actorFromEmail, actorFromUserId, createSession, destroySession, dropUserSessions, ensurePlatformAdmin, hashPassword, sbEnsureUser, sbPassword, sbRecover, sbSetPassword, sbUser, verifyLogin, verifyPassword, type Actor } from "./auth.ts";
 import { db } from "./db.ts";
 import { BOOK_MAX, LEN, LOGIN_MAX, PIN_MAX, WINDOW_MS, bookWindow, clip, clientIp, hoursWithin, inIntRange, limited, logoKind, passwordOk, priceQuote, readJson, sbConfigured, serviceMins, siteOrigin } from "./guard.ts";
-import { chooseCalendar, connectGoogle, disconnectGoogle, drainGoogle, googleAuthUrl, googleCalendars, googleConfigured, googleStatus, readState, syncBooking } from "./google.ts";
+import { chooseCalendar, connectGoogle, disconnectGoogle, drainGoogle, googleAuthUrl, googleCalendars, googleConfigured, googleStatus, pullGoogle, readState, syncBooking } from "./google.ts";
 import { blockedGuest, guestMail, guestPhone } from "./guest.ts";
 import { newPin, PIN_MS, sendConfirmMail, sendGuestInfo, sendPinMail } from "./mail.ts";
 import {
@@ -693,6 +693,18 @@ async function mirror(id: string, tid: string) {
   await drainGoogle(tid, 3);
 }
 
+async function absorbGoogle(reqUrl: string, tid: string) {
+  const hit = await pullGoogle(tid);
+  for (const id of hit.cancelled) {
+    const [row] = await db.select().from(bookings).where(and(eq(bookings.id, id), eq(bookings.tenantId, tid))).limit(1);
+    if (row) await tellGuest(reqUrl, tid, "cancel", row);
+  }
+  for (const move of hit.moved) {
+    const [row] = await db.select().from(bookings).where(and(eq(bookings.id, move.id), eq(bookings.tenantId, tid))).limit(1);
+    if (row) await tellGuest(reqUrl, tid, "move", row, { startsAt: move.startsAt, endsAt: move.endsAt });
+  }
+}
+
 api.get("/app/google", async (c) => {
   return c.json(await googleStatus(tenantId(c)));
 });
@@ -774,6 +786,7 @@ api.get("/app/week", async (c) => {
   const span = Number.isInteger(asked) && asked >= 1 && asked <= 42 ? asked : 7;
   const from = day.startOf("day");
   const to = from.plus({ days: span - 1 }).endOf("day");
+  await absorbGoogle(c.req.url, tid);
   const books = await db
     .select(bookingCols)
     .from(bookings)
@@ -1229,6 +1242,7 @@ api.post("/app/time-off", async (c) => {
         startsAt: next.startsAt,
         endsAt: next.endsAt,
       }, { startsAt: hit.startsAt, endsAt: hit.endsAt });
+      await mirror(next.id, tid);
     }
     return c.json({ timeOff: row }, 201);
   } catch (e) {
@@ -1281,6 +1295,7 @@ async function bookingFields(tid: string, body: {
 
 api.get("/app/bookings", async (c) => {
   const tid = tenantId(c);
+  await absorbGoogle(c.req.url, tid);
   const rows = await db
     .select(bookingCols)
     .from(bookings)

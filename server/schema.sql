@@ -126,7 +126,8 @@ CREATE TABLE IF NOT EXISTS google_links (
   refresh_token text NOT NULL,
   email text NOT NULL DEFAULT '',
   calendar_id text NOT NULL DEFAULT '',
-  calendar_name text NOT NULL DEFAULT ''
+  calendar_name text NOT NULL DEFAULT '',
+  sync_token text NOT NULL DEFAULT ''
 );
 
 CREATE INDEX IF NOT EXISTS bookings_staff_time ON bookings (staff_id, starts_at);

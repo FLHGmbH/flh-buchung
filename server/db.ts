@@ -95,6 +95,7 @@ export async function migrate() {
       calendar_name text NOT NULL DEFAULT ''
     )
   `).catch(ignoreExists);
+  await execSql(`ALTER TABLE google_links ADD COLUMN IF NOT EXISTS sync_token text NOT NULL DEFAULT ''`).catch(ignoreExists);
   await execSql(`
     CREATE TABLE IF NOT EXISTS service_categories (
       id uuid PRIMARY KEY DEFAULT gen_random_uuid(),

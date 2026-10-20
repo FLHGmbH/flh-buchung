@@ -1,6 +1,6 @@
 import { Fragment, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { useSearchParams } from "react-router-dom";
-import { api, useApi, type Bootstrap, type Booking, type GoogleLink, type StaffShift, type TimeOff } from "./api";
+import { api, useApi, useFresh, type Bootstrap, type Booking, type GoogleLink, type StaffShift, type TimeOff } from "./api";
 import { matchTpl } from "./catalog";
 import { gsap, reduced, useGSAP } from "./motion";
 import { phoneKey } from "../../server/guest.ts";
@@ -166,6 +166,7 @@ function nextOff(staffId: string, rows: TimeOff[]) {
 export function BookingsPage() {
   const boot = useBoot();
   const list = useApi<{ bookings: Booking[] }>("/api/app/bookings");
+  useFresh("/api/app/bookings");
   const off = useApi<{ timeOff: TimeOff[] }>("/api/app/time-off");
   const rows = list?.bookings ?? [];
   const [q, setQ] = useState("");

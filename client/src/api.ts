@@ -71,6 +71,25 @@ function inflight<T>(path: string): Promise<T> {
   return p;
 }
 
+export function useFresh(path: string | null) {
+  useEffect(() => {
+    if (!path) return;
+    const kick = () => {
+      if (document.visibilityState !== "visible") return;
+      gen.set(path, (gen.get(path) ?? 0) + 1);
+      mem.delete(path);
+      wait.delete(path);
+      bump();
+    };
+    const timer = window.setInterval(kick, 45_000);
+    document.addEventListener("visibilitychange", kick);
+    return () => {
+      window.clearInterval(timer);
+      document.removeEventListener("visibilitychange", kick);
+    };
+  }, [path]);
+}
+
 export function useApi<T>(path: string | null) {
   const [tick, setTick] = useState(0);
   useEffect(() => {

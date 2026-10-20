@@ -105,6 +105,38 @@ export function eventBody(row: {
   };
 }
 
+type GEvent = {
+  id?: string;
+  status?: string;
+  summary?: string;
+  description?: string;
+  recurringEventId?: string;
+  start?: { dateTime?: string; date?: string };
+  end?: { dateTime?: string; date?: string };
+};
+
+export function readGoogleEvent(ev: GEvent) {
+  if (!ev.id || ev.recurringEventId) return null;
+  if (ev.status === "cancelled" || !ev.start?.dateTime || !ev.end?.dateTime) {
+    return ev.status === "cancelled" ? { id: ev.id, gone: true as const } : null;
+  }
+  const start = new Date(ev.start.dateTime);
+  const end = new Date(ev.end.dateTime);
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || end <= start) return null;
+  const summary = (ev.summary ?? "").trim();
+  const cut = summary.split(" · ");
+  const staffLine = (ev.description ?? "").split("\n").find((line) => line.startsWith("Mitarbeiter:"));
+  return {
+    id: ev.id,
+    gone: false as const,
+    start,
+    end,
+    guestName: (cut[0] || "Google Termin").slice(0, 80),
+    serviceName: (cut[1] ?? "").trim(),
+    staffName: staffLine ? staffLine.slice("Mitarbeiter:".length).trim() : "",
+  };
+}
+
 const fresh = new Map<string, { token: string; until: number }>();
 
 async function database() {
@@ -197,6 +229,7 @@ export async function connectGoogle(tid: string, code: string, origin: string) {
     email: cal?.primary && cal.id.includes("@") ? cal.id : "",
     calendarId: cal?.id ?? "",
     calendarName: cal?.summary || cal?.id || "",
+    syncToken: "",
   };
   const prev = await linkOf(tid);
   if (prev?.calendarId) await forgetEvents(tid, prev.calendarId, prev.refreshToken).catch(() => {});
@@ -212,7 +245,11 @@ export async function chooseCalendar(tid: string, calendarId: string) {
   if (!hit) return false;
   const prev = await linkOf(tid);
   const { db } = await database();
-  await db.update(googleLinks).set({ calendarId: hit.id, calendarName: hit.summary }).where(eq(googleLinks.tenantId, tid));
+  await db.update(googleLinks).set({
+    calendarId: hit.id,
+    calendarName: hit.summary,
+    ...(prev?.calendarId === calendarId ? {} : { syncToken: "" }),
+  }).where(eq(googleLinks.tenantId, tid));
   if (prev?.calendarId === calendarId) return true;
   if (prev?.calendarId) await forgetEvents(tid, prev.calendarId, prev.refreshToken).catch(() => {});
   await backlog(tid, 20);
@@ -257,6 +294,107 @@ export async function disconnectGoogle(tid: string) {
   }
   const { db } = await database();
   await db.delete(googleLinks).where(eq(googleLinks.tenantId, tid));
+}
+
+const pulled = new Map<string, number>();
+
+function overlap(e: unknown) {
+  return typeof e === "object" && e !== null && "code" in e && (e as { code: string }).code === "23P01";
+}
+
+async function listChanges(token: string, calendarId: string, syncToken: string) {
+  const items: GEvent[] = [];
+  let page = "";
+  let sync = syncToken;
+  const full = !syncToken;
+  for (let n = 0; n < 4; n++) {
+    const q = new URLSearchParams({ singleEvents: "true", showDeleted: "true", maxResults: "100" });
+    if (page) q.set("pageToken", page);
+    else if (full) {
+      q.set("timeMin", new Date(Date.now() - 24 * 3600_000).toISOString());
+      q.set("timeMax", new Date(Date.now() + 120 * 24 * 3600_000).toISOString());
+    } else q.set("syncToken", syncToken);
+    const res = await gapi(token, `/calendars/${encodeURIComponent(calendarId)}/events?${q}`);
+    if (res.status === 410 && !full) return { reset: true, items: [], sync: "" };
+    if (!res.ok) throw new Error("list");
+    const data = (await res.json()) as { items?: GEvent[]; nextPageToken?: string; nextSyncToken?: string };
+    items.push(...(data.items ?? []));
+    if (data.nextSyncToken) sync = data.nextSyncToken;
+    if (!data.nextPageToken) return { reset: false, items, sync };
+    page = data.nextPageToken;
+  }
+  // ponytail: 400 changes per open. The token stays until a later open finishes the list.
+  return { reset: false, items, sync: syncToken };
+}
+
+export async function pullGoogle(tid: string) {
+  const none = { cancelled: [] as string[], moved: [] as { id: string; startsAt: Date; endsAt: Date }[] };
+  if (!googleConfigured()) return none;
+  const last = pulled.get(tid) ?? 0;
+  if (Date.now() - last < 20_000) return none;
+  const mail = { cancelled: [] as string[], moved: [] as { id: string; startsAt: Date; endsAt: Date }[] };
+  try {
+    const link = await linkOf(tid);
+    if (!link?.calendarId) return none;
+    const access = await accessToken(tid, openToken(link.refreshToken, cfg().secret));
+    let listed = await listChanges(access, link.calendarId, link.syncToken);
+    if (listed.reset) listed = await listChanges(access, link.calendarId, "");
+    const { db } = await database();
+    const known = await db.select().from(bookings).where(eq(bookings.tenantId, tid));
+    const byEvent = new Map(known.filter((row) => row.googleEventId).map((row) => [row.googleEventId as string, row]));
+    const who = await db.select({ id: staff.id, name: staff.name }).from(staff).where(eq(staff.tenantId, tid));
+    const svcs = await db.select({ id: services.id, name: services.name }).from(services).where(eq(services.tenantId, tid));
+    for (const raw of listed.items) {
+      const ev = readGoogleEvent(raw);
+      if (!ev) continue;
+      const cur = byEvent.get(ev.id);
+      if (ev.gone) {
+        if (cur && cur.status !== "cancelled") {
+          await db.update(bookings).set({ status: "cancelled", googleDirty: false }).where(eq(bookings.id, cur.id));
+          mail.cancelled.push(cur.id);
+        }
+        continue;
+      }
+      if (cur) {
+        if (cur.status !== "confirmed") continue;
+        const sameTime = Math.abs(cur.startsAt.getTime() - ev.start.getTime()) < 1000 && Math.abs(cur.endsAt.getTime() - ev.end.getTime()) < 1000;
+        if (sameTime && cur.guestName === ev.guestName) continue;
+        try {
+          await db.update(bookings).set({ startsAt: ev.start, endsAt: ev.end, guestName: ev.guestName }).where(eq(bookings.id, cur.id));
+          if (!sameTime) mail.moved.push({ id: cur.id, startsAt: cur.startsAt, endsAt: cur.endsAt });
+        } catch (e) {
+          if (!overlap(e)) throw e;
+          await db.update(bookings).set({ googleDirty: true }).where(eq(bookings.id, cur.id));
+        }
+        continue;
+      }
+      const staffId = ev.staffName ? who.find((row) => row.name.toLowerCase() === ev.staffName.toLowerCase())?.id ?? null : null;
+      const serviceId = ev.serviceName ? svcs.find((row) => row.name.toLowerCase() === ev.serviceName.toLowerCase())?.id ?? null : null;
+      try {
+        await db.insert(bookings).values({
+          tenantId: tid,
+          staffId,
+          serviceId,
+          startsAt: ev.start,
+          endsAt: ev.end,
+          guestName: ev.guestName,
+          status: "confirmed",
+          googleEventId: ev.id,
+          googleDirty: false,
+        });
+      } catch (e) {
+        if (!overlap(e)) throw e;
+      }
+    }
+    if (listed.sync !== link.syncToken) {
+      await db.update(googleLinks).set({ syncToken: listed.sync }).where(eq(googleLinks.tenantId, tid));
+    }
+    pulled.set(tid, Date.now());
+    return mail;
+  } catch (e) {
+    console.error("google pull", e instanceof Error ? e.message : e);
+    return none;
+  }
 }
 
 export async function drainGoogle(tid: string, limit: number) {

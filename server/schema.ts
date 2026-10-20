@@ -22,6 +22,7 @@ export const googleLinks = pgTable("google_links", {
   email: text("email").notNull().default(""),
   calendarId: text("calendar_id").notNull().default(""),
   calendarName: text("calendar_name").notNull().default(""),
+  syncToken: text("sync_token").notNull().default(""),
 });
 
 export const users = pgTable("users", {

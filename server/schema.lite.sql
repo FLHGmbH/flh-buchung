@@ -123,7 +123,8 @@ CREATE TABLE IF NOT EXISTS google_links (
   refresh_token text NOT NULL,
   email text NOT NULL DEFAULT '',
   calendar_id text NOT NULL DEFAULT '',
-  calendar_name text NOT NULL DEFAULT ''
+  calendar_name text NOT NULL DEFAULT '',
+  sync_token text NOT NULL DEFAULT ''
 );
 
 ALTER TABLE staff ADD CONSTRAINT staff_id_tenant UNIQUE (id, tenant_id);

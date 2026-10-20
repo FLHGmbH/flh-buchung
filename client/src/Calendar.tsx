@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
-import { api, useApi, type Booking, type Bootstrap, type WeekPayload } from "./api";
+import { api, useApi, useFresh, type Booking, type Bootstrap, type WeekPayload } from "./api";
 import { BookingModal, coverService, firstOpen, PageHead, Skel, staffColor, staffTone } from "./ui";
 
 const START = 8;
@@ -218,7 +218,9 @@ export function CalendarPage() {
   const from = view === "month" ? monthDays[0] : mon;
   const span = view === "month" ? monthDays.length : 7;
   const boot = useApi<Bootstrap>("/api/app/bootstrap");
-  const week = useApi<WeekPayload>(span === 7 ? `/api/app/week?from=${from}` : `/api/app/week?from=${from}&days=${span}`);
+  const weekPath = span === 7 ? `/api/app/week?from=${from}` : `/api/app/week?from=${from}&days=${span}`;
+  const week = useApi<WeekPayload>(weekPath);
+  useFresh(weekPath);
   const [pick, setPick] = useState<Booking | null>(null);
   const [drag, setDrag] = useState<{ id: string; day: string; mins: number; dx: number; dy: number } | null>(null);
   const [dragErr, setDragErr] = useState("");
