@@ -1378,11 +1378,18 @@ export function HoursPage() {
               ))}
             </div>
           </div>
-          <label className="field">
-            <span>Hexcode</span>
+          <div className="field">
+            <span id="hex-label">Hexcode</span>
             <div className="hex-line">
-              <i style={{ background: typed == null ? "#e5e7eb" : (typed || "#006478") }} aria-hidden="true" />
               <input
+                type="color"
+                value={typed && typed.length === 7 ? typed : (brand || "#006478")}
+                aria-label="Farbe im Farbkreis wählen"
+                onChange={(e) => pickHex(e.target.value)}
+              />
+              <input
+                id="brand-hex"
+                aria-labelledby="hex-label"
                 value={hex}
                 spellCheck={false}
                 maxLength={7}
@@ -1391,7 +1398,7 @@ export function HoursPage() {
                 onChange={(e) => pickHex(e.target.value)}
               />
             </div>
-          </label>
+          </div>
           {hexBad ? <p className="err" id="hex-err">Sechs Zeichen, zum Beispiel #006478.</p> : <p className="hint-line">Die Beispielmail zeigt Buchungsfenster, Absagen-Seite und Mails. Helle Farben werden für die Fläche etwas dunkler.</p>}
           <div className="hours-foot">
             {brand ? (
