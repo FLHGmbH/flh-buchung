@@ -13,6 +13,7 @@ export type StornoView = {
   address?: string;
   phone?: string;
   email?: string;
+  brand?: string;
 };
 
 export type Actor = {
@@ -261,6 +262,7 @@ export const api = {
   putMailSign: (sign: string) => mutate("/api/app/mail-sign", { method: "PUT", body: JSON.stringify({ sign }) }),
   putContact: (body: { address: string; phone: string; email: string; website: string }) =>
     mutate("/api/app/contact", { method: "PUT", body: JSON.stringify(body) }),
+  putBrand: (brand: string) => mutate("/api/app/brand", { method: "PUT", body: JSON.stringify({ brand }) }),
   google: () => req<GoogleLink>("/api/app/google"),
   googleCalendars: () => req<{ calendars: { id: string; summary: string }[] }>("/api/app/google/calendars"),
   putGoogleCalendar: (calendarId: string) =>
@@ -372,7 +374,7 @@ export type Booking = {
 export type TimeOff = { id: string; staffId: string; startsAt: string; endsAt: string; reason: string };
 export type GoogleLink = { configured: boolean; email: string; calendarId: string; calendarName: string };
 export type Bootstrap = {
-  tenant: { id: string; name: string; timezone: string; logoUrl?: string | null; mailSign?: string | null; mailImageUrl?: string | null; address?: string; phone?: string; contactEmail?: string; website?: string };
+  tenant: { id: string; name: string; timezone: string; logoUrl?: string | null; mailSign?: string | null; mailImageUrl?: string | null; address?: string; phone?: string; contactEmail?: string; website?: string; brand?: string };
   staff: Staff[];
   staffHours: StaffShift[];
   categories: ServiceCategory[];
@@ -419,7 +421,7 @@ export type WeekPayload = {
   timeOff: TimeOff[];
 };
 export type Pub = {
-  tenant: { name: string; slug: string; timezone: string; logoUrl?: string | null; phone?: string };
+  tenant: { name: string; slug: string; timezone: string; logoUrl?: string | null; phone?: string; brand?: string };
   staff: { id: string; name: string; photoUrl?: string | null }[];
   categories: ServiceCategory[];
   services: { id: string; name: string; durationMin: number; bufferMin?: number; categoryId?: string | null; priceCents?: number | null; priceMaxCents?: number | null; priceFrom?: boolean; info?: string; staffIds: string[]; crossIds?: string[] }[];

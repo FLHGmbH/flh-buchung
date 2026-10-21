@@ -1,3 +1,4 @@
+import { brandHex, brandOf } from "./brand.ts";
 import { guestMail, guestPhone, blockedGuest, phoneKey } from "./guest.ts";
 import { confirmIcs, confirmMail, dotStuff, encodeSubject, escHtml, guestInfoMail, icsEscape, icsFold, icsUtc, mailbox, mailboxAddr, mailEnding, mimeBody, newCancelToken, newPin, PIN_MS, pinMail } from "./mail.ts";
 
@@ -83,6 +84,24 @@ const withSite = confirmMail({
   site: "https://www.salon.example/team",
 });
 assert(withSite.html.includes("Unsere Homepage") && withSite.html.includes(">salon.example/team<") && withSite.text.includes("https://www.salon.example/team"), "homepage link");
+assert(brandHex("") === "" && brandHex("#Be185D") === "#be185d" && brandHex("red") === null && brandHex("#fff") === null, "brand hex");
+assert(brandOf("").base === "#006478" && brandOf("#006478").base === "#006478", "petrol stays");
+assert(brandOf("#ffffff").base !== "#ffffff" && brandOf("#ffff00").base !== "#ffff00", "light brand darkens");
+const dyed = confirmMail({
+  guestName: "Lea",
+  tenantName: "Salon",
+  serviceName: "Schnitt",
+  staffName: "",
+  when: "20.10.2026 14:00–14:45",
+  uid: "b1@flh-kalender",
+  start: new Date("2026-10-20T12:00:00.000Z"),
+  end: new Date("2026-10-20T12:45:00.000Z"),
+  brand: "#be185d",
+  site: "https://salon.example",
+  cancelUrl: stop,
+});
+const dyedBase = brandOf("#be185d").base;
+assert(dyed.html.includes(`background:${dyedBase}`) && !dyed.html.includes("background:#006478") && dyed.html.includes(`color:${dyedBase}`) && dyed.html.includes("color:#9b2c2c"), "branded mail");
 const coded = pinMail({ pin: "123456", tenantName: "Salon", when: "20.10.2026 14:00", logoUrl: "https://cdn.example/logo.png", sign: "Bis bald" });
 assert(coded.html.includes("123456") && coded.html.includes("https://cdn.example/logo.png") && coded.html.includes("Bis bald") && coded.text.includes("123456"), "pin card");
 const prevOrigin = process.env.PUBLIC_ORIGIN;

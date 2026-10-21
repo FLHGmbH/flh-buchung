@@ -1,6 +1,7 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { useParams } from "react-router-dom";
 import { api, type ApiErr, type Pub, type StornoView } from "./api";
+import { guestVars } from "../../server/brand.ts";
 import { guestMail, guestPhone } from "../../server/guest.ts";
 import { Fold, gsap, reduced, StepPane, useGSAP } from "./motion";
 import { euro, Modal, priceLabel, serviceLine } from "./ui";
@@ -230,7 +231,7 @@ export function BookPage() {
   }
 
   return (
-    <BookShell slug={slug}>
+    <BookShell slug={slug} brand={pub.tenant.brand}>
       {pub.tenant.logoUrl ? <img className="book-logo" src={pub.tenant.logoUrl} alt="" /> : null}
       <h1>{pub.tenant.name}</h1>
       <p className="lead">Leistung, Zeit, dann die Bestätigung per Mail.</p>
@@ -565,7 +566,7 @@ function CookieBar({ onOk, privacyHref }: { onOk: () => void; privacyHref: strin
   );
 }
 
-function BookShell({ children, slug }: { children: ReactNode; slug: string }) {
+function BookShell({ children, slug, brand }: { children: ReactNode; slug: string; brand?: string }) {
   const ref = useRef<HTMLDivElement>(null);
   const [cookies, setCookies] = useState(() => {
     try {
@@ -579,7 +580,7 @@ function BookShell({ children, slug }: { children: ReactNode; slug: string }) {
     gsap.fromTo(ref.current, { opacity: 0, y: 12 }, { opacity: 1, y: 0, duration: 0.4, ease: "power3.out" });
   }, { scope: ref });
   return (
-    <div className={"book-page book-fit" + (cookies ? " has-cookie" : "")}>
+    <div className={"book-page book-fit" + (brand ? " guest" : "") + (cookies ? " has-cookie" : "")} style={guestVars(brand) as CSSProperties}>
       <div className="book" ref={ref}>{children}</div>
       {cookies ? <CookieBar privacyHref={`/b/${slug}/datenschutz`} onOk={() => setCookies(false)} /> : null}
     </div>
@@ -734,7 +735,7 @@ export function CancelPage() {
             : "Einen Moment.";
 
   return (
-    <div className="login">
+    <div className={"login" + (row?.brand ? " guest" : "")} style={guestVars(row?.brand) as CSSProperties}>
       <div className="storno-stack" ref={box}>
       <div className="panel storno-card">
         {row?.logoUrl ? <img className="book-logo" src={row.logoUrl} alt={row.salon} /> : null}

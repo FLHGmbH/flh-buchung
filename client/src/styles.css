@@ -708,6 +708,8 @@ a { color: var(--petrol); }
   box-shadow: 0 0 0 1px #e5e7eb;
 }
 .swatches button.on { box-shadow: 0 0 0 2px var(--petrol); }
+.ci-scale { display: flex; gap: 0.4rem; margin: 0 0 0.85rem; }
+.ci-scale i { width: 2.5rem; height: 2.5rem; border-radius: 8px; box-shadow: 0 0 0 1px #e5e7eb; }
 .field .swatches input[type="color"] {
   width: 44px;
   min-width: 44px;
@@ -1254,6 +1256,13 @@ button.week-head.today {
   pointer-events: none;
 }
 
+.guest .btn:hover:not(.danger):not(.amber):not(.outline):not(.quiet) { background: var(--brand-ink, #12414a); }
+.guest .book-recap,
+.guest .storno-when,
+.guest .choice:hover,
+.guest .choice.on,
+.guest .upsell-card.on { background: var(--brand-wash, #f4f7f8); }
+.guest .choice.on { border-color: var(--petrol); }
 .login {
   min-height: 100vh;
   background: var(--petrol);

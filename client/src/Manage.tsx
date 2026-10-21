@@ -3,6 +3,7 @@ import { useSearchParams } from "react-router-dom";
 import { api, useApi, useFresh, type Bootstrap, type Booking, type GoogleLink, type StaffShift, type TimeOff } from "./api";
 import { matchTpl } from "./catalog";
 import { gsap, reduced, useGSAP } from "./motion";
+import { brandOf } from "../../server/brand.ts";
 import { phoneKey } from "../../server/guest.ts";
 import { Avatar, BookingModal, centsFromEuro, euroInput, firstOpen, ImageDrop, Modal, PageHead, priceLabel, Skel, STAFF_COLORS, staffColor, svcTone } from "./ui";
 
@@ -1231,6 +1232,7 @@ export function HoursPage() {
   const [phone, setPhone] = useState("");
   const [mail, setMail] = useState("");
   const [website, setWebsite] = useState("");
+  const [brand, setBrand] = useState("");
   const [err, setErr] = useState("");
   const [pending, setPending] = useState(false);
   useEffect(() => {
@@ -1240,12 +1242,14 @@ export function HoursPage() {
     setPhone(boot.tenant.phone ?? "");
     setMail(boot.tenant.contactEmail ?? "");
     setWebsite(boot.tenant.website ?? "");
+    setBrand(boot.tenant.brand ?? "");
     setRows([1, 2, 3, 4, 5, 6, 7].map((weekday) => {
       const h = boot.hours.find((x) => x.weekday === weekday);
       return { weekday, startHm: h?.startHm ?? "09:00", endHm: h?.endHm ?? (weekday === 6 ? "14:00" : "18:00"), open: Boolean(h) };
     }));
   }, [boot, rows.length]);
   if (!boot) return <Skel kind="hours" />;
+  const look = brandOf(brand);
   return (
     <div className="page slim">
       <PageHead title="Unternehmen" lead="Aufklappen, ändern, speichern." />
@@ -1279,6 +1283,35 @@ export function HoursPage() {
                 setErr("");
                 setPending(true);
                 api.putContact({ address, phone, email: mail, website })
+                  .catch((ex) => setErr(ex instanceof Error ? ex.message : "Speichern fehlgeschlagen."))
+                  .finally(() => setPending(false));
+              }}
+            >
+              Speichern
+            </button>
+          </div>
+        </div>
+      </details>
+      <details className="set-fold" open>
+        <summary>CI</summary>
+        <div className="card-body">
+          <ColorPick value={brand || "#006478"} onChange={(c) => setBrand(c.toLowerCase())} />
+          <div className="ci-scale" aria-hidden="true">
+            {[look.base, look.mix75, look.mix50, look.mix25].map((c, i) => <i key={i} style={{ background: c }} />)}
+          </div>
+          <p className="hint-line">Gilt für Buchungsfenster, Absagen-Seite und Mails. Helle Farben werden abgedunkelt, damit weiße Schrift lesbar bleibt.</p>
+          <div className="hours-foot">
+            {brand ? (
+              <button className="linkish" type="button" disabled={pending} onClick={() => setBrand("")}>Standardfarbe</button>
+            ) : null}
+            <button
+              className="btn"
+              type="button"
+              disabled={pending}
+              onClick={() => {
+                setErr("");
+                setPending(true);
+                api.putBrand(brand)
                   .catch((ex) => setErr(ex instanceof Error ? ex.message : "Speichern fehlgeschlagen."))
                   .finally(() => setPending(false));
               }}

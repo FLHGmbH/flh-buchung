@@ -1,5 +1,6 @@
 import { randomBytes, randomInt } from "node:crypto";
 import { connect } from "node:tls";
+import { brandOf } from "./brand.ts";
 import { mailFromAddr } from "./guard.ts";
 
 export const PIN_MS = 15 * 60 * 1000;
@@ -276,7 +277,7 @@ export function mailEnding(sign: string, imageUrl: string) {
   return { text, html };
 }
 
-export function siteLine(url?: string) {
+export function siteLine(url?: string, color = "#006478") {
   const v = url?.trim() ?? "";
   if (!v) return { text: "", html: "" };
   let label = v.replace(/^https?:\/\//i, "").replace(/\/$/, "");
@@ -289,7 +290,7 @@ export function siteLine(url?: string) {
   }
   return {
     text: `\nUnsere Homepage: ${v}`,
-    html: `<p style="margin:16px 0 0;font-size:14px;line-height:1.45;color:#253239;">Unsere Homepage<br><a href="${escHtml(v)}" style="color:#006478;font-weight:700;">${escHtml(label)}</a></p>`,
+    html: `<p style="margin:16px 0 0;font-size:14px;line-height:1.45;color:#253239;">Unsere Homepage<br><a href="${escHtml(v)}" style="color:${escHtml(color)};font-weight:700;">${escHtml(label)}</a></p>`,
   };
 }
 
@@ -304,7 +305,12 @@ export function mailCard(opts: {
   logoUrl?: string;
   sign?: string;
   imageUrl?: string;
+  brand?: string;
 }) {
+  const tone = opts.brand ? brandOf(opts.brand) : null;
+  const ground = tone?.base ?? "#006478";
+  const link = tone?.base ?? "#006478";
+  const wash = tone?.wash ?? "#f4f7f8";
   const logo = opts.logoUrl
     ? `<img src="${escHtml(opts.logoUrl)}" alt="${escHtml(opts.salon)}" width="160" style="display:block;margin:0 auto 16px;border:0;max-width:160px;height:auto;">`
     : "";
@@ -315,19 +321,19 @@ export function mailCard(opts: {
     .map((r) => `<tr><td style="padding:10px 12px;font-size:12px;line-height:1.3;color:#5c656b;">${escHtml(r.label)}</td><td style="padding:10px 12px;font-size:14px;line-height:1.35;font-weight:700;color:#253239;">${escHtml(r.value)}</td></tr>`)
     .join("");
   const table = rows
-    ? `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" bgcolor="#f4f7f8" style="margin:16px 0 0;background:#f4f7f8;border-radius:8px;">${rows}</table>`
+    ? `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" bgcolor="${wash}" style="margin:16px 0 0;background:${wash};border-radius:8px;">${rows}</table>`
     : "";
   const links = (opts.links ?? [])
     .map((l) => {
-      const color = l.tone === "stop" ? "#9b2c2c" : "#006478";
+      const color = l.tone === "stop" ? "#9b2c2c" : link;
       return `<p style="margin:16px 0 0;text-align:center;"><a href="${escHtml(l.href)}" style="color:${color};font-weight:700;">${escHtml(l.label)}</a></p>`;
     })
     .join("");
   const note = opts.note ? `<p style="margin:16px 0 0;font-size:13px;line-height:1.45;color:#5c656b;">${escHtml(opts.note)}</p>` : "";
-  const site = siteLine(opts.site).html;
+  const site = siteLine(opts.site, link).html;
   const end = mailEnding(opts.sign ?? "", opts.imageUrl ?? "");
-  return `<!DOCTYPE html><html lang="de"><body style="margin:0;padding:0;background:#006478;">
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" bgcolor="#006478" style="background:#006478;">
+  return `<!DOCTYPE html><html lang="de"><body style="margin:0;padding:0;background:${ground};">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" bgcolor="${ground}" style="background:${ground};">
 <tr><td align="center" style="padding:24px 12px;">
 <table role="presentation" width="420" cellpadding="0" cellspacing="0" bgcolor="#ffffff" style="width:100%;max-width:420px;background:#ffffff;border-radius:16px;">
 <tr><td style="padding:28px 24px;font-family:Segoe UI,system-ui,sans-serif;color:#253239;">
@@ -353,11 +359,12 @@ export function guestInfoMail(kind: "move" | "cancel", opts: {
   sign?: string;
   imageUrl?: string;
   site?: string;
+  brand?: string;
 }) {
   const end = mailEnding(opts.sign ?? "", opts.imageUrl ?? "");
   const home = siteLine(opts.site);
   const summary = opts.staffName ? `${opts.serviceName} bei ${opts.staffName}` : opts.serviceName;
-  const foot = { logoUrl: opts.logoUrl, sign: opts.sign, imageUrl: opts.imageUrl, site: opts.site };
+  const foot = { logoUrl: opts.logoUrl, sign: opts.sign, imageUrl: opts.imageUrl, site: opts.site, brand: opts.brand };
   if (kind === "cancel") {
     return {
       subject: `Termin storniert – ${opts.tenantName}`,
@@ -398,7 +405,7 @@ export async function sendGuestInfo(kind: "move" | "cancel", opts: { to: string 
   }
 }
 
-export function pinMail(opts: { pin: string; tenantName: string; when: string; logoUrl?: string; sign?: string; imageUrl?: string; site?: string }) {
+export function pinMail(opts: { pin: string; tenantName: string; when: string; logoUrl?: string; sign?: string; imageUrl?: string; site?: string; brand?: string }) {
   const end = mailEnding(opts.sign ?? "", opts.imageUrl ?? "");
   const home = siteLine(opts.site);
   return {
@@ -413,6 +420,7 @@ export function pinMail(opts: { pin: string; tenantName: string; when: string; l
       sign: opts.sign,
       imageUrl: opts.imageUrl,
       site: opts.site,
+      brand: opts.brand,
     }),
   };
 }
@@ -445,6 +453,7 @@ export function confirmMail(opts: {
   sign?: string;
   imageUrl?: string;
   site?: string;
+  brand?: string;
 } & ConfirmStop & { also?: ConfirmStop[] }) {
   const summary = opts.staffName ? `${opts.serviceName} bei ${opts.staffName}` : opts.serviceName;
   const lines = [opts, ...(opts.also ?? [])].map((ev) => ({
@@ -480,6 +489,7 @@ export function confirmMail(opts: {
       links,
       note: calNote,
       site: opts.site,
+      brand: opts.brand,
       logoUrl: opts.logoUrl,
       sign: opts.sign,
       imageUrl: opts.imageUrl,

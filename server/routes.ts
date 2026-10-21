@@ -6,6 +6,7 @@ import { Hono } from "hono";
 import { DateTime } from "luxon";
 import { actorFrom, actorFromEmail, actorFromUserId, createSession, destroySession, dropUserSessions, ensurePlatformAdmin, hashPassword, sbEnsureUser, sbPassword, sbRecover, sbSetPassword, sbUser, verifyLogin, verifyPassword, type Actor } from "./auth.ts";
 import { db } from "./db.ts";
+import { brandHex } from "./brand.ts";
 import { BOOK_MAX, LEN, LOGIN_MAX, PIN_MAX, WINDOW_MS, bookWindow, clip, clientIp, hoursWithin, inIntRange, limited, logoKind, passwordOk, priceQuote, readJson, sbConfigured, serviceMins, siteOrigin } from "./guard.ts";
 import { chooseCalendar, connectGoogle, disconnectGoogle, drainGoogle, googleAuthUrl, googleCalendars, googleConfigured, googleStatus, pullGoogle, readState, syncBooking } from "./google.ts";
 import { blockedGuest, guestMail, guestPhone } from "./guest.ts";
@@ -639,7 +640,7 @@ function storeMailImage(tenant: { id: string; slug: string }, mime: string, byte
   return storeImage(`mail-${tenant.id}`, `${tenant.id}/mail`, `/api/public/${tenant.slug}/mail-image`, mime, bytes);
 }
 
-function mailFootOf(tenant: { mailSign: string; mailImageUrl: string | null; logoUrl: string | null; website: string }, reqUrl: string) {
+function mailFootOf(tenant: { mailSign: string; mailImageUrl: string | null; logoUrl: string | null; website: string; brand?: string | null }, reqUrl: string) {
   const origin = siteOrigin(reqUrl);
   const abs = (raw: string | null) => {
     const v = raw?.trim() ?? "";
@@ -648,7 +649,7 @@ function mailFootOf(tenant: { mailSign: string; mailImageUrl: string | null; log
     if (!origin) return "";
     return `${origin}${v.startsWith("/") ? v : `/${v}`}`;
   };
-  return { sign: tenant.mailSign ?? "", logoUrl: abs(tenant.logoUrl), imageUrl: abs(tenant.mailImageUrl), site: tenant.website ?? "" };
+  return { sign: tenant.mailSign ?? "", logoUrl: abs(tenant.logoUrl), imageUrl: abs(tenant.mailImageUrl), site: tenant.website ?? "", brand: tenant.brand ?? "" };
 }
 
 function websiteOf(raw: string) {
@@ -1127,6 +1128,16 @@ api.put("/app/contact", async (c) => {
   return c.json({ address, phone, email, website });
 });
 
+api.put("/app/brand", async (c) => {
+  const tid = tenantId(c);
+  const body = await readJson<{ brand?: string }>(c);
+  if (!body) return c.json({ error: "Ungültige Anfrage." }, 400);
+  const brand = brandHex(clip(body.brand ?? "", 7));
+  if (brand == null) return c.json({ error: "Bitte eine Farbe im Format #RRGGBB wählen." }, 400);
+  await db.update(tenants).set({ brand }).where(eq(tenants.id, tid));
+  return c.json({ brand });
+});
+
 api.post("/app/mail-image", async (c) => {
   const tid = tenantId(c);
   const [tenant] = await db.select().from(tenants).where(eq(tenants.id, tid)).limit(1);
@@ -1515,7 +1526,7 @@ api.get("/public/:slug", async (c) => {
     .where(eq(serviceCategories.tenantId, tenant.id))
     .orderBy(serviceCategories.sort);
   return c.json({
-    tenant: { name: tenant.name, slug: tenant.slug, timezone: tenant.timezone, logoUrl: tenant.logoUrl, phone: tenant.phone },
+    tenant: { name: tenant.name, slug: tenant.slug, timezone: tenant.timezone, logoUrl: tenant.logoUrl, phone: tenant.phone, brand: tenant.brand || "" },
     staff: staffRows.map((s) => ({ id: s.id, name: s.name, photoUrl: s.photoUrl })),
     categories,
     services: serviceRows.map((s) => ({
@@ -1630,7 +1641,7 @@ type SealRow = {
   staffId: string | null;
 };
 
-async function sealBookings(reqUrl: string, tenant: { id: string; name: string; slug: string; timezone: string; mailSign: string; mailImageUrl: string | null; logoUrl: string | null; website: string }, mates: SealRow[]) {
+async function sealBookings(reqUrl: string, tenant: { id: string; name: string; slug: string; timezone: string; mailSign: string; mailImageUrl: string | null; logoUrl: string | null; website: string; brand?: string | null }, mates: SealRow[]) {
   const ordered = [...mates].sort((a, b) => a.startsAt.getTime() - b.startsAt.getTime());
   const svcIds = [...new Set(ordered.map((m) => m.serviceId).filter((id): id is string => Boolean(id)))];
   const whoIds = [...new Set(ordered.map((m) => m.staffId).filter((id): id is string => Boolean(id)))];
@@ -1904,6 +1915,7 @@ async function stornoHit(slug: string, token: string) {
       address: tenant.address || "",
       phone: tenant.phone || "",
       email: tenant.contactEmail || "",
+      brand: tenant.brand || "",
     },
   };
 }

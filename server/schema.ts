@@ -12,6 +12,7 @@ export const tenants = pgTable("tenants", {
   phone: text("phone").notNull().default(""),
   contactEmail: text("contact_email").notNull().default(""),
   website: text("website").notNull().default(""),
+  brand: text("brand").notNull().default(""),
   mailSign: text("mail_sign").notNull().default(""),
   mailImageUrl: text("mail_image_url"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),

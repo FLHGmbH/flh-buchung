@@ -1,5 +1,6 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type CSSProperties } from "react";
 import { Link, useParams } from "react-router-dom";
+import { guestVars } from "../../server/brand.ts";
 import { api } from "./api";
 
 const STAND = "21. Oktober 2026";
@@ -215,12 +216,13 @@ export function GuestPrivacy({ tenantName }: { tenantName: string }) {
 export function GuestPrivacyPage() {
   const { slug = "" } = useParams();
   const [name, setName] = useState("");
+  const [brand, setBrand] = useState("");
   const [missing, setMissing] = useState(false);
 
   useEffect(() => {
     let on = true;
     api.pub(slug).then(
-      (d) => { if (on) setName(d.tenant.name); },
+      (d) => { if (on) { setName(d.tenant.name); setBrand(d.tenant.brand ?? ""); } },
       () => { if (on) setMissing(true); },
     );
     return () => { on = false; };
@@ -233,7 +235,7 @@ export function GuestPrivacyPage() {
   }, [name]);
 
   return (
-    <div className="book-page">
+    <div className={"book-page" + (brand ? " guest" : "")} style={guestVars(brand) as CSSProperties}>
       <article className="book legal-doc">
         <h1>Datenschutzerklärung</h1>
         {missing ? <p>Diese Buchung gibt es nicht.</p> : name ? <GuestPrivacy tenantName={name} /> : (
