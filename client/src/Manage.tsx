@@ -813,7 +813,7 @@ export function ServicesPage() {
       return;
     }
     setPending(true);
-    const body = { name: form.name, durationMin: form.durationMin, bufferMin: form.bufferMin, staffIds: form.staffIds, crossIds: form.crossIds.slice(0, 1), active: form.active, categoryId: form.categoryId, priceCents, priceMaxCents, priceFrom: form.priceKind === "from", info: form.info.trim() };
+    const body = { name: form.name, durationMin: form.durationMin, bufferMin: form.bufferMin, staffIds: form.staffIds, crossIds: form.crossIds.filter(Boolean).slice(0, 3), active: form.active, categoryId: form.categoryId, priceCents, priceMaxCents, priceFrom: form.priceKind === "from", info: form.info.trim() };
     const done = form.id ? api.patchService(form.id, body) : api.addService(body);
     done
       .then(() => setForm(null))
@@ -1042,16 +1042,34 @@ export function ServicesPage() {
                   <textarea maxLength={512} value={form.info} onChange={(e) => setForm({ ...form, info: e.target.value })} placeholder="z. B. Waschen und Föhnen inklusive" />
                   <small className="hint-line">{form.info.length}/512</small>
                 </label>
-                <label className="field">
+                <div className="field">
                   <span>Zusammen buchbar (optional)</span>
-                  <select value={form.crossIds[0] ?? ""} onChange={(e) => setForm({ ...form, crossIds: e.target.value ? [e.target.value] : [] })}>
-                    <option value="">Keine</option>
-                    {boot.services.filter((s) => s.id !== form.id).map((s) => (
-                      <option key={s.id} value={s.id}>{s.name}</option>
+                  <div className="cross-picks">
+                    {[0, 1, 2].filter((i) => i === 0 || form.crossIds[i - 1]).map((i) => (
+                      <select
+                        key={i}
+                        value={form.crossIds[i] ?? ""}
+                        onChange={(e) => {
+                          const value = e.target.value;
+                          const next = form.crossIds.slice(0, i);
+                          if (value && !next.includes(value)) next.push(value);
+                          if (value) {
+                            for (const id of form.crossIds.slice(i + 1)) {
+                              if (id && !next.includes(id)) next.push(id);
+                            }
+                          }
+                          setForm({ ...form, crossIds: next.slice(0, 3) });
+                        }}
+                      >
+                        <option value="">{i === 0 ? "Keine" : "Keine weitere"}</option>
+                        {boot.services.filter((s) => s.id !== form.id && (s.id === form.crossIds[i] || !form.crossIds.includes(s.id))).map((s) => (
+                          <option key={s.id} value={s.id}>{s.name}</option>
+                        ))}
+                      </select>
                     ))}
-                  </select>
-                </label>
-                <p className="hint-line">Im Buchungsfenster kann man diese Leistung dazubuchen.</p>
+                  </div>
+                </div>
+                <p className="hint-line">Höchstens drei. Im Buchungsfenster kann man sie dazubuchen.</p>
             </div>
             </div>
             </div>

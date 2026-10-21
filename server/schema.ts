@@ -77,6 +77,7 @@ export const serviceCross = pgTable(
   {
     serviceId: uuid("service_id").notNull().references(() => services.id, { onDelete: "cascade" }),
     otherId: uuid("other_id").notNull().references(() => services.id, { onDelete: "cascade" }),
+    sort: integer("sort").notNull().default(0),
   },
   (t) => [primaryKey({ columns: [t.serviceId, t.otherId] })],
 );

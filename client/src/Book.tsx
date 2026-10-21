@@ -43,7 +43,7 @@ function dayLabel(key: string, opt: Intl.DateTimeFormatOptions) {
 
 const WEEKDAYS = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"];
 
-const STEPS = ["Leistung", "Person", "Tag", "Uhrzeit", "Angaben", "Code", "Fertig"];
+const STEPS = ["Leistung", "Person", "Tag", "Uhrzeit", "Angaben", "Fertig"];
 
 export function BookPage() {
   const { slug = "" } = useParams();
@@ -80,8 +80,6 @@ export function BookPage() {
   const [slot, setSlot] = useState<{ start: string; end: string; staffId: string } | null>(null);
   const [guest, setGuest] = useState({ guestName: "", guestEmail: "", guestPhone: "", note: "" });
   const [done, setDone] = useState<{ id: string; startsAt: string } | null>(null);
-  const [hold, setHold] = useState<{ id: string; startsAt: string } | null>(null);
-  const [pin, setPin] = useState("");
   const [privacy, setPrivacy] = useState(false);
   const [pending, setPending] = useState(false);
 
@@ -183,12 +181,16 @@ export function BookPage() {
     : null;
   const who = staffId ? pub.staff.find((s) => s.id === staffId)?.name ?? "Keine Präferenz" : "Keine Präferenz";
   const pickedDay = day && day >= todayKey && day <= horizon ? day : "";
-  const offer = service ? pub.services.find((s) => s.id !== service.id && (service.crossIds ?? []).includes(s.id)) : undefined;
-  const withUpsell = Boolean(offer) && ids.length <= 2 && ids.every((id, i) => i === 0 || id === offer?.id);
+  const offers = (service?.crossIds ?? []).slice(0, 3).flatMap((id) => {
+    const row = id === service?.id ? undefined : pub.services.find((s) => s.id === id);
+    return row ? [row] : [];
+  });
+  const offerIds = new Set(offers.map((s) => s.id));
+  const withUpsell = offers.length > 0 && ids.every((id, i) => i === 0 || offerIds.has(id));
   const labels = withUpsell
-    ? ["Leistung", "Person", "Tag", "Dazu", "Uhrzeit", "Angaben", "Code", "Fertig"]
+    ? ["Leistung", "Person", "Tag", "Dazu", "Uhrzeit", "Angaben", "Fertig"]
     : STEPS;
-  const at = withUpsell || step < 3 ? step : step - 1;
+  const at = (withUpsell || step < 3 ? step : step - 1) - (step >= 6 ? 1 : 0);
   const pickedNames = ids.map((id) => pub.services.find((s) => s.id === id)?.name).filter(Boolean).join(" + ");
   const recap = [
     pickedNames,
@@ -231,7 +233,7 @@ export function BookPage() {
     <BookShell slug={slug}>
       {pub.tenant.logoUrl ? <img className="book-logo" src={pub.tenant.logoUrl} alt="" /> : null}
       <h1>{pub.tenant.name}</h1>
-      <p className="lead">Leistung, Zeit, dann der Code aus der Mail.</p>
+      <p className="lead">Leistung, Zeit, dann die Bestätigung per Mail.</p>
       {err ? <p className="err" role="alert">{err}</p> : null}
       {block !== null ? (
         <Modal title="Online-Buchung nicht möglich" onClose={() => setBlock(null)}>
@@ -376,7 +378,7 @@ export function BookPage() {
                       onClick={() => {
                         setDay(key);
                         setMonthYm(key.slice(0, 7));
-                        setStep(ids.length === 1 && offer ? 3 : 4);
+                        setStep(ids.length === 1 && offers.length ? 3 : 4);
                       }}
                     >
                       <strong>{Number(key.slice(8))}</strong>
@@ -393,20 +395,23 @@ export function BookPage() {
         </div>
       )}
 
-      {step === 3 && offer && (
+      {step === 3 && offers.length ? (
         <>
           <div className="book-pick upsell">
-            <UpsellOffer
-              name={offer.name}
-              detail={offer.durationMin + " Min." + (priceLabel(offer) ? ` · ${priceLabel(offer)}` : "")}
-              line={service && service.name.length <= 32 ? `Direkt nach ${service.name}, im selben Termin.` : "Im selben Termin, direkt im Anschluss."}
-              on={ids.includes(offer.id)}
-              onToggle={() => toggleService(offer.id, true)}
-            />
-            {cart({ go: () => setStep(4), on: true, label: ids.includes(offer.id) ? "Weiter" : "Ohne weiter" }, true)}
+            {offers.map((item) => (
+              <UpsellOffer
+                key={item.id}
+                name={item.name}
+                detail={item.durationMin + " Min." + (priceLabel(item) ? ` · ${priceLabel(item)}` : "")}
+                line={service && service.name.length <= 32 ? `Direkt nach ${service.name}, im selben Termin.` : "Im selben Termin, direkt im Anschluss."}
+                on={ids.includes(item.id)}
+                onToggle={() => toggleService(item.id, true)}
+              />
+            ))}
+            {cart({ go: () => setStep(4), on: true, label: ids.some((id) => offerIds.has(id)) ? "Weiter" : "Ohne weiter" }, true)}
           </div>
         </>
-      )}
+      ) : null}
 
       {step === 4 && (
         <>
@@ -451,8 +456,8 @@ export function BookPage() {
             })
               .then((r) => {
                 setErr("");
-                setHold((r as { booking: { id: string; startsAt: string } }).booking);
-                setStep(6);
+                setDone((r as { booking: { id: string; startsAt: string } }).booking);
+                setStep(7);
               })
               .catch((ex) => noteErr(ex))
               .finally(() => setPending(false));
@@ -495,40 +500,7 @@ export function BookPage() {
               Ich habe die <a href={`/b/${slug}/datenschutz`} target="_blank" rel="noreferrer">Datenschutzerklärung</a> gelesen. {pub.tenant.name} darf Name und E-Mail für diesen Termin speichern.
             </span>
           </label>
-          <button className={privacy && guestMail(guest.guestEmail) && guestPhone(guest.guestPhone) ? "btn" : "btn is-hold"} disabled={pending || !privacy || !guestMail(guest.guestEmail) || !guestPhone(guest.guestPhone)} type="submit">{pending ? "Sendet Code…" : "Code per Mail"}</button>
-        </form>
-      )}
-
-      {step === 6 && hold && (
-        <form
-          onSubmit={(e) => {
-            e.preventDefault();
-            setPending(true);
-            setErr("");
-            api.confirm(slug, hold.id, pin)
-              .then((r) => {
-                setDone(r.booking);
-                setStep(7);
-              })
-              .catch((ex) => noteErr(ex))
-              .finally(() => setPending(false));
-          }}
-        >
-          <p>Code aus der Mail, 15 Minuten gültig.</p>
-          <label className="field">
-            <span>6-stelliger Code</span>
-            <input
-              className="pin"
-              required
-              inputMode="numeric"
-              autoComplete="one-time-code"
-              pattern="\d{6}"
-              maxLength={6}
-              value={pin}
-              onChange={(e) => setPin(e.target.value.replace(/\D/g, "").slice(0, 6))}
-            />
-          </label>
-          <button className="btn" disabled={pending || pin.length !== 6} type="submit">{pending ? "Prüft…" : "Bestätigen"}</button>
+          <button className={privacy && guestMail(guest.guestEmail) && guestPhone(guest.guestPhone) ? "btn" : "btn is-hold"} disabled={pending || !privacy || !guestMail(guest.guestEmail) || !guestPhone(guest.guestPhone)} type="submit">{pending ? "Wird gebucht…" : "Termin buchen"}</button>
         </form>
       )}
 
@@ -624,12 +596,109 @@ function siteLabel(url: string) {
   }
 }
 
+function MoveCal({ slug, token, onMoved }: { slug: string; token: string; onMoved: (row: StornoView) => void }) {
+  const [slots, setSlots] = useState<{ start: string; end: string; staffId: string }[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [err, setErr] = useState("");
+  const [day, setDay] = useState("");
+  const [monthYm, setMonthYm] = useState("");
+  const [pick, setPick] = useState("");
+  const [pending, setPending] = useState(false);
+  useEffect(() => {
+    api.stornoSlots(slug, token)
+      .then((r) => setSlots(r.slots))
+      .catch((e: Error) => setErr(e.message))
+      .finally(() => setLoading(false));
+  }, [slug, token]);
+  const todayKey = berlinDay(new Date().toISOString());
+  const horizon = shiftKey(todayKey, 27);
+  const month = monthYm || todayKey.slice(0, 7);
+  const months: string[] = [];
+  for (let k = todayKey; k <= horizon; k = shiftKey(k, 1)) {
+    const ym = k.slice(0, 7);
+    if (!months.includes(ym)) months.push(ym);
+  }
+  const cells: string[] = [];
+  const monthStop = shiftKey(mondayOf(monthEnd(month)), 6);
+  for (let k = mondayOf(`${month}-01`); k <= monthStop; k = shiftKey(k, 1)) cells.push(k);
+  const openDays = new Set(slots.map((s) => berlinDay(s.start)));
+  const daySlots = uniqueStarts(slots.filter((s) => berlinDay(s.start) === day));
+  return (
+    <div className="storno-move">
+      <h2>Neuen Termin wählen</h2>
+      {err ? <p className="err" role="alert">{err}</p> : null}
+      {loading ? <DayBones /> : (
+        <div className="storno-cal">
+          <BookMonth month={month}>
+            <div className="book-cal-bar">
+              <button type="button" aria-label="Vorheriger Monat" disabled={months.indexOf(month) <= 0} onClick={() => setMonthYm(months[months.indexOf(month) - 1] ?? month)}>‹</button>
+              <strong>{dayLabel(`${month}-01`, { month: "long", year: "numeric" })}</strong>
+              <button type="button" aria-label="Nächster Monat" disabled={months.indexOf(month) >= months.length - 1} onClick={() => setMonthYm(months[months.indexOf(month) + 1] ?? month)}>›</button>
+            </div>
+            <div className="book-cal-wd" aria-hidden="true">
+              <span className="book-kw">KW</span>
+              {WEEKDAYS.map((w) => <span key={w}>{w}</span>)}
+            </div>
+            <div className="days">
+              {cells.flatMap((key, i) => {
+                const open = key >= todayKey && key <= horizon && openDays.has(key);
+                const btn = (
+                  <button
+                    key={key}
+                    type="button"
+                    disabled={!open}
+                    className={[day === key ? "on" : "", key === todayKey ? "is-today" : "", key.slice(0, 7) !== month ? "is-out" : ""].filter(Boolean).join(" ")}
+                    aria-pressed={day === key}
+                    onClick={() => { setDay(key); setPick(""); setMonthYm(key.slice(0, 7)); }}
+                  >
+                    <strong>{Number(key.slice(8))}</strong>
+                    {key === todayKey ? <small>Heute</small> : null}
+                  </button>
+                );
+                return i % 7 === 0 ? [<span key={`kw-${key}`} className="book-kw">{isoWeek(key)}</span>, btn] : [btn];
+              })}
+            </div>
+          </BookMonth>
+          {day ? (
+            <div className="slots">
+              {daySlots.map((s) => (
+                <button key={s.start} className={"choice" + (pick === s.start ? " amber" : "")} type="button" onClick={() => setPick(s.start)}>
+                  {new Date(s.start).toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" })}
+                </button>
+              ))}
+            </div>
+          ) : null}
+          {!slots.length ? <p>In den nächsten 4 Wochen ist nichts frei.</p> : null}
+          {pick ? (
+            <button
+              className="btn"
+              type="button"
+              disabled={pending}
+              onClick={() => {
+                setPending(true);
+                setErr("");
+                api.moveStorno(slug, token, pick)
+                  .then(onMoved)
+                  .catch((e: Error) => setErr(e.message))
+                  .finally(() => setPending(false));
+              }}
+            >
+              {pending ? "Wird verschoben…" : "Auf diese Uhrzeit verschieben"}
+            </button>
+          ) : null}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function CancelPage() {
   const { slug = "", token = "" } = useParams();
   const [row, setRow] = useState<StornoView | null>(null);
   const [err, setErr] = useState("");
   const [kept, setKept] = useState(false);
   const [pending, setPending] = useState(false);
+  const [moved, setMoved] = useState(false);
   const box = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -649,7 +718,7 @@ export function CancelPage() {
         ? "Termin abgesagt"
         : row?.state === "closed"
           ? "Absagen nicht möglich"
-          : "Termin absagen?";
+          : "Termin ändern?";
   const lead = !row && err
     ? err
     : kept && row
@@ -659,7 +728,9 @@ export function CancelPage() {
         : row?.state === "closed"
           ? "Dieser Termin ist vorbei oder schon abgeschlossen."
           : row
-            ? `Bei ${row.salon}. Wenn du absagst, ist der Platz sofort wieder frei.`
+            ? moved
+              ? `Neuer Termin bei ${row.salon}. Die Mail ist unterwegs. Du kannst ihn noch einmal verschieben oder absagen.`
+              : `Bei ${row.salon}. Du kannst absagen oder unten einen neuen Termin wählen.`
             : "Einen Moment.";
 
   return (
@@ -694,6 +765,7 @@ export function CancelPage() {
               {pending ? "Wird abgesagt…" : "Ja, absagen"}
             </button>
             <button className="btn quiet" type="button" disabled={pending} onClick={() => setKept(true)}>Nein, behalten</button>
+            <MoveCal key={row.when} slug={slug} token={token} onMoved={(next) => { setRow(next); setMoved(true); }} />
           </>
         ) : null}
         {row && (row.website || row.address || row.phone || row.email) ? (

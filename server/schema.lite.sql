@@ -65,6 +65,7 @@ CREATE TABLE IF NOT EXISTS services (
 CREATE TABLE IF NOT EXISTS service_cross (
   service_id uuid NOT NULL REFERENCES services(id) ON DELETE CASCADE,
   other_id uuid NOT NULL REFERENCES services(id) ON DELETE CASCADE,
+  sort integer NOT NULL DEFAULT 0,
   PRIMARY KEY (service_id, other_id)
 );
 

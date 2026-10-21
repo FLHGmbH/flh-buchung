@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { api } from "./api";
 
-const STAND = "6. Oktober 2026";
+const STAND = "21. Oktober 2026";
 
 export function MandantPrivacy() {
   return (
@@ -81,7 +81,7 @@ export function MandantPrivacy() {
         Kontodaten speichern wir für die Dauer des Vertrags über das Werkzeug. Sitzungen enden nach sieben Tagen oder mit der Abmeldung.
         Der Zähler zur Anmeldebegrenzung liegt 15 Minuten im Arbeitsspeicher. Termine, Mitarbeiter und Bilder bleiben gespeichert, bis Sie sie ändern oder löschen oder das Mandantenkonto endet.
         Stornierte Termine bleiben mit den Gastangaben gespeichert, nur der Status wechselt. Eine automatische Löschfrist ist nicht eingerichtet.
-        Den Prüfwert des Buchungscodes löschen wir, sobald der Gast den Termin bestätigt. Läuft der Code nach 15 Minuten ab, wird der Termin storniert. Der Prüfwert kann am stornierten Eintrag stehen bleiben und ist dann ungültig.
+        Neue Buchungen brauchen keinen Code. Ein älterer offener Code verfällt nach 15 Minuten, der Termin wird dann storniert. Der Prüfwert kann am stornierten Eintrag stehen bleiben und ist dann ungültig.
       </p>
 
       <h2>Rechte</h2>
@@ -130,7 +130,7 @@ export function GuestPrivacy({ tenantName }: { tenantName: string }) {
       <h2>Welche Daten</h2>
       <p>Wenn Sie einen Termin buchen, verarbeitet der Betrieb über dieses Fenster:</p>
       <ul>
-        <li>Name und E-Mail-Adresse, beides Pflicht, sonst kann der Code nicht zugestellt und der Termin nicht geführt werden</li>
+        <li>Name und E-Mail-Adresse, beides Pflicht, sonst kann die Bestätigung nicht zugestellt und der Termin nicht geführt werden</li>
         <li>Telefon und Notiz, nur wenn Sie sie eintragen</li>
         <li>gewählte Leistung, gewünschte Person, Beginn und Ende</li>
         <li>eine Buchungsnummer und den Status (offen, bestätigt oder storniert)</li>
@@ -139,15 +139,14 @@ export function GuestPrivacy({ tenantName }: { tenantName: string }) {
         Namen und Fotos der auswählbaren Personen legt der Betrieb an. Das sind Angaben zu seinen Mitarbeitern, nicht zu Ihnen.
       </p>
       <p>
-        Zweck ist die Terminanfrage und, nach Eingabe des Codes, die Terminvereinbarung mit dem Betrieb, einschließlich der Bestätigungsmail und der Kalenderdatei.
+        Zweck ist die Terminvereinbarung mit dem Betrieb, einschließlich der Bestätigungsmail und der Kalenderdatei.
         Rechtsgrundlage ist Art. 6 Abs. 1 lit. b DSGVO, auch für Telefon und Notiz, soweit Sie sie zur Buchung mitgeben.
       </p>
 
-      <h2>Code und E-Mail</h2>
+      <h2>E-Mail</h2>
       <p>
-        Vor der Bestätigung erzeugt das Fenster einen sechsstelligen Code und schickt ihn an Ihre E-Mail. Gespeichert wird nur ein Prüfwert, nicht der Code selbst.
-        Der Code gilt 15 Minuten. Danach wird der offene Termin storniert. Mit der Bestätigung wird der Prüfwert gelöscht.
-        Die Bestätigung enthält Ihren Namen, die Leistung, gegebenenfalls die Person, die Uhrzeit und den Namen des Betriebs, dazu eine Kalenderdatei (termin.ics) mit denselben Angaben.
+        Mit dem Buchen ist der Termin bestätigt. Die Bestätigung geht sofort an Ihre E-Mail.
+        Sie enthält Ihren Namen, die Leistung, gegebenenfalls die Person, die Uhrzeit und den Namen des Betriebs, dazu eine Kalenderdatei (termin.ics) mit denselben Angaben.
       </p>
       <p>
         Den Versand übernimmt im Live-Betrieb Mittwald CM Service GmbH &amp; Co. KG, Espelkamp, über den Mailserver der FLH GmbH.
@@ -156,13 +155,13 @@ export function GuestPrivacy({ tenantName }: { tenantName: string }) {
 
       <h2>Schutz vor Missbrauch</h2>
       <p>
-        Für 15 Minuten zählt der Server im Arbeitsspeicher, wie oft eine IP-Adresse Buchungen anstößt und wie oft ein Code für eine bestimmte Buchung probiert wird.
+        Für 15 Minuten zählt der Server im Arbeitsspeicher, wie oft eine IP-Adresse Buchungen anstößt.
         Dieselbe Grenze gilt für wiederholte Buchungen derselben E-Mail-Adresse bei diesem Betrieb. Die IP-Adresse landet nicht in Ihrem Termineintrag.
         Der Zähler endet nach 15 Minuten oder mit dem Neustart des Prozesses.
       </p>
       <p>
-        Rechtsgrundlage ist Art. 6 Abs. 1 lit. f DSGVO. Das berechtigte Interesse des Betriebs und der FLH GmbH ist, die Buchung vor automatisierten Anfragen und vor dem Ausprobieren von Codes zu schützen.
-        Sie können nach Art. 21 DSGVO widersprechen. Ohne diesen Zähler können wir die Buchung in dem Moment nicht offen halten.
+        Rechtsgrundlage ist Art. 6 Abs. 1 lit. f DSGVO. Das berechtigte Interesse des Betriebs und der FLH GmbH ist, die Buchung vor automatisierten Anfragen zu schützen.
+        Sie können nach Art. 21 DSGVO widersprechen. Ohne diesen Zähler können wir die Buchung vor massenhaften Anfragen nicht schützen.
       </p>
 
       <h2>Aufruf der Seite</h2>
@@ -183,7 +182,7 @@ export function GuestPrivacy({ tenantName }: { tenantName: string }) {
         <li>FLH GmbH, Ismaning, als Auftragsverarbeiter</li>
         <li>Supabase Inc., USA: Datenbank und, falls der Betrieb ein Logo oder Mitarbeiterfoto hinterlegt, der öffentliche Bildspeicher</li>
         <li>Vercel Inc., USA: Hosting</li>
-        <li>Mittwald CM Service GmbH &amp; Co. KG, Espelkamp: Zustellung von Code und Bestätigung</li>
+        <li>Mittwald CM Service GmbH &amp; Co. KG, Espelkamp: Zustellung der Bestätigung</li>
       </ul>
       <p>
         Soweit Supabase oder Vercel Daten in den USA verarbeiten, geschieht das auf Grundlage eines Angemessenheitsbeschlusses, soweit der Empfänger darunter fällt, sonst auf Grundlage von Standardvertragsklauseln nach Art. 46 DSGVO.
@@ -194,7 +193,7 @@ export function GuestPrivacy({ tenantName }: { tenantName: string }) {
       <p>
         Der Termin bleibt gespeichert, solange der Betrieb ihn im Kalender führt. In diesem Fenster gibt es keine Löschfunktion für Gäste.
         Stornierte Termine behalten Name, E-Mail, Telefon und Notiz, nur der Status wechselt auf storniert. Eine automatische Löschfrist ist nicht eingerichtet.
-        Löschung verlangen Sie beim Betrieb. Der Code-Prüfwert wird bei Bestätigung gelöscht und ist nach Ablauf der 15 Minuten ungültig.
+        Löschung verlangen Sie beim Betrieb.
       </p>
 
       <h2>Rechte</h2>

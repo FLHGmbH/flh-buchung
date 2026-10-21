@@ -54,9 +54,15 @@ a { color: var(--petrol); }
   color: #cbd5e1;
   display: flex;
   flex-direction: column;
-  padding: 0 0 1.5rem;
+  align-self: start;
+  position: sticky;
+  top: 0;
+  height: 100dvh;
+  max-height: 100dvh;
+  overflow: hidden;
+  padding: 0 0 1rem;
 }
-.sidebar .brand { display: flex; justify-content: center; padding: 1.5rem 1rem 1.25rem; }
+.sidebar .brand { display: flex; justify-content: center; flex-shrink: 0; padding: 1.5rem 1rem 1.25rem; }
 .sidebar a {
   color: #cbd5e1;
   text-decoration: none;
@@ -71,12 +77,21 @@ a { color: var(--petrol); }
 }
 .sidebar a:hover { background: var(--side-hover); color: #fff; }
 .sidebar a.active { background: var(--side-active); color: #fff; font-weight: 600; }
-.sidebar nav { display: flex; flex-direction: column; }
+.sidebar nav {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  scrollbar-width: thin;
+  scrollbar-color: #1a515c transparent;
+}
 .nav-ico { flex-shrink: 0; opacity: 0.9; }
-.sidebar .grow { flex: 1; }
+.sidebar .grow { display: none; }
 .sidebar .who {
   display: flex;
   align-items: center;
+  flex-shrink: 0;
   gap: 0.75rem;
   padding: 0 1.25rem 1.1rem;
   min-width: 0;
@@ -103,6 +118,7 @@ a { color: var(--petrol); }
 .sidebar .ghost {
   background: transparent;
   border: 0;
+  flex-shrink: 0;
   border-top: 1px solid var(--side-line);
   color: #cbd5e1;
   padding: 1rem 1.5rem 0;
@@ -118,6 +134,7 @@ a { color: var(--petrol); }
 .sidebar a.legal-side {
   background: transparent;
   color: #94a3b8;
+  flex-shrink: 0;
   font-size: 0.75rem;
   min-height: 36px;
   padding: 0.35rem 0.85rem;
@@ -251,6 +268,7 @@ a { color: var(--petrol); }
 .hit-detail div { display: flex; gap: 0.4rem; }
 .hit-detail dt { color: #64748b; }
 .hit-detail dd { margin: 0; }
+.cross-picks { display: flex; flex-direction: column; gap: 0.45rem; }
 .field input, .field select, .field textarea {
   border: 1px solid #e2e8f0;
   border-radius: 8px;
@@ -1662,7 +1680,16 @@ body:has(.book-fit) #root {
   background: transparent;
 }
 .book h1 { overflow-wrap: anywhere; margin: 0.5rem 0 0.25rem; font-size: 1.65rem; letter-spacing: -0.02em; text-align: center; }
-.storno-stack { width: min(420px, 100%); }
+.storno-stack { width: min(560px, 100%); }
+.storno-move { margin-top: 1.15rem; padding-top: 1rem; border-top: 1px solid #e4eaec; }
+.storno-move h2 { margin: 0 0 0.75rem; font-size: 1.05rem; text-align: center; }
+.login .storno-move p { margin: 0.45rem 0; text-align: center; }
+.storno-cal .days { grid-auto-rows: 2.75rem; margin-bottom: 0.65rem; }
+.storno-cal .days button { height: auto; min-height: 2.5rem; }
+.storno-cal .book-cal-bar { margin-bottom: 0.45rem; }
+.storno-cal .book-cal-bar button { width: 36px; height: 36px; }
+.storno-move .slots { margin-bottom: 0.75rem; }
+.storno-move .btn { width: 100%; }
 .login .storno-stack .panel { width: 100%; }
 .flh-credit {
   display: flex;
@@ -1918,9 +1945,18 @@ body:has(.book-fit) #root {
 
 @media (max-width: 900px) {
   .app { grid-template-columns: minmax(0, 1fr); }
-  .sidebar { flex-direction: row; flex-wrap: wrap; padding: 0.75rem; }
+  .sidebar {
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-self: stretch;
+    position: static;
+    height: auto;
+    max-height: none;
+    overflow: visible;
+    padding: 0.75rem;
+  }
   .sidebar .brand { padding: 0.5rem; }
-  .sidebar nav { flex-direction: row; flex-wrap: wrap; margin: 0; }
+  .sidebar nav { flex: none; flex-direction: row; flex-wrap: wrap; margin: 0; min-height: 0; overflow: visible; }
   .sidebar a { padding: 0.55rem 0.75rem; }
   .sidebar .grow { display: none; }
   .sidebar .who { padding: 0.5rem; }
@@ -1946,7 +1982,7 @@ body:has(.book-fit) #root {
 
 @media (max-width: 700px) {
   .sidebar {
-    flex-wrap: nowrap;
+    flex-wrap: wrap;
     align-items: center;
     gap: 0.15rem;
     min-width: 0;
@@ -1971,18 +2007,26 @@ body:has(.book-fit) #root {
     padding: 0.35rem 0.7rem;
     white-space: nowrap;
   }
-  .sidebar .who { display: none; }
+  .sidebar .who {
+    display: flex;
+    flex: 1 1 100%;
+    order: 3;
+    min-width: 0;
+    padding: 0.45rem 0.5rem 0.15rem;
+  }
+  .sidebar a.legal-side { order: 4; }
   .sidebar .ghost {
+    order: 5;
     flex: 0 0 auto;
-    width: 44px;
+    width: auto;
     min-height: 44px;
     margin: 0;
-    padding: 0;
+    padding: 0.35rem 0.65rem;
     border: 0;
-    justify-content: center;
-    font-size: 0;
+    justify-content: flex-start;
+    font-size: 0.75rem;
   }
-  .sidebar .ghost svg { width: 20px; height: 20px; }
+  .sidebar .ghost svg { width: 16px; height: 16px; }
   .table th, .table td { padding: 0.75rem 0.65rem; }
   .page-head { flex-direction: column; align-items: stretch; gap: 0.75rem; }
   .head-tools, .search, .search input { width: 100%; max-width: none; }

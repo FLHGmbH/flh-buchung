@@ -456,7 +456,7 @@ export function confirmMail(opts: {
     end: ev.end,
   }));
   const block = lines
-    .map((l) => `${l.summary}\n${l.when}${l.cancelUrl ? `\nTermin stornieren: ${l.cancelUrl}` : ""}`)
+    .map((l) => `${l.summary}\n${l.when}${l.cancelUrl ? `\nTermin verschieben/stornieren: ${l.cancelUrl}` : ""}`)
     .join("\n\n");
   const end = mailEnding(opts.sign ?? "", opts.imageUrl ?? "");
   const home = siteLine(opts.site);
@@ -466,7 +466,7 @@ export function confirmMail(opts: {
   ]);
   const links = lines.filter((l) => l.cancelUrl).map((l) => ({
     href: l.cancelUrl,
-    label: lines.length > 1 ? `${l.summary} stornieren` : "Termin stornieren",
+    label: lines.length > 1 ? `${l.summary} verschieben/stornieren` : "Termin verschieben/stornieren",
     tone: "stop" as const,
   }));
   const calNote = "Mit einem Klick auf termin.ics im Anhang trägst du den Termin in deinen Kalender ein.";

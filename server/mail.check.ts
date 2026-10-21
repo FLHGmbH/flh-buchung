@@ -67,8 +67,8 @@ const confirmed = confirmMail({
   end: new Date("2026-10-20T12:45:00.000Z"),
   cancelUrl: stop,
 });
-assert(confirmed.text.includes(`Termin stornieren: ${stop}`), "confirm link text");
-assert(confirmed.html.includes(`href="${escHtml(stop)}"`) && confirmed.html.includes("Termin stornieren"), "confirm link html");
+assert(confirmed.text.includes(`Termin verschieben/stornieren: ${stop}`), "confirm link text");
+assert(confirmed.html.includes(`href="${escHtml(stop)}"`) && confirmed.html.includes("Termin verschieben/stornieren"), "confirm link html");
 assert(confirmed.html.includes("background:#006478") && confirmed.html.includes(">Salon<"), "confirm card");
 assert(confirmed.html.includes("color:#9b2c2c") && confirmed.text.includes("Mit einem Klick auf termin.ics"), "cancel link and calendar note");
 const withSite = confirmMail({

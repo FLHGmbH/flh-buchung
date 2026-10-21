@@ -300,6 +300,10 @@ export const api = {
     req<StornoView>(`/api/public/${slug}/storno/${encodeURIComponent(token)}`),
   dropStorno: (slug: string, token: string) =>
     req<StornoView>(`/api/public/${slug}/storno/${encodeURIComponent(token)}`, { method: "POST" }),
+  stornoSlots: (slug: string, token: string) =>
+    req<{ slots: { start: string; end: string; staffId: string }[] }>(`/api/public/${slug}/storno/${encodeURIComponent(token)}/slots`),
+  moveStorno: (slug: string, token: string, start: string) =>
+    req<StornoView>(`/api/public/${slug}/storno/${encodeURIComponent(token)}/move`, { method: "POST", body: JSON.stringify({ start }) }),
   confirm: (slug: string, id: string, pin: string) =>
     req<{ booking: { id: string; startsAt: string } }>(`/api/public/${slug}/bookings/${id}/confirm`, {
       method: "POST",

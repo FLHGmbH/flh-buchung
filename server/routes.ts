@@ -9,7 +9,7 @@ import { db } from "./db.ts";
 import { BOOK_MAX, LEN, LOGIN_MAX, PIN_MAX, WINDOW_MS, bookWindow, clip, clientIp, hoursWithin, inIntRange, limited, logoKind, passwordOk, priceQuote, readJson, sbConfigured, serviceMins, siteOrigin } from "./guard.ts";
 import { chooseCalendar, connectGoogle, disconnectGoogle, drainGoogle, googleAuthUrl, googleCalendars, googleConfigured, googleStatus, pullGoogle, readState, syncBooking } from "./google.ts";
 import { blockedGuest, guestMail, guestPhone } from "./guest.ts";
-import { newCancelToken, newPin, PIN_MS, sendConfirmMail, sendGuestInfo, sendPinMail } from "./mail.ts";
+import { newCancelToken, PIN_MS, sendConfirmMail, sendGuestInfo } from "./mail.ts";
 import {
   bookings,
   memberships,
@@ -111,32 +111,31 @@ async function serviceIdsInTenant(tenantId: string, ids: string[]) {
   return rows.length === unique.length;
 }
 
-function linkedIds(serviceId: string, rows: { serviceId: string; otherId: string }[]) {
-  const ids: string[] = [];
-  for (const row of rows) {
-    const other = row.serviceId === serviceId ? row.otherId : row.otherId === serviceId ? row.serviceId : "";
-    if (other && other !== serviceId && !ids.includes(other)) ids.push(other);
-  }
-  return ids;
+function linkedIds(serviceId: string, rows: { serviceId: string; otherId: string; sort: number }[]) {
+  return rows
+    .filter((row) => row.serviceId === serviceId && row.otherId && row.otherId !== serviceId)
+    .sort((a, b) => a.sort - b.sort || a.otherId.localeCompare(b.otherId))
+    .map((row) => row.otherId)
+    .filter((id, i, all) => all.indexOf(id) === i)
+    .slice(0, 3);
 }
 
 async function saveCross(tid: string, serviceId: string, ids: string[]) {
-  const partner = ids.find((id) => id && id !== serviceId) ?? "";
-  if (partner && !(await serviceIdsInTenant(tid, [partner]))) return false;
-  const touch = partner
-    ? or(
-        eq(serviceCross.serviceId, serviceId),
-        eq(serviceCross.otherId, serviceId),
-        eq(serviceCross.serviceId, partner),
-        eq(serviceCross.otherId, partner),
-      )
-    : or(eq(serviceCross.serviceId, serviceId), eq(serviceCross.otherId, serviceId));
-  await db.delete(serviceCross).where(touch);
-  if (partner) {
-    await db.insert(serviceCross).values([
-      { serviceId, otherId: partner },
-      { serviceId: partner, otherId: serviceId },
-    ]);
+  const partners: string[] = [];
+  for (const id of ids) {
+    if (!id || id === serviceId || partners.includes(id)) continue;
+    partners.push(id);
+    if (partners.length === 3) break;
+  }
+  if (partners.length && !(await serviceIdsInTenant(tid, partners))) return false;
+  const incoming = await db.select().from(serviceCross).where(eq(serviceCross.otherId, serviceId));
+  const keepSort = new Map(incoming.filter((row) => row.serviceId !== serviceId).map((row) => [row.serviceId, row.sort]));
+  await db.delete(serviceCross).where(or(eq(serviceCross.serviceId, serviceId), eq(serviceCross.otherId, serviceId)));
+  if (partners.length) {
+    await db.insert(serviceCross).values(partners.flatMap((otherId, sort) => [
+      { serviceId, otherId, sort },
+      { serviceId: otherId, otherId: serviceId, sort: keepSort.get(otherId) ?? 99 },
+    ]));
   }
   return true;
 }
@@ -1621,6 +1620,78 @@ function noshowBlock(phone: string) {
   };
 }
 
+type SealRow = {
+  id: string;
+  startsAt: Date;
+  endsAt: Date;
+  guestName: string;
+  guestEmail: string;
+  serviceId: string | null;
+  staffId: string | null;
+};
+
+async function sealBookings(reqUrl: string, tenant: { id: string; name: string; slug: string; timezone: string; mailSign: string; mailImageUrl: string | null; logoUrl: string | null; website: string }, mates: SealRow[]) {
+  const ordered = [...mates].sort((a, b) => a.startsAt.getTime() - b.startsAt.getTime());
+  const svcIds = [...new Set(ordered.map((m) => m.serviceId).filter((id): id is string => Boolean(id)))];
+  const whoIds = [...new Set(ordered.map((m) => m.staffId).filter((id): id is string => Boolean(id)))];
+  const svcRows = svcIds.length
+    ? await db.select({ id: services.id, name: services.name }).from(services).where(inArray(services.id, svcIds))
+    : [];
+  const whoRows = whoIds.length
+    ? await db.select({ id: staff.id, name: staff.name }).from(staff).where(inArray(staff.id, whoIds))
+    : [];
+  const svcName = new Map(svcRows.map((s) => [s.id, s.name]));
+  const whoName = new Map(whoRows.map((s) => [s.id, s.name]));
+  const line = (m: SealRow) => {
+    const a = DateTime.fromJSDate(m.startsAt).setZone(tenant.timezone);
+    const b = DateTime.fromJSDate(m.endsAt).setZone(tenant.timezone);
+    return {
+      serviceName: (m.serviceId && svcName.get(m.serviceId)) || "Termin",
+      staffName: (m.staffId && whoName.get(m.staffId)) || "",
+      when: `${a.toFormat("dd.MM.yyyy HH:mm")}–${b.toFormat("HH:mm")}`,
+      uid: `${m.id}@flh-kalender`,
+      start: m.startsAt,
+      end: m.endsAt,
+    };
+  };
+  const tokens = ordered.map(() => newCancelToken());
+  const origin = siteOrigin(reqUrl);
+  const linked = ordered.map((m, i) => ({
+    ...line(m),
+    cancelUrl: origin ? `${origin}/b/${tenant.slug}/storno/${tokens[i]}` : "",
+  }));
+  const [head, ...rest] = linked;
+  if (!head) throw new Error("leer");
+  await sendConfirmMail({
+    to: ordered[0].guestEmail,
+    guestName: ordered[0].guestName,
+    tenantName: tenant.name,
+    ...head,
+    also: rest,
+    ...mailFootOf(tenant, reqUrl),
+  });
+  const updated = [];
+  for (let i = 0; i < ordered.length; i++) {
+    const [saved] = await db
+      .update(bookings)
+      .set({ status: "confirmed", pinHash: "", pinExpiresAt: null, cancelToken: tokens[i] })
+      .where(and(eq(bookings.id, ordered[i].id), eq(bookings.tenantId, tenant.id), eq(bookings.status, "pending")))
+      .returning();
+    if (saved) updated.push(saved);
+  }
+  if (!updated.length) throw new Error("weg");
+  if (googleConfigured()) {
+    try {
+      for (const made of updated) await syncBooking(made.id);
+      await drainGoogle(tenant.id, 3);
+    } catch (e) {
+      console.error("google sync", e instanceof Error ? e.message : e);
+    }
+  }
+  const row = ordered[0];
+  return { booking: { id: row.id, startsAt: row.startsAt, endsAt: row.endsAt, guestName: row.guestName } };
+}
+
 api.post("/public/:slug/book", async (c) => {
   const ip = clientIp(c.req);
   if (limited(`book:${ip}`, BOOK_MAX, WINDOW_MS)) {
@@ -1682,7 +1753,7 @@ api.post("/public/:slug/book", async (c) => {
       ),
     )
     .limit(1);
-  if (openHold) return c.json({ error: "Bitte zuerst den offenen Code bestätigen." }, 429);
+  if (openHold) return c.json({ error: "Eine Buchung läuft noch. Bitte kurz warten und es dann erneut versuchen." }, 429);
   const ok = freeSlots({
     zone: tenant.timezone,
     hours,
@@ -1721,11 +1792,8 @@ api.post("/public/:slug/book", async (c) => {
     const names = new Map(chain.map((s) => [s.id, s.name]));
     planned = fit.map((s) => ({ ...s, name: names.get(s.serviceId) ?? "Termin" }));
   }
-  const pin = newPin();
-  const pinHash = await hashPassword(pin);
-  const pinExpiresAt = new Date(Date.now() + PIN_MS);
   const note = clip(body.note ?? "", LEN.note);
-  const made: { id: string; startsAt: Date; endsAt: Date; guestName: string }[] = [];
+  const made: SealRow[] = [];
   try {
     for (const step of planned) {
       const [row] = await db
@@ -1741,8 +1809,7 @@ api.post("/public/:slug/book", async (c) => {
           guestPhone: phone,
           note,
           status: "pending",
-          pinHash,
-          pinExpiresAt,
+          pinExpiresAt: new Date(Date.now() + PIN_MS),
         })
         .returning();
       made.push(row);
@@ -1752,19 +1819,12 @@ api.post("/public/:slug/book", async (c) => {
     if (overlapError(e)) return c.json({ error: "Dieser Slot ist gerade vergeben. Bitte neu wählen." }, 409);
     throw e;
   }
-  const when = planned
-    .map((s) => `${s.name} ${DateTime.fromJSDate(s.start).setZone(tenant.timezone).toFormat("dd.MM.yyyy HH:mm")}`)
-    .join(" · ");
   try {
-    await sendPinMail({ to: guestEmail, pin, tenantName: tenant.name, when, ...mailFootOf(tenant, c.req.url) });
+    return c.json(await sealBookings(c.req.url, tenant, made), 201);
   } catch {
     for (const row of made) await db.update(bookings).set({ status: "cancelled" }).where(eq(bookings.id, row.id));
-    return c.json({ error: "Code konnte nicht gesendet werden. Bitte später erneut buchen." }, 502);
+    return c.json({ error: "Bestätigung konnte nicht gesendet werden. Bitte später erneut buchen." }, 502);
   }
-  const row = made[0];
-  return c.json({
-    booking: { id: row.id, startsAt: row.startsAt, endsAt: row.endsAt, guestName: row.guestName, status: "pending" },
-  }, 201);
 });
 
 api.post("/public/:slug/bookings/:id/confirm", async (c) => {
@@ -1801,68 +1861,11 @@ api.post("/public/:slug/bookings/:id/confirm", async (c) => {
       eq(bookings.status, "pending"),
     )))
     .sort((a, b) => a.startsAt.getTime() - b.startsAt.getTime());
-  const svcIds = [...new Set(mates.map((m) => m.serviceId).filter((id): id is string => Boolean(id)))];
-  const whoIds = [...new Set(mates.map((m) => m.staffId).filter((id): id is string => Boolean(id)))];
-  const svcRows = svcIds.length
-    ? await db.select({ id: services.id, name: services.name }).from(services).where(inArray(services.id, svcIds))
-    : [];
-  const whoRows = whoIds.length
-    ? await db.select({ id: staff.id, name: staff.name }).from(staff).where(inArray(staff.id, whoIds))
-    : [];
-  const svcName = new Map(svcRows.map((s) => [s.id, s.name]));
-  const whoName = new Map(whoRows.map((s) => [s.id, s.name]));
-  const line = (m: (typeof mates)[number]) => {
-    const a = DateTime.fromJSDate(m.startsAt).setZone(tenant.timezone);
-    const b = DateTime.fromJSDate(m.endsAt).setZone(tenant.timezone);
-    return {
-      serviceName: (m.serviceId && svcName.get(m.serviceId)) || "Termin",
-      staffName: (m.staffId && whoName.get(m.staffId)) || "",
-      when: `${a.toFormat("dd.MM.yyyy HH:mm")}–${b.toFormat("HH:mm")}`,
-      uid: `${m.id}@flh-kalender`,
-      start: m.startsAt,
-      end: m.endsAt,
-    };
-  };
-  const tokens = mates.map(() => newCancelToken());
-  const origin = siteOrigin(c.req.url);
-  const linked = mates.map((m, i) => ({
-    ...line(m),
-    cancelUrl: origin ? `${origin}/b/${tenant.slug}/storno/${tokens[i]}` : "",
-  }));
-  const [head, ...rest] = linked;
-  if (!head) return c.json({ error: "Buchung unbekannt oder abgelaufen." }, 404);
   try {
-    await sendConfirmMail({
-      to: row.guestEmail,
-      guestName: row.guestName,
-      tenantName: tenant.name,
-      ...head,
-      also: rest,
-      ...mailFootOf(tenant, c.req.url),
-    });
+    return c.json(await sealBookings(c.req.url, tenant, mates));
   } catch {
     return c.json({ error: "Bestätigung konnte nicht gesendet werden. Bitte den Code erneut eingeben." }, 502);
   }
-  const updated = [];
-  for (let i = 0; i < mates.length; i++) {
-    const [saved] = await db
-      .update(bookings)
-      .set({ status: "confirmed", pinHash: "", pinExpiresAt: null, cancelToken: tokens[i] })
-      .where(and(
-        eq(bookings.id, mates[i].id),
-        eq(bookings.tenantId, tenant.id),
-        eq(bookings.pinHash, row.pinHash),
-        eq(bookings.status, "pending"),
-      ))
-      .returning();
-    if (saved) updated.push(saved);
-  }
-  if (!updated.length) return c.json({ error: "Buchung unbekannt oder abgelaufen." }, 404);
-  if (googleConfigured()) {
-    for (const made of updated) await syncBooking(made.id);
-    await drainGoogle(tenant.id, 3);
-  }
-  return c.json({ booking: { id: row.id, startsAt: row.startsAt, endsAt: row.endsAt, guestName: row.guestName } });
 });
 
 const CANCEL_TOKEN = /^[A-Za-z0-9_-]{20,64}$/;
@@ -1904,6 +1907,68 @@ async function stornoHit(slug: string, token: string) {
     },
   };
 }
+
+async function guestSlots(tenant: { id: string; timezone: string; minNoticeMin: number }, serviceId: string, staffId: string | null, exceptId: string) {
+  const [service] = await db
+    .select()
+    .from(services)
+    .where(and(eq(services.id, serviceId), eq(services.tenantId, tenant.id), eq(services.active, true)))
+    .limit(1);
+  if (!service) return [];
+  const staffIds = await bookableStaffIds(tenant.id, service.id, staffId);
+  if (!staffIds.length) return [];
+  const { hours, staffHours: shifts } = await loadShifts(tenant.id);
+  const { from, to } = bookWindow(tenant.timezone);
+  const buffers = new Map((await db.select().from(services).where(eq(services.tenantId, tenant.id))).map((s) => [s.id, s.bufferMin]));
+  const busy = await busyFor(tenant.id, staffIds, buffers, exceptId);
+  return freeSlots({
+    zone: tenant.timezone,
+    hours,
+    staffHours: shifts,
+    busy,
+    staffIds,
+    durationMin: service.durationMin,
+    from: from.toJSDate(),
+    to: to.toJSDate(),
+    now: new Date(),
+    minNoticeMin: tenant.minNoticeMin,
+  });
+}
+
+api.get("/public/:slug/storno/:token/slots", async (c) => {
+  const hit = await stornoHit(c.req.param("slug"), c.req.param("token"));
+  if (!hit || hit.cur.status !== "confirmed" || !hit.cur.serviceId) return c.json({ slots: [] });
+  const slots = await guestSlots(hit.tenant, hit.cur.serviceId, hit.cur.staffId, hit.cur.id);
+  return c.json({ slots: slots.map((s) => ({ start: s.start.toISOString(), end: s.end.toISOString(), staffId: s.staffId })) });
+});
+
+api.post("/public/:slug/storno/:token/move", async (c) => {
+  if (limited(`move:${clientIp(c.req)}`, 20, WINDOW_MS)) {
+    return c.json({ error: "Zu viele Versuche. Bitte später erneut." }, 429);
+  }
+  const hit = await stornoHit(c.req.param("slug"), c.req.param("token"));
+  if (!hit) return c.json({ error: "Dieser Link ist ungültig." }, 404);
+  if (hit.cur.status !== "confirmed" || !hit.cur.serviceId) return c.json(hit.view);
+  const body = await readJson<{ start?: string }>(c);
+  const start = new Date(body?.start ?? "");
+  if (Number.isNaN(start.getTime())) return c.json({ error: "Uhrzeit ungültig." }, 400);
+  if (start.getTime() === hit.cur.startsAt.getTime()) return c.json(hit.view);
+  const slots = await guestSlots(hit.tenant, hit.cur.serviceId, hit.cur.staffId, hit.cur.id);
+  const slot = slots.find((s) => s.start.getTime() === start.getTime());
+  if (!slot) return c.json({ error: "Dieser Termin ist nicht mehr frei." }, 409);
+  const endsAt = slot.end;
+  const prev = { startsAt: hit.cur.startsAt, endsAt: hit.cur.endsAt, staffId: hit.cur.staffId };
+  await db.update(bookings).set({ startsAt: slot.start, endsAt, staffId: slot.staffId }).where(and(eq(bookings.id, hit.cur.id), eq(bookings.tenantId, hit.tenant.id), eq(bookings.status, "confirmed")));
+  const deny = await denyIfTaken(hit.tenant.id, { staffId: slot.staffId, serviceId: hit.cur.serviceId, startsAt: slot.start, endsAt }, hit.cur.id);
+  if (deny) {
+    await db.update(bookings).set({ startsAt: prev.startsAt, endsAt: prev.endsAt, staffId: prev.staffId }).where(eq(bookings.id, hit.cur.id));
+    return c.json({ error: deny }, 409);
+  }
+  await tellGuest(c.req.url, hit.tenant.id, "move", { ...hit.cur, startsAt: slot.start, endsAt, staffId: slot.staffId }, { startsAt: prev.startsAt, endsAt: prev.endsAt });
+  await mirror(hit.cur.id, hit.tenant.id);
+  const next = await stornoHit(c.req.param("slug"), c.req.param("token"));
+  return c.json(next?.view ?? hit.view);
+});
 
 api.get("/public/:slug/storno/:token", async (c) => {
   const hit = await stornoHit(c.req.param("slug"), c.req.param("token"));
