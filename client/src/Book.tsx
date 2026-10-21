@@ -626,7 +626,6 @@ function MoveCal({ slug, token, onMoved }: { slug: string; token: string; onMove
   const daySlots = uniqueStarts(slots.filter((s) => berlinDay(s.start) === day));
   return (
     <div className="storno-move">
-      <h2>Neuen Termin wählen</h2>
       {err ? <p className="err" role="alert">{err}</p> : null}
       {loading ? <DayBones /> : (
         <div className="storno-cal">
@@ -697,7 +696,6 @@ export function CancelPage() {
   const { slug = "", token = "" } = useParams();
   const [row, setRow] = useState<StornoView | null>(null);
   const [err, setErr] = useState("");
-  const [kept, setKept] = useState(false);
   const [pending, setPending] = useState(false);
   const [moved, setMoved] = useState(false);
   const box = useRef<HTMLDivElement>(null);
@@ -713,26 +711,22 @@ export function CancelPage() {
 
   const title = !row && err
     ? "Link ungültig"
-    : kept
-      ? "Termin bleibt"
-      : row?.state === "gone"
-        ? "Termin abgesagt"
-        : row?.state === "closed"
-          ? "Absagen nicht möglich"
-          : "Termin ändern?";
+    : row?.state === "gone"
+      ? "Termin abgesagt"
+      : row?.state === "closed"
+        ? "Absagen nicht möglich"
+        : "Termin ändern?";
   const lead = !row && err
     ? err
-    : kept && row
-      ? `Bei ${row.salon} hat sich nichts geändert.`
-      : row?.state === "gone"
-        ? `Bei ${row.salon} ist der Platz wieder frei.`
-        : row?.state === "closed"
-          ? "Dieser Termin ist vorbei oder schon abgeschlossen."
-          : row
-            ? moved
-              ? `Neuer Termin bei ${row.salon}. Die Mail ist unterwegs. Du kannst ihn noch einmal verschieben oder absagen.`
-              : `Bei ${row.salon}. Du kannst absagen oder unten einen neuen Termin wählen.`
-            : "Einen Moment.";
+    : row?.state === "gone"
+      ? `Bei ${row.salon} ist der Platz wieder frei.`
+      : row?.state === "closed"
+        ? "Dieser Termin ist vorbei oder schon abgeschlossen."
+        : row
+          ? moved
+            ? `Neuer Termin bei ${row.salon}. Die Mail ist unterwegs.`
+            : `Bei ${row.salon}. Verschieben und Stornieren sind getrennt.`
+          : "Einen Moment.";
 
   return (
     <div className={"login" + (row?.brand ? " guest" : "")} style={guestVars(row?.brand) as CSSProperties}>
@@ -748,26 +742,33 @@ export function CancelPage() {
           </div>
         ) : null}
         {err && row ? <p className="err" role="alert">{err}</p> : null}
-        {row && !kept && row.state === "open" ? (
-          <>
-            <button
-              className="btn danger"
-              type="button"
-              disabled={pending}
-              onClick={() => {
-                setPending(true);
-                setErr("");
-                api.dropStorno(slug, token)
-                  .then(setRow)
-                  .catch((e: Error) => setErr(e.message))
-                  .finally(() => setPending(false));
-              }}
-            >
-              {pending ? "Wird abgesagt…" : "Ja, absagen"}
-            </button>
-            <button className="btn quiet" type="button" disabled={pending} onClick={() => setKept(true)}>Nein, behalten</button>
-            <MoveCal key={row.when} slug={slug} token={token} onMoved={(next) => { setRow(next); setMoved(true); }} />
-          </>
+        {row && row.state === "open" ? (
+          <div className="storno-split">
+            <section className="storno-block" aria-labelledby="move-title">
+              <h2 id="move-title">Termin verschieben</h2>
+              <p>Tag und Uhrzeit neu wählen. Leistung und Person bleiben.</p>
+              <MoveCal key={row.when} slug={slug} token={token} onMoved={(next) => { setRow(next); setMoved(true); }} />
+            </section>
+            <section className="storno-block is-stop" aria-labelledby="stop-title">
+              <h2 id="stop-title">Termin stornieren</h2>
+              <p>Der Platz wird sofort frei. Das lässt sich nicht rückgängig machen.</p>
+              <button
+                className="btn danger"
+                type="button"
+                disabled={pending}
+                onClick={() => {
+                  setPending(true);
+                  setErr("");
+                  api.dropStorno(slug, token)
+                    .then(setRow)
+                    .catch((e: Error) => setErr(e.message))
+                    .finally(() => setPending(false));
+                }}
+              >
+                {pending ? "Wird abgesagt…" : "Ja, absagen"}
+              </button>
+            </section>
+          </div>
         ) : null}
         {row && (row.website || row.address || row.phone || row.email) ? (
           <div className="storno-foot">

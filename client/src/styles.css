@@ -1767,12 +1767,21 @@ body:has(.book-fit) #root {
   background: transparent;
 }
 .book h1 { overflow-wrap: anywhere; margin: 0.5rem 0 0.25rem; font-size: 1.65rem; letter-spacing: -0.02em; text-align: center; }
-.storno-stack { width: min(560px, 100%); }
-.storno-move { margin-top: 1.15rem; padding-top: 1rem; border-top: 1px solid #e4eaec; }
-.storno-move h2 { margin: 0 0 0.75rem; font-size: 1.05rem; text-align: center; }
-.login .storno-move p { margin: 0.45rem 0; text-align: center; }
-.storno-cal .days { grid-auto-rows: 2.75rem; margin-bottom: 0.65rem; }
-.storno-cal .days button { height: auto; min-height: 2.5rem; }
+.storno-stack { width: min(860px, 100%); }
+.storno-split { display: grid; gap: 1rem; }
+.storno-block {
+  border: 1px solid #e4eaec;
+  border-radius: 12px;
+  padding: 1rem 1rem 1.1rem;
+  text-align: left;
+}
+.storno-block h2 { margin: 0 0 0.2rem; font-size: 1.15rem; text-align: left; }
+.login .storno-block > p { margin: 0 0 0.85rem; text-align: left; color: var(--graphite-75); }
+.storno-block.is-stop { background: #fdf8f8; border-color: #f0d6d6; }
+.storno-move { margin: 0; padding: 0; border: 0; }
+.login .storno-move p { margin: 0.45rem 0; text-align: left; }
+.storno-cal .days { grid-auto-rows: 3.1rem; margin-bottom: 0.65rem; }
+.storno-cal .days button { height: auto; min-height: 2.75rem; }
 .storno-cal .book-cal-bar { margin-bottom: 0.45rem; }
 .storno-cal .book-cal-bar button { width: 36px; height: 36px; }
 .storno-move .slots { margin-bottom: 0.75rem; }

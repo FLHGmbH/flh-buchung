@@ -71,7 +71,7 @@ const confirmed = confirmMail({
 assert(confirmed.text.includes(`Termin verschieben/stornieren: ${stop}`), "confirm link text");
 assert(confirmed.html.includes(`href="${escHtml(stop)}"`) && confirmed.html.includes("Termin verschieben/stornieren"), "confirm link html");
 assert(confirmed.html.includes("background:#006478") && confirmed.html.includes(">Salon<"), "confirm card");
-assert(confirmed.html.includes("color:#9b2c2c") && confirmed.text.includes("Mit einem Klick auf termin.ics"), "cancel link and calendar note");
+assert(confirmed.html.includes("color:#006478") && !confirmed.html.includes("color:#9b2c2c") && confirmed.text.includes("Mit einem Klick auf termin.ics"), "confirm link color");
 const withSite = confirmMail({
   guestName: "Lea",
   tenantName: "Salon",
@@ -101,7 +101,7 @@ const dyed = confirmMail({
   cancelUrl: stop,
 });
 const dyedBase = brandOf("#be185d").base;
-assert(dyed.html.includes(`background:${dyedBase}`) && !dyed.html.includes("background:#006478") && dyed.html.includes(`color:${dyedBase}`) && dyed.html.includes("color:#9b2c2c"), "branded mail");
+assert(dyed.html.includes(`background:${dyedBase}`) && !dyed.html.includes("background:#006478") && dyed.html.includes(`color:${dyedBase}`) && !dyed.html.includes("color:#9b2c2c"), "branded mail");
 const coded = pinMail({ pin: "123456", tenantName: "Salon", when: "20.10.2026 14:00", logoUrl: "https://cdn.example/logo.png", sign: "Bis bald" });
 assert(coded.html.includes("123456") && coded.html.includes("https://cdn.example/logo.png") && coded.html.includes("Bis bald") && coded.text.includes("123456"), "pin card");
 const prevOrigin = process.env.PUBLIC_ORIGIN;

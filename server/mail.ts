@@ -476,7 +476,6 @@ export function confirmMail(opts: {
   const links = lines.filter((l) => l.cancelUrl).map((l) => ({
     href: l.cancelUrl,
     label: lines.length > 1 ? `${l.summary} verschieben/stornieren` : "Termin verschieben/stornieren",
-    tone: "stop" as const,
   }));
   const calNote = "Mit einem Klick auf termin.ics im Anhang trägst du den Termin in deinen Kalender ein.";
   return {
