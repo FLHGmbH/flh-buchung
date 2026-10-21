@@ -3,7 +3,7 @@ import { useSearchParams } from "react-router-dom";
 import { api, useApi, useFresh, type Bootstrap, type Booking, type GoogleLink, type StaffShift, type TimeOff } from "./api";
 import { matchTpl } from "./catalog";
 import { gsap, reduced, useGSAP } from "./motion";
-import { brandOf } from "../../server/brand.ts";
+import { brandHex, brandOf } from "../../server/brand.ts";
 import { phoneKey } from "../../server/guest.ts";
 import { Avatar, BookingModal, centsFromEuro, euroInput, firstOpen, ImageDrop, Modal, PageHead, priceLabel, Skel, STAFF_COLORS, staffColor, svcTone } from "./ui";
 
@@ -30,6 +30,60 @@ function ColorPick({ value, onChange }: { value: string; onChange: (c: string) =
         <input type="color" value={value} aria-label="Eigene Farbe" onChange={(e) => onChange(e.target.value)} />
       </div>
     </label>
+  );
+}
+
+const CI_COLORS = ["#006478", "#1b5561", "#0f766e", "#1d4e89", "#3730a3", "#8359dd", "#be185d", "#b45309", "#9a3412", "#3f6212"];
+
+function siteBits(raw: string) {
+  const v = raw.trim();
+  if (!v) return null;
+  try {
+    const u = new URL(/^https?:\/\//i.test(v) ? v : `https://${v}`);
+    if (!u.hostname.includes(".")) return null;
+    const path = u.pathname === "/" ? "" : u.pathname.replace(/\/$/, "");
+    return { href: u.toString(), label: `${u.host.replace(/^www\./, "")}${path}` };
+  } catch {
+    return null;
+  }
+}
+
+function MailSample({ name, logo, image, sign, site, ground, wash, link }: {
+  name: string;
+  logo?: string | null;
+  image?: string | null;
+  sign: string;
+  site: string;
+  ground: string;
+  wash: string;
+  link: string;
+}) {
+  const home = siteBits(site);
+  const bye = sign.trim();
+  return (
+    <aside className="firm-side" aria-label="Beispielmail">
+      <p className="mail-kicker">Beispielmail</p>
+      <div className="mail-sheet" style={{ background: ground }}>
+        <div className="mail-card">
+          {logo ? <img className="mail-logo" src={logo} alt="" /> : null}
+          <p className="mail-salon">{name}</p>
+          <p className="mail-lead">Hallo Anna, dein Termin ist bestätigt.</p>
+          <div className="mail-rows" style={{ background: wash }}>
+            <div><span>Leistung</span><strong>Schnitt bei Anna</strong></div>
+            <div><span>Zeit</span><strong>21.10.2026 14:00–14:45</strong></div>
+          </div>
+          <p className="mail-note">Mit einem Klick auf termin.ics im Anhang trägst du den Termin in deinen Kalender ein.</p>
+          {home ? <p className="mail-home">Unsere Homepage<br /><a href={home.href} style={{ color: link }} target="_blank" rel="noreferrer">{home.label}</a></p> : null}
+          <p className="mail-stop">Termin verschieben/stornieren</p>
+          {bye ? <p className="mail-sign">{bye}</p> : null}
+          {image ? <img className="mail-shot" src={image} alt="" /> : null}
+        </div>
+        <p className="mail-flh">
+          <img src="/kalendaa.svg" alt="" width={28} height={31} />
+          Powered by FLH - Kalender
+        </p>
+      </div>
+    </aside>
   );
 }
 
@@ -1233,6 +1287,7 @@ export function HoursPage() {
   const [mail, setMail] = useState("");
   const [website, setWebsite] = useState("");
   const [brand, setBrand] = useState("");
+  const [hex, setHex] = useState("#006478");
   const [err, setErr] = useState("");
   const [pending, setPending] = useState(false);
   useEffect(() => {
@@ -1243,6 +1298,7 @@ export function HoursPage() {
     setMail(boot.tenant.contactEmail ?? "");
     setWebsite(boot.tenant.website ?? "");
     setBrand(boot.tenant.brand ?? "");
+    setHex(boot.tenant.brand || "#006478");
     setRows([1, 2, 3, 4, 5, 6, 7].map((weekday) => {
       const h = boot.hours.find((x) => x.weekday === weekday);
       return { weekday, startHm: h?.startHm ?? "09:00", endHm: h?.endHm ?? (weekday === 6 ? "14:00" : "18:00"), open: Boolean(h) };
@@ -1250,10 +1306,21 @@ export function HoursPage() {
   }, [boot, rows.length]);
   if (!boot) return <Skel kind="hours" />;
   const look = brandOf(brand);
+  const typed = brandHex(hex);
+  const hexBad = typed == null;
+  function pickHex(raw: string) {
+    const t = raw.trim().toLowerCase().replace(/\s/g, "");
+    const v = (t === "" || t.startsWith("#") ? t : `#${t}`).slice(0, 7);
+    setHex(v);
+    const next = brandHex(v);
+    if (next != null) setBrand(next);
+  }
   return (
-    <div className="page slim">
+    <div className="page firm">
       <PageHead title="Unternehmen" lead="Aufklappen, ändern, speichern." />
       {err ? <p className="err" role="alert">{err}</p> : null}
+      <div className="firm-grid">
+      <div>
       <details className="set-fold" open>
         <summary>Kontakt</summary>
         <div className="card-body">
@@ -1295,19 +1362,45 @@ export function HoursPage() {
       <details className="set-fold" open>
         <summary>CI</summary>
         <div className="card-body">
-          <ColorPick value={brand || "#006478"} onChange={(c) => setBrand(c.toLowerCase())} />
-          <div className="ci-scale" aria-hidden="true">
-            {[look.base, look.mix75, look.mix50, look.mix25].map((c, i) => <i key={i} style={{ background: c }} />)}
+          <div className="field">
+            <span>Farbe</span>
+            <div className="swatches" role="group" aria-label="Zehn Farben">
+              {CI_COLORS.map((c) => (
+                <button
+                  key={c}
+                  type="button"
+                  className={(brand || "#006478") === c ? "on" : ""}
+                  style={{ background: c }}
+                  aria-label={c}
+                  aria-pressed={(brand || "#006478") === c}
+                  onClick={() => { setBrand(c); setHex(c); }}
+                />
+              ))}
+            </div>
           </div>
-          <p className="hint-line">Gilt für Buchungsfenster, Absagen-Seite und Mails. Helle Farben werden abgedunkelt, damit weiße Schrift lesbar bleibt.</p>
+          <label className="field">
+            <span>Hexcode</span>
+            <div className="hex-line">
+              <i style={{ background: typed == null ? "#e5e7eb" : (typed || "#006478") }} aria-hidden="true" />
+              <input
+                value={hex}
+                spellCheck={false}
+                maxLength={7}
+                aria-invalid={hexBad}
+                aria-describedby={hexBad ? "hex-err" : undefined}
+                onChange={(e) => pickHex(e.target.value)}
+              />
+            </div>
+          </label>
+          {hexBad ? <p className="err" id="hex-err">Sechs Zeichen, zum Beispiel #006478.</p> : <p className="hint-line">Die Beispielmail zeigt Buchungsfenster, Absagen-Seite und Mails. Helle Farben werden für die Fläche etwas dunkler.</p>}
           <div className="hours-foot">
             {brand ? (
-              <button className="linkish" type="button" disabled={pending} onClick={() => setBrand("")}>Standardfarbe</button>
+              <button className="linkish" type="button" disabled={pending} onClick={() => { setBrand(""); setHex("#006478"); }}>Standardfarbe</button>
             ) : null}
             <button
               className="btn"
               type="button"
-              disabled={pending}
+              disabled={pending || hexBad}
               onClick={() => {
                 setErr("");
                 setPending(true);
@@ -1321,6 +1414,18 @@ export function HoursPage() {
           </div>
         </div>
       </details>
+      </div>
+      <MailSample
+        name={boot.tenant.name}
+        logo={boot.tenant.logoUrl}
+        image={boot.tenant.mailImageUrl}
+        sign={sign}
+        site={website}
+        ground={look.base}
+        wash={look.wash}
+        link={look.base}
+      />
+      <div className="firm-rest">
       <details className="set-fold" open>
         <summary>Öffnungszeiten</summary>
         {rows.map((r, i) => (
@@ -1436,6 +1541,8 @@ export function HoursPage() {
           <GoogleSync />
         </div>
       </details>
+      </div>
+      </div>
     </div>
   );
 }

@@ -35,8 +35,8 @@ function hex(c: Rgb) {
 export function brandOf(raw?: string | null) {
   const picked = brandHex(raw ?? "") || PETROL;
   let rgb = parse(picked);
-  // ponytail: light picks are darkened until white type holds (luma <= 0.32). A light ground with dark type would need a second palette.
-  for (let i = 0; i < 12 && luma(rgb) > 0.32; i++) rgb = mix(rgb, [0, 0, 0], 0.18);
+  // ponytail: light picks are darkened until white type clears about 4.5:1 (luma <= 0.18). A light ground with dark type would need a second palette.
+  for (let i = 0; i < 12 && luma(rgb) > 0.18; i++) rgb = mix(rgb, [0, 0, 0], 0.18);
   const white: Rgb = [255, 255, 255];
   return {
     base: hex(rgb),
