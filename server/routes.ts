@@ -4,6 +4,7 @@ import { fileURLToPath } from "node:url";
 import { and, desc, eq, gt, gte, inArray, lt, lte, ne, or } from "drizzle-orm";
 import { Hono } from "hono";
 import { DateTime } from "luxon";
+import { altchaOk, altchaReady, newChallenge } from "./altcha.ts";
 import { actorFrom, actorFromEmail, actorFromUserId, createSession, destroySession, dropUserSessions, ensurePlatformAdmin, hashPassword, sbEnsureUser, sbPassword, sbRecover, sbSetPassword, sbUser, verifyLogin, verifyPassword, type Actor } from "./auth.ts";
 import { db } from "./db.ts";
 import { brandHex } from "./brand.ts";
@@ -1705,6 +1706,18 @@ async function sealBookings(reqUrl: string, tenant: { id: string; name: string; 
   return { booking: { id: row.id, startsAt: row.startsAt, endsAt: row.endsAt, guestName: row.guestName } };
 }
 
+api.get("/public/:slug/altcha", async (c) => {
+  if (limited(`altcha:${clientIp(c.req)}`, 30, WINDOW_MS)) {
+    return c.json({ error: "Zu viele Anfragen. Bitte später erneut." }, 429);
+  }
+  const [tenant] = await db.select().from(tenants).where(eq(tenants.slug, c.req.param("slug"))).limit(1);
+  if (!tenant || !tenant.active) return c.json({ error: "Unbekannt." }, 404);
+  const challenge = await newChallenge();
+  if (!challenge) return c.json({ error: "Sicherheitsprüfung nicht konfiguriert." }, 503);
+  c.header("Cache-Control", "no-store");
+  return c.json(challenge);
+});
+
 api.post("/public/:slug/book", async (c) => {
   const ip = clientIp(c.req);
   if (limited(`book:${ip}`, BOOK_MAX, WINDOW_MS)) {
@@ -1721,6 +1734,7 @@ api.post("/public/:slug/book", async (c) => {
     guestPhone?: string;
     note?: string;
     extraIds?: string[];
+    altcha?: string;
   } | null = await readJson(c);
   if (!body) return c.json({ error: "Ungültige Anfrage." }, 400);
   const [service] = await db
@@ -1804,6 +1818,10 @@ api.post("/public/:slug/book", async (c) => {
     if (!fit) return c.json({ error: "Die weiteren Leistungen passen zeitlich nicht." }, 409);
     const names = new Map(chain.map((s) => [s.id, s.name]));
     planned = fit.map((s) => ({ ...s, name: names.get(s.serviceId) ?? "Termin" }));
+  }
+  if (!altchaReady()) return c.json({ error: "Sicherheitsprüfung nicht konfiguriert." }, 503);
+  if (!(await altchaOk(body.altcha))) {
+    return c.json({ error: "Die Sicherheitsprüfung ist fehlgeschlagen. Bitte erneut versuchen." }, 403);
   }
   const note = clip(body.note ?? "", LEN.note);
   const made: SealRow[] = [];

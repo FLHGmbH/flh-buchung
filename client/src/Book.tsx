@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { useParams } from "react-router-dom";
+import "altcha";
+import "altcha/i18n/de";
 import { api, type ApiErr, type Pub, type StornoView } from "./api";
 import { guestVars } from "../../server/brand.ts";
 import { guestMail, guestPhone } from "../../server/guest.ts";
@@ -8,6 +10,14 @@ import { euro, Modal, priceLabel, serviceLine } from "./ui";
 
 function berlinDay(iso: string) {
   return new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Berlin", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date(iso));
+}
+
+function plusMonths(key: string, months: number) {
+  const [y, m, d] = key.split("-").map(Number);
+  const first = new Date(Date.UTC(y, m - 1 + months, 1));
+  const last = new Date(Date.UTC(first.getUTCFullYear(), first.getUTCMonth() + 1, 0)).getUTCDate();
+  const z = (n: number) => String(n).padStart(2, "0");
+  return `${first.getUTCFullYear()}-${z(first.getUTCMonth() + 1)}-${z(Math.min(d, last))}`;
 }
 
 function shiftKey(key: string, days: number) {
@@ -82,7 +92,38 @@ export function BookPage() {
   const [guest, setGuest] = useState({ guestName: "", guestEmail: "", guestPhone: "", note: "" });
   const [done, setDone] = useState<{ id: string; startsAt: string } | null>(null);
   const [privacy, setPrivacy] = useState(false);
+  const [proof, setProof] = useState("");
   const [pending, setPending] = useState(false);
+  const host = useRef<HTMLDivElement>(null);
+  const box = useRef<(HTMLElement & { reset?: () => void }) | null>(null);
+  const canSend = privacy && proof !== "" && guestMail(guest.guestEmail) && guestPhone(guest.guestPhone);
+
+  useEffect(() => {
+    const parent = host.current;
+    if (step !== 5 || !parent) return;
+    setProof("");
+    const el = document.createElement("altcha-widget") as HTMLElement & { reset?: () => void };
+    el.setAttribute("challenge", `/api/public/${slug}/altcha`);
+    el.setAttribute("language", "de");
+    parent.replaceChildren(el);
+    box.current = el;
+    const onVerified = (ev: Event) => {
+      const payload = (ev as CustomEvent<{ payload?: string }>).detail?.payload;
+      setProof(typeof payload === "string" ? payload : "");
+    };
+    const onState = (ev: Event) => {
+      const state = (ev as CustomEvent<{ state?: string }>).detail?.state;
+      if (state === "expired" || state === "error" || state === "unverified") setProof("");
+    };
+    el.addEventListener("verified", onVerified);
+    el.addEventListener("statechange", onState);
+    return () => {
+      el.removeEventListener("verified", onVerified);
+      el.removeEventListener("statechange", onState);
+      box.current = null;
+      parent.replaceChildren();
+    };
+  }, [step, slot?.start, slug]);
 
   useEffect(() => {
     if (!serviceId || !pub) return;
@@ -113,7 +154,7 @@ export function BookPage() {
     return map;
   }, [slots, staffId]);
   const todayKey = berlinDay(new Date().toISOString());
-  const horizon = shiftKey(todayKey, 27);
+  const horizon = plusMonths(todayKey, 6);
   const month = monthYm || (day || todayKey).slice(0, 7);
   const months: string[] = [];
   for (let k = todayKey; k <= horizon; k = shiftKey(k, 1)) {
@@ -331,7 +372,7 @@ export function BookPage() {
               </button>
             </>
           ) : null}
-          {!pending && !offered.length ? <p>In den nächsten 4 Wochen ist niemand frei.</p> : null}
+          {!pending && !offered.length ? <p>In den nächsten 6 Monaten ist niemand frei.</p> : null}
         </>
       )}
 
@@ -392,7 +433,7 @@ export function BookPage() {
               {day ? <p className="book-cal-pick">{dayLabel(day, { weekday: "long", day: "numeric", month: "long" })}</p> : null}
             </BookMonth>
           )}
-          {!pending && !slots.length ? <p>In den nächsten 4 Wochen kein freier Slot.</p> : null}
+          {!pending && !slots.length ? <p>In den nächsten 6 Monaten kein freier Slot.</p> : null}
         </div>
       )}
 
@@ -446,6 +487,12 @@ export function BookPage() {
               setErr("Bitte eine gültige Telefonnummer angeben.");
               return;
             }
+            const filed = new FormData(e.currentTarget).get("altcha");
+            const altcha = typeof filed === "string" && filed ? filed : proof;
+            if (!altcha) {
+              setErr("Bitte die Sicherheitsprüfung abschließen.");
+              return;
+            }
             setErr("");
             setPending(true);
             api.book(slug, {
@@ -454,13 +501,18 @@ export function BookPage() {
               staffId: slot.staffId,
               start: slot.start,
               ...guest,
+              altcha,
             })
               .then((r) => {
                 setErr("");
                 setDone((r as { booking: { id: string; startsAt: string } }).booking);
                 setStep(7);
               })
-              .catch((ex) => noteErr(ex))
+              .catch((ex) => {
+                noteErr(ex);
+                setProof("");
+                box.current?.reset?.();
+              })
               .finally(() => setPending(false));
           }}
         >
@@ -501,7 +553,8 @@ export function BookPage() {
               Ich habe die <a href={`/b/${slug}/datenschutz`} target="_blank" rel="noreferrer">Datenschutzerklärung</a> gelesen. {pub.tenant.name} darf Name und E-Mail für diesen Termin speichern.
             </span>
           </label>
-          <button className={privacy && guestMail(guest.guestEmail) && guestPhone(guest.guestPhone) ? "btn" : "btn is-hold"} disabled={pending || !privacy || !guestMail(guest.guestEmail) || !guestPhone(guest.guestPhone)} type="submit">{pending ? "Wird gebucht…" : "Termin buchen"}</button>
+          <div ref={host} />
+          <button className={canSend ? "btn" : "btn is-hold"} disabled={pending || !canSend} type="submit">{pending ? "Wird gebucht…" : "Termin buchen"}</button>
         </form>
       )}
 
@@ -612,7 +665,7 @@ function MoveCal({ slug, token, onMoved }: { slug: string; token: string; onMove
       .finally(() => setLoading(false));
   }, [slug, token]);
   const todayKey = berlinDay(new Date().toISOString());
-  const horizon = shiftKey(todayKey, 27);
+  const horizon = plusMonths(todayKey, 6);
   const month = monthYm || todayKey.slice(0, 7);
   const months: string[] = [];
   for (let k = todayKey; k <= horizon; k = shiftKey(k, 1)) {
@@ -690,7 +743,7 @@ function MoveCal({ slug, token, onMoved }: { slug: string; token: string; onMove
             </div>
           </BookMonth>
           )}
-          {!day && !slots.length ? <p>In den nächsten 4 Wochen ist nichts frei.</p> : null}
+          {!day && !slots.length ? <p>In den nächsten 6 Monaten ist nichts frei.</p> : null}
         </div>
       )}
     </div>

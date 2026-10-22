@@ -1290,6 +1290,7 @@ export function HoursPage() {
   const [hex, setHex] = useState("#006478");
   const [err, setErr] = useState("");
   const [pending, setPending] = useState(false);
+  const [saved, setSaved] = useState({ contact: false, hours: false, mail: false });
   useEffect(() => {
     if (!boot || rows.length) return;
     setSign(boot.tenant.mailSign ?? "");
@@ -1326,30 +1327,35 @@ export function HoursPage() {
         <div className="card-body">
           <label className="field">
             <span>Adresse</span>
-            <textarea value={address} onChange={(e) => setAddress(e.target.value)} placeholder={"Musterstraße 1\n12345 Berlin"} />
+            <textarea data-tour="contact-address" value={address} onChange={(e) => setAddress(e.target.value)} placeholder={"Musterstraße 1\n12345 Berlin"} />
           </label>
           <label className="field">
             <span>Telefon</span>
-            <input type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="030 12345678" />
+            <input data-tour="contact-phone" type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="030 12345678" />
           </label>
           <label className="field">
             <span>Kontakt-E-Mail</span>
-            <input type="email" value={mail} onChange={(e) => setMail(e.target.value)} placeholder="salon@example.de" />
+            <input data-tour="contact-mail" type="email" value={mail} onChange={(e) => setMail(e.target.value)} placeholder="salon@example.de" />
           </label>
           <label className="field">
             <span>Homepage</span>
-            <input type="url" value={website} onChange={(e) => setWebsite(e.target.value)} placeholder="https://salon.de" />
+            <input data-tour="contact-site" type="url" value={website} onChange={(e) => setWebsite(e.target.value)} placeholder="https://salon.de" />
           </label>
           <p className="hint-line">Die Telefonnummer steht im Buchungsfenster, wenn jemand online nicht mehr buchen darf.</p>
           <div className="hours-foot">
             <button
               className="btn"
               type="button"
+              data-tour="save-contact"
+              data-saved={saved.contact ? "1" : "0"}
               disabled={pending}
               onClick={() => {
                 setErr("");
                 setPending(true);
                 api.putContact({ address, phone, email: mail, website })
+                  .then(() => {
+                    if ([address, phone, mail, website].some((v) => v.trim())) setSaved((s) => ({ ...s, contact: true }));
+                  })
                   .catch((ex) => setErr(ex instanceof Error ? ex.message : "Speichern fehlgeschlagen."))
                   .finally(() => setPending(false));
               }}
@@ -1433,7 +1439,7 @@ export function HoursPage() {
         link={look.base}
       />
       <div className="firm-rest">
-      <details className="set-fold" open>
+      <details className="set-fold" open data-tour="hours">
         <summary>Öffnungszeiten</summary>
         {rows.map((r, i) => (
           <div className="hours-row" key={r.weekday}>
@@ -1446,7 +1452,17 @@ export function HoursPage() {
           </div>
         ))}
         <div className="hours-foot">
-          <button className="btn" type="button" onClick={() => api.putHours(rows.filter((r) => r.open).map(({ weekday, startHm, endHm }) => ({ weekday, startHm, endHm })))}>
+          <button
+            className="btn"
+            type="button"
+            data-tour="save-hours"
+            data-saved={saved.hours ? "1" : "0"}
+            onClick={() => {
+              api.putHours(rows.filter((r) => r.open).map(({ weekday, startHm, endHm }) => ({ weekday, startHm, endHm })))
+                .then(() => setSaved((s) => ({ ...s, hours: true })))
+                .catch((ex) => setErr(ex instanceof Error ? ex.message : "Speichern fehlgeschlagen."));
+            }}
+          >
             Speichern
           </button>
         </div>
@@ -1491,7 +1507,7 @@ export function HoursPage() {
         <div className="card-body">
           <label className="field">
             <span>Text am Ende jeder Mail</span>
-            <textarea value={sign} onChange={(e) => setSign(e.target.value)} placeholder={"Viele Grüße\nSalon Demo"} />
+            <textarea data-tour="mail-sign" value={sign} onChange={(e) => setSign(e.target.value)} placeholder={"Viele Grüße\nSalon Demo"} />
           </label>
           <p className="hint-line">Ohne eigenes Bild steht das Logo unten in der Mail.</p>
           {boot.tenant.mailImageUrl ? <img className="logo-preview" src={boot.tenant.mailImageUrl} alt="" /> : null}
@@ -1528,11 +1544,16 @@ export function HoursPage() {
             <button
               className="btn"
               type="button"
+              data-tour="save-mail"
+              data-saved={saved.mail ? "1" : "0"}
               disabled={pending}
               onClick={() => {
                 setErr("");
                 setPending(true);
                 api.putMailSign(sign)
+                  .then(() => {
+                    if (sign.trim()) setSaved((s) => ({ ...s, mail: true }));
+                  })
                   .catch((ex) => setErr(ex instanceof Error ? ex.message : "Speichern fehlgeschlagen."))
                   .finally(() => setPending(false));
               }}

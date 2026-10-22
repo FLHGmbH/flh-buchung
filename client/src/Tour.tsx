@@ -12,7 +12,7 @@ const STEPS: Step[] = [
   {
     id: "intro", path: "", free: true,
     title: "Hallo und herzlich willkommen!",
-    why: "Wir richten jetzt gemeinsam alles ein, damit Gäste bei dir buchen können: Mitarbeiter, Kategorie, Leistung und dein erster Termin. Die Seiten wechselst du selbst.",
+    why: "Wir richten jetzt gemeinsam alles ein, damit Gäste bei dir buchen können: Mitarbeiter, Kategorie, Leistung, dein erster Termin und dein Unternehmen. Die Seiten wechselst du selbst.",
     text: "Du legst alles selbst an und klickst die Seiten in der Leiste selbst an. Klick auf Los geht's.",
   },
   {
@@ -58,6 +58,30 @@ const STEPS: Step[] = [
     text: "Klick auf + Neuer Termin und lege einen Termin an.",
   },
   {
+    id: "go-firm", path: "/app/zeiten", nav: "nav-firm",
+    title: "Zum Unternehmen",
+    why: "Kontaktdaten, Öffnungszeiten und der Text deiner Mails liegen hier.",
+    text: "Klick in der Seitenleiste auf Unternehmen.",
+  },
+  {
+    id: "contact", path: "/app/zeiten",
+    title: "Kontakt",
+    why: "Adresse, Telefon, E-Mail und Homepage sieht der Gast im Buchungsfenster und auf der Absagen-Seite.",
+    text: "Trag deine Daten ein und speichere.",
+  },
+  {
+    id: "hours", path: "/app/zeiten",
+    title: "Öffnungszeiten",
+    why: "Gäste können nur buchen, solange der Salon offen ist. Ein Tag ohne Haken ist geschlossen.",
+    text: "Prüf die Tage und Uhrzeiten und speichere.",
+  },
+  {
+    id: "mail", path: "/app/zeiten",
+    title: "E-Mail",
+    why: "Dieser Text steht am Ende jeder Mail an deine Gäste.",
+    text: "Klapp E-Mail auf, schreib den Text und speichere.",
+  },
+  {
     id: "go-dashboard", path: "/app/dashboard", nav: "nav-dashboard",
     title: "Zum Dashboard",
     why: "Zum Schluss siehst du die Übersicht deines Salons.",
@@ -80,7 +104,25 @@ function formId() {
 }
 
 function val(name: string) {
-  return document.querySelector<HTMLInputElement>(`[data-tour="${name}"]`)?.value.trim() ?? "";
+  return document.querySelector<HTMLInputElement | HTMLTextAreaElement>(`[data-tour="${name}"]`)?.value.trim() ?? "";
+}
+
+const CONTACT = ["contact-address", "contact-phone", "contact-mail", "contact-site"];
+
+function focused(names: string[]) {
+  return names.find((n) => document.activeElement === qs(n)) ?? null;
+}
+
+function shownEl(name: string) {
+  const el = qs(name);
+  const box = el?.closest("details");
+  if (box instanceof HTMLDetailsElement && !box.open) return box.querySelector<HTMLElement>("summary");
+  return el;
+}
+
+function folded(name: string) {
+  const box = qs(name)?.closest("details");
+  return box instanceof HTMLDetailsElement && !box.open;
 }
 
 function slideOf() {
@@ -111,6 +153,17 @@ function spot(step: Step) {
     if (slide === "2") return qs("save-service");
     return qs("add-service");
   }
+  if (step.id === "contact") {
+    const hit = focused(CONTACT);
+    if (hit) return shownEl(hit);
+    if (!CONTACT.some((n) => val(n))) return shownEl("contact-address");
+    return shownEl("save-contact");
+  }
+  if (step.id === "hours") return shownEl("hours");
+  if (step.id === "mail") {
+    if (!val("mail-sign") || document.activeElement === qs("mail-sign")) return shownEl("mail-sign");
+    return shownEl("save-mail");
+  }
   if (qs("staff-name")) return done("staff-name") ? qs("save-staff") : qs("staff-name");
   return qs("add-staff");
 }
@@ -132,6 +185,20 @@ function cue(step: Step, path: string) {
   if (step.id === "booking" && formId() === "") {
     return done("guest-name") ? "Termin erstellen legt deinen Termin in den Kalender." : val("guest-name") ? "Passt alles? Dann klick auf Termin erstellen." : "Wähle Datum und Leistung und trag den Gast ein.";
   }
+  if (step.id === "contact") {
+    if (folded("contact-address")) return "Klick auf Kontakt, um die Felder aufzuklappen.";
+    if (focused(CONTACT) || !CONTACT.some((n) => val(n))) return "Trag Adresse, Telefon, E-Mail oder Homepage ein.";
+    return "Speichern übernimmt die Kontaktdaten.";
+  }
+  if (step.id === "hours") {
+    if (folded("hours")) return "Klick auf Öffnungszeiten.";
+    return "Haken auf, Uhrzeit setzen, dann Speichern. Ohne Haken ist der Tag geschlossen.";
+  }
+  if (step.id === "mail") {
+    if (folded("mail-sign")) return "Klick auf E-Mail, um den Text aufzuklappen.";
+    if (!val("mail-sign") || document.activeElement === qs("mail-sign")) return "Schreib den Text, der am Ende jeder Mail steht.";
+    return "Speichern hängt den Text an jede Mail.";
+  }
   return step.text;
 }
 
@@ -142,6 +209,9 @@ function finished(step: Step, boot: Bootstrap, rows: Booking[], base: Base, path
   if (step.id === "category") return boot.categories.length > base.cats;
   if (step.id === "service") return boot.services.length > base.svcs;
   if (step.id === "booking") return rows.some((b) => !base.ids.has(b.id) && b.status !== "cancelled");
+  if (step.id === "contact") return qs("save-contact")?.getAttribute("data-saved") === "1" && CONTACT.some((n) => val(n));
+  if (step.id === "hours") return qs("save-hours")?.getAttribute("data-saved") === "1";
+  if (step.id === "mail") return qs("save-mail")?.getAttribute("data-saved") === "1" && val("mail-sign") !== "";
   return false;
 }
 
@@ -222,7 +292,7 @@ export function Tour({ onClose }: { onClose: () => void }) {
       });
     };
     const mo = new MutationObserver(bump);
-    mo.observe(document.body, { subtree: true, childList: true, attributes: true, attributeFilter: ["data-slide", "data-id", "disabled"] });
+    mo.observe(document.body, { subtree: true, childList: true, attributes: true, attributeFilter: ["data-slide", "data-id", "data-saved", "disabled", "open"] });
     document.addEventListener("input", bump, true);
     document.addEventListener("focusout", bump, true);
     window.addEventListener("resize", bump);

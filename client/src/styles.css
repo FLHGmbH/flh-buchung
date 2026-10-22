@@ -1824,6 +1824,7 @@ body:has(.book-fit) #root {
 .storno-addr { white-space: pre-line; }
 .book .lead { margin: 0 0 1.5rem; color: var(--graphite-75); text-align: center; }
 .book .btn { width: 100%; margin-top: 0.25rem; }
+.book altcha-widget { display: block; margin: 0.85rem 0 0.15rem; }
 .book .book-back {
   width: auto;
   align-self: flex-start;

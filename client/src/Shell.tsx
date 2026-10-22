@@ -115,7 +115,7 @@ export function Shell({ actor, onLogout }: { actor: Actor; onLogout: () => void 
               {link("/app/mitarbeiter", "Mitarbeiter", "nav-staff")}
               {link("/app/sperren", "Sperren")}
               {link("/app/leistungen", "Leistungen", "nav-services")}
-              {link("/app/zeiten", "Unternehmen")}
+              {link("/app/zeiten", "Unternehmen", "nav-firm")}
             </>
           ) : (
             <>

@@ -327,7 +327,9 @@ async function listChanges(token: string, calendarId: string, syncToken: string)
     if (page) q.set("pageToken", page);
     else if (full) {
       q.set("timeMin", new Date(Date.now() - 24 * 3600_000).toISOString());
-      q.set("timeMax", new Date(Date.now() + 120 * 24 * 3600_000).toISOString());
+      const far = new Date();
+      far.setMonth(far.getMonth() + 6);
+      q.set("timeMax", far.toISOString());
     } else q.set("syncToken", syncToken);
     const res = await gapi(token, `/calendars/${encodeURIComponent(calendarId)}/events?${q}`);
     if (res.status === 410 && !full) return { reset: true, items: [], sync: "" };
