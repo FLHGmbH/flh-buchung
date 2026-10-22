@@ -93,18 +93,24 @@ export function BookPage() {
   const [done, setDone] = useState<{ id: string; startsAt: string } | null>(null);
   const [privacy, setPrivacy] = useState(false);
   const [proof, setProof] = useState("");
+  const [checking, setChecking] = useState(false);
+  const [asked, setAsked] = useState(false);
   const [pending, setPending] = useState(false);
   const host = useRef<HTMLDivElement>(null);
-  const box = useRef<(HTMLElement & { reset?: () => void }) | null>(null);
-  const canSend = privacy && proof !== "" && guestMail(guest.guestEmail) && guestPhone(guest.guestPhone);
+  const box = useRef<(HTMLElement & { reset?: () => void; verify?: () => void }) | null>(null);
+  const nameOk = guest.guestName.trim() !== "";
+  const mailOk = guestMail(guest.guestEmail);
+  const phoneOk = guestPhone(guest.guestPhone);
 
   useEffect(() => {
     const parent = host.current;
     if (step !== 5 || !parent) return;
     setProof("");
-    const el = document.createElement("altcha-widget") as HTMLElement & { reset?: () => void };
+    setChecking(true);
+    const el = document.createElement("altcha-widget") as HTMLElement & { reset?: () => void; verify?: () => void };
     el.setAttribute("challenge", `/api/public/${slug}/altcha`);
     el.setAttribute("language", "de");
+    el.setAttribute("auto", "onload");
     parent.replaceChildren(el);
     box.current = el;
     const onVerified = (ev: Event) => {
@@ -113,6 +119,7 @@ export function BookPage() {
     };
     const onState = (ev: Event) => {
       const state = (ev as CustomEvent<{ state?: string }>).detail?.state;
+      setChecking(state === "verifying");
       if (state === "expired" || state === "error" || state === "unverified") setProof("");
     };
     el.addEventListener("verified", onVerified);
@@ -476,21 +483,13 @@ export function BookPage() {
 
       {step === 5 && slot && (
         <form
+          noValidate
           onSubmit={(e) => {
             e.preventDefault();
-            if (!privacy) return;
-            if (!guestMail(guest.guestEmail)) {
-              setErr("Bitte eine gültige E-Mail angeben.");
-              return;
-            }
-            if (!guestPhone(guest.guestPhone)) {
-              setErr("Bitte eine gültige Telefonnummer angeben.");
-              return;
-            }
             const filed = new FormData(e.currentTarget).get("altcha");
             const altcha = typeof filed === "string" && filed ? filed : proof;
-            if (!altcha) {
-              setErr("Bitte die Sicherheitsprüfung abschließen.");
+            if (!nameOk || !mailOk || !phoneOk || !privacy || !altcha) {
+              setAsked(true);
               return;
             }
             setErr("");
@@ -511,26 +510,31 @@ export function BookPage() {
               .catch((ex) => {
                 noteErr(ex);
                 setProof("");
+                setChecking(true);
                 box.current?.reset?.();
+                box.current?.verify?.();
               })
               .finally(() => setPending(false));
           }}
         >
           <p className="book-when">{new Date(slot.start).toLocaleDateString("de-DE", { weekday: "short", day: "numeric", month: "short" })} · {chainClock(slot.start, ids, pub.services)}</p>
-          <label className="field"><span>Name</span><input required value={guest.guestName} onChange={(e) => setGuest({ ...guest, guestName: e.target.value })} placeholder="Max Mustermann" /></label>
+          <label className="field">
+            <span>Name</span>
+            <input aria-invalid={asked && !nameOk} value={guest.guestName} onChange={(e) => setGuest({ ...guest, guestName: e.target.value })} placeholder="Max Mustermann" />
+            {asked && !nameOk ? <small className="err">Bitte einen Namen angeben.</small> : null}
+          </label>
           <label className="field">
             <span>E-Mail</span>
             <input
               type="email"
-              required
               inputMode="email"
               autoComplete="email"
-              aria-invalid={guest.guestEmail.trim() !== "" && !guestMail(guest.guestEmail)}
+              aria-invalid={(asked || guest.guestEmail.trim() !== "") && !mailOk}
               value={guest.guestEmail}
               onChange={(e) => setGuest({ ...guest, guestEmail: e.target.value })}
               placeholder="max@mustermann.de"
             />
-            {guest.guestEmail.trim() && !guestMail(guest.guestEmail) ? <small className="err">Bitte eine gültige E-Mail, zum Beispiel max@mustermann.de.</small> : null}
+            {(asked || guest.guestEmail.trim() !== "") && !mailOk ? <small className="err">Bitte eine gültige E-Mail, zum Beispiel max@mustermann.de.</small> : null}
           </label>
           <label className="field">
             <span>Telefon</span>
@@ -538,23 +542,25 @@ export function BookPage() {
               type="tel"
               inputMode="tel"
               autoComplete="tel"
-              aria-invalid={guest.guestPhone.trim() !== "" && !guestPhone(guest.guestPhone)}
+              aria-invalid={(asked || guest.guestPhone.trim() !== "") && !phoneOk}
               value={guest.guestPhone}
               onChange={(e) => setGuest({ ...guest, guestPhone: e.target.value })}
               placeholder="0151 12345678"
             />
-            {guest.guestPhone.trim() && !guestPhone(guest.guestPhone) ? <small className="err">Bitte eine gültige Telefonnummer, zum Beispiel 0151 12345678.</small> : null}
+            {(asked || guest.guestPhone.trim() !== "") && !phoneOk ? <small className="err">Bitte eine gültige Telefonnummer, zum Beispiel 0151 12345678.</small> : null}
           </label>
           <label className="field"><span>Notiz</span><textarea value={guest.note} onChange={(e) => setGuest({ ...guest, note: e.target.value })} /></label>
           <p className="legal-note">Unverbindlicher Termin. Genannte Preise können abweichen und dienen nur zur Orientierung.</p>
-          <label className="check agree">
-            <input type="checkbox" checked={privacy} onChange={(e) => setPrivacy(e.target.checked)} required />
+          <label className={"check agree" + (asked && !privacy ? " is-miss" : "")}>
+            <input type="checkbox" checked={privacy} onChange={(e) => setPrivacy(e.target.checked)} />
             <span>
               Ich habe die <a href={`/b/${slug}/datenschutz`} target="_blank" rel="noreferrer">Datenschutzerklärung</a> gelesen. {pub.tenant.name} darf Name und E-Mail für diesen Termin speichern.
             </span>
           </label>
-          <div ref={host} />
-          <button className={canSend ? "btn" : "btn is-hold"} disabled={pending || !canSend} type="submit">{pending ? "Wird gebucht…" : "Termin buchen"}</button>
+          {asked && !privacy ? <small className="err">Bitte die Datenschutzerklärung bestätigen.</small> : null}
+          <div ref={host} className={asked && !proof ? "altcha-host is-miss" : "altcha-host"} />
+          {asked && !proof ? <small className="err">{checking ? "Die Sicherheitsprüfung läuft noch." : "Die Sicherheitsprüfung fehlt noch."}</small> : null}
+          <button className="btn" disabled={pending} type="submit">{pending ? "Wird gebucht…" : "Termin buchen"}</button>
         </form>
       )}
 

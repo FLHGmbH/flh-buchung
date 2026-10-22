@@ -279,6 +279,7 @@ a { color: var(--petrol); }
   max-width: 100%;
   min-height: 44px;
 }
+.field input[aria-invalid="true"] { border-color: var(--danger); }
 .field input[type="email"],
 .field input[type="password"] { padding-inline-end: 2.4rem; }
 .field input::placeholder,
@@ -1825,6 +1826,10 @@ body:has(.book-fit) #root {
 .book .lead { margin: 0 0 1.5rem; color: var(--graphite-75); text-align: center; }
 .book .btn { width: 100%; margin-top: 0.25rem; }
 .book altcha-widget { display: block; margin: 0.85rem 0 0.15rem; }
+.book .altcha-host.is-miss { outline: 2px solid var(--danger); outline-offset: 3px; border-radius: 10px; }
+.book .check.agree.is-miss { color: var(--danger); }
+.book .check.agree.is-miss a { color: inherit; }
+.book .field .err, .book form > .err { display: block; margin: 0.15rem 0 0.65rem; }
 .book .book-back {
   width: auto;
   align-self: flex-start;
