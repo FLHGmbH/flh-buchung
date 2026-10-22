@@ -143,11 +143,14 @@ async function database() {
   return import("./db.ts");
 }
 
+const GOOGLE_MS = 8_000;
+
 async function postForm(url: string, body: URLSearchParams) {
   const res = await fetch(url, {
     method: "POST",
     headers: { "content-type": "application/x-www-form-urlencoded" },
     body,
+    signal: AbortSignal.timeout(GOOGLE_MS),
   });
   const data = (await res.json().catch(() => ({}))) as { access_token?: string; refresh_token?: string; expires_in?: number; error?: string };
   if (!res.ok || data.error) throw new Error(data.error || "Google");
@@ -172,7 +175,8 @@ async function accessToken(tid: string, refresh: string) {
 async function gapi(token: string, path: string, init?: RequestInit) {
   const headers: Record<string, string> = { authorization: `Bearer ${token}` };
   if (init?.body) headers["content-type"] = "application/json";
-  return fetch(`https://www.googleapis.com/calendar/v3${path}`, { ...init, headers });
+  // ponytail: one hung socket used to hold the request until Vercel killed it at 30s. 8s is the ceiling; a retry rides the next pull.
+  return fetch(`https://www.googleapis.com/calendar/v3${path}`, { ...init, headers, signal: AbortSignal.timeout(GOOGLE_MS) });
 }
 
 async function linkOf(tid: string) {
@@ -297,6 +301,17 @@ export async function disconnectGoogle(tid: string) {
 }
 
 const pulled = new Map<string, number>();
+const flying = new Map<string, Promise<GooglePull>>();
+
+type GooglePull = {
+  cancelled: string[];
+  moved: { id: string; startsAt: Date; endsAt: Date }[];
+  changed: boolean;
+};
+
+function emptyPull(): GooglePull {
+  return { cancelled: [], moved: [], changed: false };
+}
 
 function overlap(e: unknown) {
   return typeof e === "object" && e !== null && "code" in e && (e as { code: string }).code === "23P01";
@@ -327,15 +342,25 @@ async function listChanges(token: string, calendarId: string, syncToken: string)
   return { reset: false, items, sync: syncToken };
 }
 
-export async function pullGoogle(tid: string) {
-  const none = { cancelled: [] as string[], moved: [] as { id: string; startsAt: Date; endsAt: Date }[] };
-  if (!googleConfigured()) return none;
+export function pullGoogle(tid: string) {
+  const run = flying.get(tid);
+  if (run) return run.then((hit) => ({ cancelled: [] as string[], moved: [] as GooglePull["moved"], changed: hit.changed }));
+  const p = pullOnce(tid).finally(() => {
+    if (flying.get(tid) === p) flying.delete(tid);
+  });
+  flying.set(tid, p);
+  return p;
+}
+
+async function pullOnce(tid: string) {
+  if (!googleConfigured()) return emptyPull();
   const last = pulled.get(tid) ?? 0;
-  if (Date.now() - last < 20_000) return none;
-  const mail = { cancelled: [] as string[], moved: [] as { id: string; startsAt: Date; endsAt: Date }[] };
+  if (Date.now() - last < 20_000) return emptyPull();
+  const mail = emptyPull();
   try {
     const link = await linkOf(tid);
-    if (!link?.calendarId) return none;
+    if (!link?.calendarId) return emptyPull();
+    await drainGoogle(tid, 1);
     const access = await accessToken(tid, openToken(link.refreshToken, cfg().secret));
     let listed = await listChanges(access, link.calendarId, link.syncToken);
     if (listed.reset) listed = await listChanges(access, link.calendarId, "");
@@ -352,6 +377,7 @@ export async function pullGoogle(tid: string) {
         if (cur && cur.status !== "cancelled") {
           await db.update(bookings).set({ status: "cancelled", googleDirty: false }).where(eq(bookings.id, cur.id));
           mail.cancelled.push(cur.id);
+          mail.changed = true;
         }
         continue;
       }
@@ -361,6 +387,7 @@ export async function pullGoogle(tid: string) {
         if (sameTime && cur.guestName === ev.guestName) continue;
         try {
           await db.update(bookings).set({ startsAt: ev.start, endsAt: ev.end, guestName: ev.guestName }).where(eq(bookings.id, cur.id));
+          mail.changed = true;
           if (!sameTime) mail.moved.push({ id: cur.id, startsAt: cur.startsAt, endsAt: cur.endsAt });
         } catch (e) {
           if (!overlap(e)) throw e;
@@ -382,6 +409,7 @@ export async function pullGoogle(tid: string) {
           googleEventId: ev.id,
           googleDirty: false,
         });
+        mail.changed = true;
       } catch (e) {
         if (!overlap(e)) throw e;
       }
@@ -393,7 +421,8 @@ export async function pullGoogle(tid: string) {
     return mail;
   } catch (e) {
     console.error("google pull", e instanceof Error ? e.message : e);
-    return none;
+    pulled.set(tid, Date.now());
+    return mail;
   }
 }
 

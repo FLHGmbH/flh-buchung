@@ -8,7 +8,7 @@ import { actorFrom, actorFromEmail, actorFromUserId, createSession, destroySessi
 import { db } from "./db.ts";
 import { brandHex } from "./brand.ts";
 import { BOOK_MAX, LEN, LOGIN_MAX, PIN_MAX, WINDOW_MS, bookWindow, clip, clientIp, hoursWithin, inIntRange, limited, logoKind, passwordOk, priceQuote, readJson, sbConfigured, serviceMins, siteOrigin } from "./guard.ts";
-import { chooseCalendar, connectGoogle, disconnectGoogle, drainGoogle, googleAuthUrl, googleCalendars, googleConfigured, googleStatus, pullGoogle, readState, syncBooking } from "./google.ts";
+import { chooseCalendar, connectGoogle, disconnectGoogle, googleAuthUrl, googleCalendars, googleConfigured, googleStatus, pullGoogle, readState, syncBooking } from "./google.ts";
 import { blockedGuest, guestMail, guestPhone } from "./guest.ts";
 import { newCancelToken, PIN_MS, sendConfirmMail, sendGuestInfo } from "./mail.ts";
 import {
@@ -705,10 +705,9 @@ async function tellGuest(reqUrl: string, tid: string, kind: "move" | "cancel", r
   }
 }
 
-async function mirror(id: string, tid: string) {
+async function mirror(id: string, _tid: string) {
   if (!googleConfigured()) return;
   await syncBooking(id);
-  await drainGoogle(tid, 3);
 }
 
 async function absorbGoogle(reqUrl: string, tid: string) {
@@ -721,6 +720,7 @@ async function absorbGoogle(reqUrl: string, tid: string) {
     const [row] = await db.select().from(bookings).where(and(eq(bookings.id, move.id), eq(bookings.tenantId, tid))).limit(1);
     if (row) await tellGuest(reqUrl, tid, "move", row, { startsAt: move.startsAt, endsAt: move.endsAt });
   }
+  return hit.changed;
 }
 
 api.get("/app/google", async (c) => {
@@ -769,6 +769,11 @@ api.get("/app/google/callback", async (c) => {
   return back(ok ? "verbunden" : "fehler");
 });
 
+api.get("/app/google/pull", async (c) => {
+  const changed = await absorbGoogle(c.req.url, tenantId(c));
+  return c.json({ changed });
+});
+
 api.get("/app/bootstrap", async (c) => {
   const tid = tenantId(c);
   const [tenant] = await db.select().from(tenants).where(eq(tenants.id, tid)).limit(1);
@@ -804,7 +809,6 @@ api.get("/app/week", async (c) => {
   const span = Number.isInteger(asked) && asked >= 1 && asked <= 42 ? asked : 7;
   const from = day.startOf("day");
   const to = from.plus({ days: span - 1 }).endOf("day");
-  await absorbGoogle(c.req.url, tid);
   const books = await db
     .select(bookingCols)
     .from(bookings)
@@ -1325,7 +1329,6 @@ async function bookingFields(tid: string, body: {
 
 api.get("/app/bookings", async (c) => {
   const tid = tenantId(c);
-  await absorbGoogle(c.req.url, tid);
   const rows = await db
     .select(bookingCols)
     .from(bookings)
@@ -1694,7 +1697,6 @@ async function sealBookings(reqUrl: string, tenant: { id: string; name: string; 
   if (googleConfigured()) {
     try {
       for (const made of updated) await syncBooking(made.id);
-      await drainGoogle(tenant.id, 3);
     } catch (e) {
       console.error("google sync", e instanceof Error ? e.message : e);
     }

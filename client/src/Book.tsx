@@ -629,6 +629,36 @@ function MoveCal({ slug, token, onMoved }: { slug: string; token: string; onMove
       {err ? <p className="err" role="alert">{err}</p> : null}
       {loading ? <DayBones /> : (
         <div className="storno-cal">
+          {day ? (
+            <>
+              <button className="btn outline book-back" type="button" onClick={() => { setDay(""); setPick(""); }}>Zurück</button>
+              <p className="storno-day">{dayLabel(day, { weekday: "long", day: "numeric", month: "long" })}</p>
+              <div className="slots">
+                {daySlots.map((s) => (
+                  <button key={s.start} className={"choice" + (pick === s.start ? " amber" : "")} type="button" onClick={() => setPick(s.start)}>
+                    {new Date(s.start).toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" })}
+                  </button>
+                ))}
+              </div>
+              {pick ? (
+                <button
+                  className="btn"
+                  type="button"
+                  disabled={pending}
+                  onClick={() => {
+                    setPending(true);
+                    setErr("");
+                    api.moveStorno(slug, token, pick)
+                      .then(onMoved)
+                      .catch((e: Error) => setErr(e.message))
+                      .finally(() => setPending(false));
+                  }}
+                >
+                  {pending ? "Wird verschoben…" : "Auf diese Uhrzeit verschieben"}
+                </button>
+              ) : null}
+            </>
+          ) : (
           <BookMonth month={month}>
             <div className="book-cal-bar">
               <button type="button" aria-label="Vorheriger Monat" disabled={months.indexOf(month) <= 0} onClick={() => setMonthYm(months[months.indexOf(month) - 1] ?? month)}>‹</button>
@@ -659,33 +689,8 @@ function MoveCal({ slug, token, onMoved }: { slug: string; token: string; onMove
               })}
             </div>
           </BookMonth>
-          {day ? (
-            <div className="slots">
-              {daySlots.map((s) => (
-                <button key={s.start} className={"choice" + (pick === s.start ? " amber" : "")} type="button" onClick={() => setPick(s.start)}>
-                  {new Date(s.start).toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" })}
-                </button>
-              ))}
-            </div>
-          ) : null}
-          {!slots.length ? <p>In den nächsten 4 Wochen ist nichts frei.</p> : null}
-          {pick ? (
-            <button
-              className="btn"
-              type="button"
-              disabled={pending}
-              onClick={() => {
-                setPending(true);
-                setErr("");
-                api.moveStorno(slug, token, pick)
-                  .then(onMoved)
-                  .catch((e: Error) => setErr(e.message))
-                  .finally(() => setPending(false));
-              }}
-            >
-              {pending ? "Wird verschoben…" : "Auf diese Uhrzeit verschieben"}
-            </button>
-          ) : null}
+          )}
+          {!day && !slots.length ? <p>In den nächsten 4 Wochen ist nichts frei.</p> : null}
         </div>
       )}
     </div>

@@ -1786,6 +1786,8 @@ body:has(.book-fit) #root {
 .storno-cal .book-cal-bar button { width: 36px; height: 36px; }
 .storno-move .slots { margin-bottom: 0.75rem; }
 .storno-move .btn { width: 100%; }
+.storno-move .btn.book-back { width: auto; margin: 0 0 0.75rem; }
+.login .storno-move .storno-day { margin: 0 0 0.75rem; font-weight: 700; color: var(--graphite); text-align: left; }
 .login .storno-stack .panel { width: 100%; }
 .flh-credit {
   display: flex;

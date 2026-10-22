@@ -84,15 +84,30 @@ function inflight<T>(path: string): Promise<T> {
   return p;
 }
 
+function refresh(path: string) {
+  const n = (gen.get(path) ?? 0) + 1;
+  gen.set(path, n);
+  const p = req(path).then(
+    (d) => {
+      if ((gen.get(path) ?? 0) !== n) return d;
+      mem.set(path, d);
+      wait.delete(path);
+      bump();
+      return d;
+    },
+    () => {
+      if ((gen.get(path) ?? 0) === n) wait.delete(path);
+    },
+  );
+  wait.set(path, p);
+}
+
 export function useFresh(path: string | null) {
   useEffect(() => {
     if (!path) return;
     const kick = () => {
       if (document.visibilityState !== "visible") return;
-      gen.set(path, (gen.get(path) ?? 0) + 1);
-      mem.delete(path);
-      wait.delete(path);
-      bump();
+      refresh(path);
     };
     const timer = window.setInterval(kick, 45_000);
     document.addEventListener("visibilitychange", kick);
@@ -131,23 +146,7 @@ export function useApi<T>(path: string | null) {
 function bust(prefix: string) {
   // ponytail: drop responses that started before this bust. A still-running prefetch must not repaint the old week.
   const keys = new Set([...mem.keys(), ...wait.keys()].filter((k) => k.startsWith(prefix)));
-  for (const k of keys) {
-    const n = (gen.get(k) ?? 0) + 1;
-    gen.set(k, n);
-    const p = req(k).then(
-      (d) => {
-        if ((gen.get(k) ?? 0) !== n) return d;
-        mem.set(k, d);
-        wait.delete(k);
-        bump();
-        return d;
-      },
-      () => {
-        if ((gen.get(k) ?? 0) === n) wait.delete(k);
-      },
-    );
-    wait.set(k, p);
-  }
+  for (const k of keys) refresh(k);
 }
 
 function dayKey(iso: string, tz: string) {

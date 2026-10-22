@@ -44,8 +44,11 @@ export function LiveBookings() {
   const drop = useCallback((id: string) => setToasts((list) => list.filter((t) => t.id !== id)), []);
   useEffect(() => {
     let on = true;
+    let toastBusy = false;
+    let pullBusy = false;
     async function tick() {
-      if (document.visibilityState === "hidden") return;
+      if (!on || toastBusy || document.visibilityState === "hidden") return;
+      toastBusy = true;
       try {
         const r = await fetch("/api/app/pulse", { credentials: "include" });
         if (!r.ok || !on) return;
@@ -62,16 +65,39 @@ export function LiveBookings() {
         api.sync();
       } catch {
         /* nächster Tick */
+      } finally {
+        toastBusy = false;
+      }
+    }
+    async function pull() {
+      if (!on || pullBusy || document.visibilityState === "hidden") return;
+      pullBusy = true;
+      try {
+        const r = await fetch("/api/app/google/pull", { credentials: "include" });
+        if (!r.ok || !on) return;
+        const data = (await r.json()) as { changed?: boolean };
+        if (data.changed) api.sync();
+      } catch {
+        /* nächster Zug */
+      } finally {
+        pullBusy = false;
       }
     }
     // ponytail: poll instead of a socket; Vercel drops long-lived streams. Drop the interval if realtime lands.
     tick();
+    pull();
     const id = setInterval(tick, 4000);
-    const wake = () => { if (document.visibilityState === "visible") tick(); };
+    const gid = setInterval(pull, 15_000);
+    const wake = () => {
+      if (document.visibilityState !== "visible") return;
+      tick();
+      pull();
+    };
     document.addEventListener("visibilitychange", wake);
     return () => {
       on = false;
       clearInterval(id);
+      clearInterval(gid);
       document.removeEventListener("visibilitychange", wake);
     };
   }, []);
