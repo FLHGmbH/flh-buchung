@@ -409,6 +409,7 @@ export function StaffPage() {
   const [err, setErr] = useState("");
   const [pending, setPending] = useState(false);
   const [askDel, setAskDel] = useState(false);
+  const [hoursSaved, setHoursSaved] = useState(false);
   const who = boot?.staff.find((s) => s.id === sel) ?? null;
   const upcoming = useMemo(() => {
     if (!who || !list) return [];
@@ -420,18 +421,18 @@ export function StaffPage() {
   if (!boot) return <Skel kind="staff" />;
   const cover = edit ? otherBlocks(edit.id, boot.staff, boot.hours, boot.staffHours ?? []) : null;
   return (
-    <div className="page">
+    <div className="page" data-tour="staff-saved" data-saved={hoursSaved ? "1" : "0"}>
       <PageHead
         title="Mitarbeiter"
         aside={<button className="btn" type="button" data-tour="add-staff" onClick={() => { setColor(STAFF_COLORS[boot.staff.length % STAFF_COLORS.length]); setOpen(true); }}>+ Mitarbeiter</button>}
       />
       <div className="staff-grid">
-        {boot.staff.map((s) => {
+        {boot.staff.map((s, index) => {
           const abs = nextOff(s.id, off?.timeOff ?? []);
           const sick = /krank/i.test(abs?.reason ?? "");
           return (
             <article className={"staff-card" + (sel === s.id ? " on" : "")} key={s.id}>
-              <button className="gear" type="button" aria-label="Einstellungen" onClick={() => { setErr(""); setHmDay(null); const saved = (boot.staffHours ?? []).filter((h) => h.staffId === s.id); setEdit({ id: s.id, name: s.name, active: s.active, photoUrl: s.photoUrl, color: staffColor(s), custom: saved.length > 0, rows: shiftRows(saved, boot.hours) }); }}>
+              <button className="gear" type="button" aria-label="Einstellungen" data-tour={index === 0 ? "edit-staff" : undefined} onClick={() => { setErr(""); setHmDay(null); const saved = (boot.staffHours ?? []).filter((h) => h.staffId === s.id); setEdit({ id: s.id, name: s.name, active: s.active, photoUrl: s.photoUrl, color: staffColor(s), custom: saved.length > 0, rows: shiftRows(saved, boot.hours) }); }}>
                 ⚙
               </button>
               <button
@@ -556,6 +557,7 @@ export function StaffPage() {
         <Modal title="Mitarbeiter-Einstellungen" wide onClose={() => setEdit(null)}>
           <form
             className="staff-set"
+            data-tour="staff-set"
             onSubmit={(e) => {
               e.preventDefault();
               setErr("");
@@ -568,7 +570,10 @@ export function StaffPage() {
               Promise.all([
                 api.patchStaff(edit.id, { name: edit.name, active: edit.active, color: edit.color }),
                 api.putStaffHours(edit.id, hours),
-              ]).then(() => setEdit(null)).catch((ex) => setErr(ex instanceof Error ? ex.message : "Speichern fehlgeschlagen.")).finally(() => setPending(false));
+              ]).then(() => {
+                if (hours.length) setHoursSaved(true);
+                setEdit(null);
+              }).catch((ex) => setErr(ex instanceof Error ? ex.message : "Speichern fehlgeschlagen.")).finally(() => setPending(false));
             }}
           >
             {err ? <p className="err" role="alert">{err}</p> : null}
@@ -639,7 +644,7 @@ export function StaffPage() {
               <summary>Farbe & Status</summary>
               <div className="card-body">
                 <ColorPick value={edit.color} onChange={(c) => setEdit({ ...edit, color: c })} />
-                <label className="check">
+                <label className="check" data-tour="staff-active">
                   <input type="checkbox" checked={edit.active} onChange={(e) => setEdit({ ...edit, active: e.target.checked })} />
                   Aktiv (im Kalender und bei Online-Buchungen verfügbar)
                 </label>
@@ -649,14 +654,14 @@ export function StaffPage() {
             <details className="set-fold" open>
               <summary>Arbeitszeiten</summary>
               <div className="card-body">
-                <label className="check">
+                <label className="check" data-tour="staff-custom">
                   <input type="checkbox" checked={edit.custom} onChange={(e) => setEdit({ ...edit, custom: e.target.checked })} />
                   Eigene Arbeitszeiten. Ohne Haken gelten die Öffnungszeiten.
                 </label>
                 {edit.custom ? (
                   <>
                     <p className="shift-hint">Tag oben anhaken. Zeiten im Balken per Doppelklick ändern. Grau: andere sind da.</p>
-                    <div className="shift-week" role="group" aria-label="Arbeitszeiten">
+                    <div className="shift-week" role="group" aria-label="Arbeitszeiten" data-tour="staff-shifts">
                       <div className="shift-scale" aria-hidden="true">
                         <ol>
                           {["0", "6", "12", "18", "24"].map((h) => <li key={h}>{h}</li>)}
@@ -734,7 +739,7 @@ export function StaffPage() {
 
             <div className="modal-foot">
               <button type="button" className="btn outline" onClick={() => setEdit(null)}>Abbrechen</button>
-              <button className="btn" type="submit" disabled={pending}>Speichern</button>
+              <button className="btn" type="submit" data-tour="save-staff-edit" disabled={pending}>Speichern</button>
             </div>
           </form>
         </Modal>
@@ -1097,7 +1102,7 @@ export function ServicesPage() {
                   <textarea maxLength={512} value={form.info} onChange={(e) => setForm({ ...form, info: e.target.value })} placeholder="z. B. Waschen und Föhnen inklusive" />
                   <small className="hint-line">{form.info.length}/512</small>
                 </label>
-                <div className="field">
+                <div className="field" data-tour="svc-cross">
                   <span>Zusammen buchbar (optional)</span>
                   <div className="cross-picks">
                     {[0, 1, 2].filter((i) => i === 0 || form.crossIds[i - 1]).map((i) => (

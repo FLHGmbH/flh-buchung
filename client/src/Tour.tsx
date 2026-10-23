@@ -28,6 +28,12 @@ const STEPS: Step[] = [
     text: "Klick auf + Mitarbeiter und lege dich oder dein Team an.",
   },
   {
+    id: "staff-hours", path: "/app/mitarbeiter",
+    title: "Arbeitszeiten",
+    why: "Eigene Arbeitszeiten legen fest, wann diese Person gebucht werden kann. Aktiv schaltet sie im Kalender und in der Online-Buchung frei.",
+    text: "Klick auf das Zahnrad, leg die Zeiten an und speichere.",
+  },
+  {
     id: "go-services", path: "/app/leistungen", nav: "nav-services",
     title: "Zu den Leistungen",
     why: "Kategorien und Leistungen liegen auf einer eigenen Seite.",
@@ -46,6 +52,12 @@ const STEPS: Step[] = [
     text: "Klick auf + Leistung und lege deine erste an.",
   },
   {
+    id: "cross", path: "/app/leistungen",
+    title: "Zusammen buchbar",
+    why: "Das ist Cross-Selling. Sobald mehrere Leistungen da sind, wählst du hier welche dazu passen.",
+    text: "Im letzten Schritt der Leistung. Der Gast kann sie im Buchungsfenster dazubuchen.",
+  },
+  {
     id: "go-calendar", path: "/app", nav: "nav-calendar",
     title: "Zum Kalender",
     why: "Den ersten Termin legst du im Kalender an.",
@@ -56,6 +68,12 @@ const STEPS: Step[] = [
     title: "Ersten Termin anlegen",
     why: "So siehst du, wie ein Termin im Kalender landet. Gäste buchen später genauso über deine Buchungsseite.",
     text: "Klick auf + Neuer Termin und lege einen Termin an.",
+  },
+  {
+    id: "drag", path: "/app",
+    title: "Termin verschieben",
+    why: "Einen bestehenden Termin ziehst du mit der Maus auf eine andere Uhrzeit oder einen anderen Tag.",
+    text: "In der Wochen- oder Tagesansicht fasst du den Termin an und ziehst ihn an die neue Stelle. Danach Weiter.",
   },
   {
     id: "go-firm", path: "/app/zeiten", nav: "nav-firm",
@@ -145,8 +163,24 @@ function spot(step: Step) {
     const slide = slideOf();
     if (slide === "0") return qs("svc-name");
     if (slide === "1") return qs("svc-staff");
-    if (slide === "2") return qs("save-service");
+    if (slide === "2") return qs("svc-cross");
     return qs("add-service");
+  }
+  if (step.id === "cross") {
+    if (slideOf() === "2") return qs("svc-cross");
+    if (slideOf() !== null) return qs("save-service");
+    return qs("add-service");
+  }
+  if (step.id === "drag") return document.querySelector<HTMLElement>(".day-col [data-tour='chip']") ?? qs("chip");
+  if (step.id === "staff-hours") {
+    if (!qs("staff-set")) return qs("edit-staff");
+    const custom = qs("staff-custom")?.querySelector("input");
+    if (!(custom instanceof HTMLInputElement && custom.checked)) return qs("staff-custom");
+    if (!qs("staff-shifts")?.querySelector("input[type=checkbox]:checked")) return qs("staff-shifts");
+    const active = qs("staff-active");
+    const box = active?.closest("details");
+    if (box instanceof HTMLDetailsElement && !box.open) return box.querySelector<HTMLElement>("summary");
+    return qs("save-staff-edit");
   }
   if (step.id === "contact") {
     const hit = focused(CONTACT);
@@ -194,7 +228,24 @@ function cue(step: Step, path: string, at: string) {
   if (step.id === "service") {
     if (at === "svc-name") return "Name, Dauer und Kategorie trägst du selbst ein. Danach Weiter im Formular.";
     if (at === "svc-staff") return "Wähl selbst, wer die Leistung machen darf. Danach Weiter im Formular.";
-    if (at === "save-service") return "Preis kannst du leer lassen. Speichern legt deine Leistung an.";
+    if (at === "svc-cross") return "Hier steht Zusammen buchbar. Gleich dazu mehr.";
+    return step.text;
+  }
+  if (step.id === "cross") {
+    if (at === "svc-cross") return "Sobald mehrere Leistungen da sind, wählst du hier bis zu drei aus. Das ist Cross-Selling. Speichern legt die Leistung an.";
+    if (at === "save-service") return "Weiter bis zum letzten Schritt. Dort steht Zusammen buchbar.";
+    return step.text;
+  }
+  if (step.id === "drag") {
+    return at === "chip" ? "Zieh den Termin auf eine andere Uhrzeit oder einen anderen Tag." : step.text;
+  }
+  if (step.id === "staff-hours") {
+    if (at === "edit-staff") return "Klick auf das Zahnrad, um den Mitarbeiter zu bearbeiten.";
+    if (at === "staff-custom") return "Haken setzen: eigene Arbeitszeiten statt der Öffnungszeiten.";
+    if (at === "staff-shifts") return "Tag anhaken. Die Uhrzeit im Balken per Doppelklick ändern.";
+    if (at.startsWith("sum:")) return "Klick auf Farbe & Status. Dort schaltest du Aktiv ein.";
+    if (at === "staff-active") return "Aktiv lässt die Person im Kalender und online buchen. Dann Speichern.";
+    if (at === "save-staff-edit") return "Speichern übernimmt Zeiten und Status.";
     return step.text;
   }
   if (step.id === "booking") {
@@ -223,10 +274,12 @@ function cue(step: Step, path: string, at: string) {
 
 function finished(step: Step, boot: Bootstrap, rows: Booking[], base: Base, path: string) {
   if (step.nav) return path === step.path;
-  if (step.id === "dashboard" || step.free) return true;
+  if (step.id === "dashboard" || step.id === "drag" || step.free) return true;
   if (step.id === "staff") return boot.staff.length > base.staff;
+  if (step.id === "staff-hours") return qs("staff-saved")?.getAttribute("data-saved") === "1";
   if (step.id === "category") return boot.categories.length > base.cats;
-  if (step.id === "service") return boot.services.length > base.svcs;
+  if (step.id === "service") return slideOf() === "2" || boot.services.length > base.svcs;
+  if (step.id === "cross") return boot.services.length > base.svcs;
   if (step.id === "booking") return rows.some((b) => !base.ids.has(b.id) && b.status !== "cancelled");
   if (step.id === "contact") return qs("save-contact")?.getAttribute("data-saved") === "1" && CONTACT.some((n) => val(n));
   if (step.id === "hours") return qs("save-hours")?.getAttribute("data-saved") === "1";
@@ -558,7 +611,7 @@ export function Tour({ onClose }: { onClose: () => void }) {
 
   // Done: a short green beat, then the tour moves on by itself.
   useEffect(() => {
-    if (!ready || !step || step.id === "dashboard" || step.free || !unready.current || jump.current) return;
+    if (!ready || !step || step.id === "dashboard" || step.id === "drag" || step.free || !unready.current || jump.current) return;
     const ring = ringRef.current;
     jump.current = true;
     ring?.classList.add("is-ok");
