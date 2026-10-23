@@ -49,15 +49,24 @@ export async function sbPassword(email: string, password: string) {
   return res.ok;
 }
 
-export async function sbRecover(email: string, redirectTo: string) {
-  const cfg = sbPublic();
-  if (!cfg) return false;
-  const res = await fetch(`${cfg.base}/auth/v1/recover?redirect_to=${encodeURIComponent(redirectTo)}`, {
+export async function sbRecoveryLink(email: string, redirectTo: string) {
+  const cfg = sbAdmin();
+  if (!cfg) return { url: "", missing: false };
+  const res = await fetch(`${cfg.base}/auth/v1/admin/generate_link`, {
     method: "POST",
-    headers: { apikey: cfg.key, authorization: `Bearer ${cfg.key}`, "content-type": "application/json", "redirect-to": redirectTo },
-    body: JSON.stringify({ email }),
+    headers: cfg.headers,
+    body: JSON.stringify({ type: "recovery", email, redirect_to: redirectTo }),
   });
-  return res.ok;
+  if (!res.ok) {
+    const text = await res.text().catch(() => "");
+    if (res.status === 404 || res.status === 422 || /not found|does not exist/i.test(text)) return { url: "", missing: true };
+    console.error("sbRecoveryLink", res.status);
+    return { url: "", missing: false };
+  }
+  const data = (await res.json()) as { action_link?: string };
+  const url = data.action_link ?? "";
+  if (!/^https?:\/\//.test(url)) return { url: "", missing: false };
+  return { url, missing: false };
 }
 
 export async function sbUser(accessToken: string) {

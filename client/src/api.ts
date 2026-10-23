@@ -238,8 +238,6 @@ export const api = {
   createTenant: (body: object) => mutate("/api/admin/tenants", { method: "POST", body: JSON.stringify(body) }, "/api/admin"),
   patchTenant: (id: string, body: object) =>
     mutate(`/api/admin/tenants/${id}`, { method: "PATCH", body: JSON.stringify(body) }, "/api/admin"),
-  setTenantPassword: (tenantId: string, userId: string, password: string) =>
-    req(`/api/admin/tenants/${tenantId}/password`, { method: "PATCH", body: JSON.stringify({ userId, password }) }),
   bootstrap: () => inflight<Bootstrap>("/api/app/bootstrap"),
   week: (from: string) => inflight<WeekPayload>(`/api/app/week?from=${from}`),
   addStaff: (name: string, color: string) => mutate("/api/app/staff", { method: "POST", body: JSON.stringify({ name, color }) }),

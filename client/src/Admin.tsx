@@ -178,7 +178,7 @@ export function AdminDetail() {
   const [loadErr, setLoadErr] = useState("");
   const [copied, setCopied] = useState<"iframe" | "url" | null>(null);
   const [frameOn, setFrameOn] = useState(false);
-  const [pw, setPw] = useState({ userId: "", password: "", err: "", ok: false, pending: false });
+  const [pw, setPw] = useState({ userId: "", err: "", ok: false, pending: false });
   useEffect(() => {
     if (!id) return;
     let on = true;
@@ -205,7 +205,7 @@ export function AdminDetail() {
   if (!data?.tenant) return <Skel kind="hours" />;
   const admins = data.admins ?? [];
   const adminId = pw.userId || admins[0]?.id || "";
-  const kd = admins[0];
+  const kd = admins.find((a) => a.id === adminId) ?? admins[0];
   function mark(kind: "iframe" | "url", text: string) {
     navigator.clipboard.writeText(text).then(() => setCopied(kind));
   }
@@ -274,35 +274,35 @@ export function AdminDetail() {
             ) : (
               <p className="hint-line">Kein KD hinterlegt.</p>
             )}
-            {admins.length ? (
-              <form
-                onSubmit={(e) => {
-                  e.preventDefault();
-                  setPw((s) => ({ ...s, err: "", ok: false, pending: true }));
-                  api
-                    .setTenantPassword(data.tenant.id, adminId, pw.password)
-                    .then(() => setPw({ userId: adminId, password: "", err: "", ok: true, pending: false }))
-                    .catch((ex) => setPw((s) => ({ ...s, err: ex.message, ok: false, pending: false })));
-                }}
-              >
+            {kd ? (
+              <>
                 {pw.err ? <p className="err" role="alert">{pw.err}</p> : null}
-                {pw.ok ? <p className="ok" role="status">Passwort in Auth gespeichert. KD kann sich anmelden.</p> : null}
+                {pw.ok ? <p className="ok" role="status">Reset-Mail ist raus. KD setzt das Passwort über den Link.</p> : null}
                 {admins.length > 1 ? (
                   <label className="field">
                     <span>Admin</span>
-                    <select value={adminId} onChange={(e) => setPw((s) => ({ ...s, userId: e.target.value }))}>
+                    <select value={adminId} onChange={(e) => setPw((s) => ({ ...s, userId: e.target.value, ok: false }))}>
                       {admins.map((a) => (
                         <option key={a.id} value={a.id}>{a.name} ({a.email})</option>
                       ))}
                     </select>
                   </label>
                 ) : null}
-                <label className="field">
-                  <span>Neues Passwort</span>
-                  <input type="password" autoComplete="new-password" minLength={8} required value={pw.password} onChange={(e) => setPw((s) => ({ ...s, password: e.target.value, ok: false }))} />
-                </label>
-                <button className="btn" type="submit" disabled={pw.pending}>{pw.pending ? "Speichern…" : "In Auth speichern"}</button>
-              </form>
+                <button
+                  className="btn"
+                  type="button"
+                  disabled={pw.pending}
+                  onClick={() => {
+                    setPw((s) => ({ ...s, err: "", ok: false, pending: true }));
+                    api
+                      .recover(kd.email)
+                      .then(() => setPw((s) => ({ ...s, ok: true, pending: false })))
+                      .catch((ex) => setPw((s) => ({ ...s, err: ex.message, ok: false, pending: false })));
+                  }}
+                >
+                  {pw.pending ? "Senden…" : "Passwort-Reset-Mail versenden"}
+                </button>
+              </>
             ) : null}
           </div>
         </article>

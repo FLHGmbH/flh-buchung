@@ -5,13 +5,13 @@ import { and, desc, eq, gt, gte, inArray, lt, lte, ne, or } from "drizzle-orm";
 import { Hono } from "hono";
 import { DateTime } from "luxon";
 import { altchaOk, altchaReady, newChallenge } from "./altcha.ts";
-import { actorFrom, actorFromEmail, actorFromUserId, createSession, destroySession, dropUserSessions, ensurePlatformAdmin, hashPassword, sbEnsureUser, sbPassword, sbRecover, sbSetPassword, sbUser, verifyLogin, verifyPassword, type Actor } from "./auth.ts";
+import { actorFrom, actorFromEmail, actorFromUserId, createSession, destroySession, dropUserSessions, ensurePlatformAdmin, hashPassword, sbEnsureUser, sbPassword, sbRecoveryLink, sbSetPassword, sbUser, verifyLogin, verifyPassword, type Actor } from "./auth.ts";
 import { db } from "./db.ts";
 import { brandHex } from "./brand.ts";
 import { BOOK_MAX, LEN, LOGIN_MAX, PIN_MAX, WINDOW_MS, bookWindow, clip, clientIp, hoursWithin, inIntRange, limited, logoKind, passwordOk, priceQuote, readJson, sbConfigured, serviceMins, siteOrigin } from "./guard.ts";
 import { chooseCalendar, connectGoogle, disconnectGoogle, googleAuthUrl, googleCalendars, googleConfigured, googleStatus, pullGoogle, readState, syncBooking } from "./google.ts";
 import { blockedGuest, guestMail, guestPhone } from "./guest.ts";
-import { newCancelToken, PIN_MS, sendConfirmMail, sendGuestInfo } from "./mail.ts";
+import { newCancelToken, PIN_MS, sendConfirmMail, sendGuestInfo, sendWelcomeMail } from "./mail.ts";
 import {
   bookings,
   memberships,
@@ -296,8 +296,11 @@ api.post("/auth/recover", async (c) => {
   const origin = siteOrigin(c.req.url);
   if (!origin) return c.json({ error: "PUBLIC_ORIGIN fehlt." }, 503);
   try {
-    const ok = await sbRecover(email, `${origin}/reset`);
-    if (!ok) return c.json({ error: "Mail gerade nicht möglich." }, 503);
+    const link = await sbRecoveryLink(email, `${origin}/reset`);
+    if (!link.missing) {
+      if (!link.url) return c.json({ error: "Mail gerade nicht möglich." }, 503);
+      await sendWelcomeMail({ to: email, url: link.url });
+    }
   } catch (e) {
     console.error(e);
     return c.json({ error: "Mail gerade nicht möglich." }, 503);
@@ -509,32 +512,6 @@ api.patch("/admin/tenants/:id", async (c) => {
   const [tenant] = await db.update(tenants).set(patch).where(eq(tenants.id, id)).returning();
   if (!tenant) return c.json({ error: "Nicht gefunden." }, 404);
   return c.json({ tenant });
-});
-
-api.patch("/admin/tenants/:id/password", async (c) => {
-  const id = c.req.param("id");
-  const body = await readJson<{ userId?: string; password?: string }>(c);
-  if (!body) return c.json({ error: "Ungültige Anfrage." }, 400);
-  if (!body.userId || !passwordOk(body.password ?? "")) {
-    return c.json({ error: "Nutzer und Passwort (min. 8 Zeichen) nötig." }, 400);
-  }
-  const [mem] = await db
-    .select()
-    .from(memberships)
-    .where(and(eq(memberships.userId, body.userId), eq(memberships.tenantId, id), eq(memberships.role, "tenant_admin")))
-    .limit(1);
-  if (!mem) return c.json({ error: "Nicht gefunden." }, 404);
-  const [user] = await db.select().from(users).where(eq(users.id, body.userId)).limit(1);
-  if (!user) return c.json({ error: "Nicht gefunden." }, 404);
-  if (sbConfigured()) {
-    const ensured = await sbEnsureUser(user.email, body.password as string, user.name);
-    if (!ensured.ok) return c.json({ error: ensured.error }, ensured.status);
-    await db.update(users).set({ passwordHash: "" }).where(eq(users.id, user.id));
-  } else {
-    await db.update(users).set({ passwordHash: await hashPassword(body.password as string) }).where(eq(users.id, user.id));
-  }
-  await dropUserSessions(user.id);
-  return c.json({ ok: true });
 });
 
 function tenantId(c: { get: (k: "actor") => Actor }) {

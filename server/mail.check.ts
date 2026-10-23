@@ -1,6 +1,6 @@
 import { brandHex, brandOf } from "./brand.ts";
 import { guestMail, guestPhone, blockedGuest, phoneKey } from "./guest.ts";
-import { confirmIcs, confirmMail, dotStuff, encodeSubject, escHtml, guestInfoMail, icsEscape, icsFold, icsUtc, mailbox, mailboxAddr, mailEnding, mimeBody, newCancelToken, newPin, PIN_MS, pinMail } from "./mail.ts";
+import { confirmIcs, confirmMail, dotStuff, encodeSubject, escHtml, guestInfoMail, icsEscape, icsFold, icsUtc, mailbox, mailboxAddr, mailEnding, mimeBody, newCancelToken, newPin, PIN_MS, pinMail, welcomeMail } from "./mail.ts";
 
 function assert(cond: unknown, msg: string) {
   if (!cond) throw new Error(msg);
@@ -109,6 +109,9 @@ process.env.PUBLIC_ORIGIN = "https://book.example";
 const branded = pinMail({ pin: "123456", tenantName: "Salon", when: "20.10.2026 14:00" });
 assert(branded.html.includes("https://book.example/kalendaa.png") && branded.html.includes('href="https://www.flh-digital.de/"') && branded.text.includes("Powered by FLH - Kalender"), "flh credit");
 assert(cancelled.text.includes("Powered by FLH - Kalender") && confirmed.text.includes("https://www.flh-digital.de/") && moved.html.includes("Powered by FLH - Kalender"), "flh credit on every mail");
+const hello = welcomeMail({ url: "https://book.example/reset?x=1&y=2" });
+assert(hello.subject === "Willkommen beim FLH Kalender" && hello.text.includes("Klick hier, um dein Passwort festzulegen:") && hello.text.includes("Danach meldest du dich damit an und kannst loslegen."), "welcome text");
+assert(hello.html.includes("background:#006478") && hello.html.includes("Passwort festlegen") && hello.html.includes("https://book.example/kalendaa.png") && hello.html.includes(`href="${escHtml("https://book.example/reset?x=1&y=2")}"`), "welcome card");
 if (prevOrigin) process.env.PUBLIC_ORIGIN = prevOrigin;
 else delete process.env.PUBLIC_ORIGIN;
 console.log("mail.check ok");

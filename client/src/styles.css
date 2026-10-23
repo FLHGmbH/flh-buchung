@@ -23,8 +23,8 @@
   --btn: #17525d;
   --ink: #0f172a;
   --focus: 0 0 0 0.1875rem color-mix(in srgb, var(--petrol) 45%, white);
-  /* 16px on 1920×1080. Same composition from 480p through 4K and beyond; the shorter axis wins so nothing overflows. */
-  font-size: min(calc(100vw / 120), calc(100dvh / 67.5));
+  /* Screenshot size is 16px. Smaller windows stay there. Above Full HD the same composition grows, up to the shorter axis. */
+  font-size: max(16px, min(calc(100vw / 120), calc(100dvh / 67.5)));
 }
 
 * { box-sizing: border-box; }
@@ -1820,7 +1820,7 @@ body:has(.book-fit) #root {
 .book .lead { margin: 0 0 1.5rem; color: var(--graphite-75); text-align: center; }
 .book .btn { width: 100%; margin-top: 0.25rem; }
 .book .altcha-host { margin: 0.85rem 0 0.15rem; }
-.book altcha-widget { display: block; margin: 0; zoom: min(calc(100vw / 1920), calc(100dvh / 1080)); }
+.book altcha-widget { display: block; margin: 0; zoom: max(1, min(calc(100vw / 1920), calc(100dvh / 1080))); }
 .book .altcha-host.is-miss { outline: 0.125rem solid var(--danger); outline-offset: 0.1875rem; border-radius: 0.625rem; }
 .book .check.agree.is-miss { color: var(--danger); }
 .book .check.agree.is-miss a { color: inherit; }

@@ -510,6 +510,33 @@ export function confirmMail(opts: {
   };
 }
 
+export function welcomeMail(opts: { url: string }) {
+  const url = opts.url;
+  return {
+    subject: "Willkommen beim FLH Kalender",
+    text: `Willkommen beim FLH Kalender.\n\nKlick hier, um dein Passwort festzulegen:\n${url}\n\nDanach meldest du dich damit an und kannst loslegen.${flhCredit().text}`,
+    html: mailCard({
+      salon: "FLH Kalender",
+      lead: "Willkommen beim FLH Kalender.",
+      rows: [],
+      note: "Klick auf den Link und lege dein Passwort fest. Danach meldest du dich damit an und kannst loslegen.",
+      links: [{ href: url, label: "Passwort festlegen" }],
+      logoUrl: flhMark() || undefined,
+    }),
+  };
+}
+
+export async function sendWelcomeMail(opts: { to: string; url: string }) {
+  const from = mailFromAddr(process.env.MAIL_FROM);
+  if (!from) throw new Error("MAIL_FROM muss eine eigene Domain sein.");
+  try {
+    await smtpSend({ from, to: opts.to, ...welcomeMail(opts) });
+  } catch (e) {
+    console.error("smtp failed", e instanceof Error ? e.message : e);
+    throw new Error("Mailversand fehlgeschlagen.");
+  }
+}
+
 export async function sendConfirmMail(opts: { to: string } & Parameters<typeof confirmMail>[0]) {
   const from = mailFromAddr(process.env.MAIL_FROM);
   if (!from) throw new Error("MAIL_FROM muss eine eigene Domain sein.");

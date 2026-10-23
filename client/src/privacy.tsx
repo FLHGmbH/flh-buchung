@@ -39,7 +39,7 @@ export function MandantPrivacy() {
         In der Datenbank liegt nur ein Prüfwert dieses Schlüssels, zusammen mit der Ablaufzeit. Die Sitzung gilt sieben Tage, bis zur Abmeldung oder bis das Passwort neu gesetzt wird.
       </p>
       <p>
-        Beim Zurücksetzen des Passworts schickt der Anmeldedienst eine E-Mail mit einem einmaligen Link. Der darin enthaltene Zugriffsschlüssel wird im Sitzungsspeicher des Browsers unter dem Schlüssel <code>flh-recovery</code> gehalten, bis das neue Passwort gespeichert ist, eine Anmeldung oder Abmeldung im selben Tab erfolgt oder der Tab geschlossen wird.
+        Beim Zurücksetzen des Passworts schicken wir eine E-Mail mit einem einmaligen Link des Anmeldedienstes. Der darin enthaltene Zugriffsschlüssel wird im Sitzungsspeicher des Browsers unter dem Schlüssel <code>flh-recovery</code> gehalten, bis das neue Passwort gespeichert ist, eine Anmeldung oder Abmeldung im selben Tab erfolgt oder der Tab geschlossen wird.
       </p>
       <p>
         Zum Schutz vor Fehlversuchen merken wir uns für 15 Minuten im Arbeitsspeicher des Servers, wie oft eine IP-Adresse Anmeldung, Passwort-Mail oder Passwort-Setzen aufgerufen hat.
