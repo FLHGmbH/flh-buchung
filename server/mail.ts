@@ -1,7 +1,7 @@
 import { randomBytes, randomInt } from "node:crypto";
 import { connect } from "node:tls";
 import { brandOf } from "./brand.ts";
-import { mailFromAddr } from "./guard.ts";
+import { mailFromAddr, siteOrigin } from "./guard.ts";
 
 export const PIN_MS = 15 * 60 * 1000;
 
@@ -253,10 +253,9 @@ async function smtpSend(opts: { from: string; to: string; subject: string; text:
 const FLH_URL = "https://www.flh-digital.de/";
 
 function flhMark() {
-  const o = process.env.PUBLIC_ORIGIN?.trim().replace(/\/$/, "");
-  if (o) return `${o}/kalendaa.png`;
-  const vercel = process.env.VERCEL_URL?.trim().replace(/^https?:\/\//, "").replace(/\/$/, "");
-  return vercel ? `https://${vercel}/kalendaa.png` : "";
+  const origin = siteOrigin("http://local.invalid/");
+  if (!origin || origin.startsWith("http://local.invalid")) return "";
+  return `${origin}/kalendaa.png`;
 }
 
 export function flhCredit() {

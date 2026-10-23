@@ -320,6 +320,7 @@ export function BookPage() {
         pub.services.length ? (
           <div className="book-pick">
             <div className="book-list">
+              <p className="book-hint">{cats.length ? "Öffne eine Kategorie und wähle die Leistung, die zu dir passt." : "Wähle die Leistung, die zu dir passt."}</p>
               {cats.length ? blocks.map((b) => {
                 const on = catId === b.id || b.rows.some((s) => ids.includes(s.id));
                 return (

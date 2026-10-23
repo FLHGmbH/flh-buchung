@@ -122,10 +122,14 @@ export async function readJson<T>(c: { req: { json: () => Promise<unknown> } }) 
   }
 }
 
+const CANONICAL_ORIGIN = "https://buchungs-tool.flh-digital.de";
+const LEGACY_HOST = "flh-kalender.vercel.app";
+
 export function siteOrigin(reqUrl: string) {
   const o = process.env.PUBLIC_ORIGIN?.trim().replace(/\/$/, "");
-  if (o) return o;
+  if (o && o !== `https://${LEGACY_HOST}`) return o;
   const vercel = process.env.VERCEL_URL?.trim().replace(/\/$/, "");
+  if (vercel === LEGACY_HOST || o === `https://${LEGACY_HOST}`) return CANONICAL_ORIGIN;
   if (vercel) return `https://${vercel}`;
   if (process.env.VERCEL || process.env.NODE_ENV === "production") return null;
   return new URL(reqUrl).origin;

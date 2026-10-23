@@ -23,8 +23,8 @@
   --btn: #17525d;
   --ink: #0f172a;
   --focus: 0 0 0 0.1875rem color-mix(in srgb, var(--petrol) 45%, white);
-  /* Screenshot size is 16px. Smaller windows stay there. Above Full HD the same composition grows, up to the shorter axis. */
-  font-size: max(16px, min(calc(100vw / 120), calc(100dvh / 67.5)));
+  /* Full HD is 16px. Smaller windows stay there. Wider windows keep that same composition. */
+  font-size: max(16px, calc(100vw / 120));
 }
 
 * { box-sizing: border-box; }
@@ -157,7 +157,7 @@ svg[width="28"] { width: 1.75rem; height: 1.75rem; }
 
 .main { background: var(--paper); min-width: 0; overflow: auto; }
 .page { padding: 2.25rem 2.5rem 3rem; max-width: 87.5rem; }
-.page.wide { max-width: 96.875rem; }
+.page.wide { max-width: none; }
 .page.slim { max-width: 45rem; }
 .page-head {
   display: flex;
@@ -1860,6 +1860,7 @@ body:has(.book-fit) #root {
   transform-origin: left center;
   transition: transform 0.28s ease;
 }
+.book-hint { margin: 0 0 0.65rem; color: var(--graphite-75); font-size: 0.9rem; line-height: 1.4; }
 .book-recap {
   margin: 0 0 1rem;
   padding: 0.55rem 0.75rem;

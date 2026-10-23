@@ -120,11 +120,6 @@ function shownEl(name: string) {
   return el;
 }
 
-function folded(name: string) {
-  const box = qs(name)?.closest("details");
-  return box instanceof HTMLDetailsElement && !box.open;
-}
-
 function slideOf() {
   return document.querySelector("[data-tour='svc-form']")?.getAttribute("data-slide") ?? null;
 }
@@ -168,36 +163,60 @@ function spot(step: Step) {
   return qs("add-staff");
 }
 
-function cue(step: Step, path: string) {
+const ENTRY = new Set(["add-staff", "add-category", "add-service", "add-booking"]);
+
+function spotKey(el: HTMLElement | null) {
+  if (!el) return "";
+  const name = el.getAttribute("data-tour");
+  if (name) return name;
+  if (el.tagName === "SUMMARY") return `sum:${(el.textContent ?? "").trim()}`;
+  return "";
+}
+
+// Closed form: the page only has the + button left. That is behind us, not the next step.
+function rewindToEntry(old: HTMLElement | null, next: HTMLElement | null) {
+  return Boolean(old && !old.isConnected && ENTRY.has(next?.getAttribute("data-tour") ?? ""));
+}
+
+// `at` is the target the ring has already committed to. Copy stays there until the ring moves.
+function cue(step: Step, path: string, at: string) {
   if (step.nav) return path === step.path ? "Du bist schon auf der richtigen Seite. Klick auf Weiter." : step.text;
-  if (step.id === "staff" && qs("staff-name")) {
-    return done("staff-name") ? "Speichern legt die Person an." : val("staff-name") ? "Passt der Name? Dann klick auf Speichern." : "Trag den Namen der Person ein.";
+  if (step.id === "staff") {
+    if (at === "save-staff") return "Speichern legt die Person an.";
+    if (at === "staff-name") return val("staff-name") ? "Passt der Name? Dann klick auf Speichern." : "Trag den Namen der Person ein.";
+    return step.text;
   }
-  if (step.id === "category" && qs("cat-name")) {
-    return done("cat-name") ? "Speichern legt die Kategorie an." : val("cat-name") ? "Passt der Name? Dann klick auf Speichern." : "Trag den Namen der Kategorie ein.";
+  if (step.id === "category") {
+    if (at === "save-category") return "Speichern legt die Kategorie an.";
+    if (at === "cat-name") return val("cat-name") ? "Passt der Name? Dann klick auf Speichern." : "Trag den Namen der Kategorie ein.";
+    return step.text;
   }
   if (step.id === "service") {
-    const slide = slideOf();
-    if (slide === "0") return "Name, Dauer und Kategorie trägst du selbst ein. Danach Weiter im Formular.";
-    if (slide === "1") return "Wähl selbst, wer die Leistung machen darf. Danach Weiter im Formular.";
-    if (slide === "2") return "Preis kannst du leer lassen. Speichern legt deine Leistung an.";
+    if (at === "svc-name") return "Name, Dauer und Kategorie trägst du selbst ein. Danach Weiter im Formular.";
+    if (at === "svc-staff") return "Wähl selbst, wer die Leistung machen darf. Danach Weiter im Formular.";
+    if (at === "save-service") return "Preis kannst du leer lassen. Speichern legt deine Leistung an.";
+    return step.text;
   }
-  if (step.id === "booking" && formId() === "") {
-    return done("guest-name") ? "Termin erstellen legt deinen Termin in den Kalender." : val("guest-name") ? "Passt alles? Dann klick auf Termin erstellen." : "Wähle Datum und Leistung und trag den Gast ein.";
+  if (step.id === "booking") {
+    if (at === "save-booking") return "Termin erstellen legt deinen Termin in den Kalender.";
+    if (at === "guest-name") return val("guest-name") ? "Passt alles? Dann klick auf Termin erstellen." : "Wähle Datum und Leistung und trag den Gast ein.";
+    return step.text;
   }
   if (step.id === "contact") {
-    if (folded("contact-address")) return "Klick auf Kontakt, um die Felder aufzuklappen.";
-    if (focused(CONTACT) || !CONTACT.some((n) => val(n))) return "Trag Adresse, Telefon, E-Mail oder Homepage ein.";
-    return "Speichern übernimmt die Kontaktdaten.";
+    if (at.startsWith("sum:")) return "Klick auf Kontakt, um die Felder aufzuklappen.";
+    if (at === "save-contact") return "Speichern übernimmt die Kontaktdaten.";
+    if (at.startsWith("contact-")) return "Trag Adresse, Telefon, E-Mail oder Homepage ein.";
+    return step.text;
   }
   if (step.id === "hours") {
-    if (folded("hours")) return "Klick auf Öffnungszeiten.";
+    if (at.startsWith("sum:")) return "Klick auf Öffnungszeiten.";
     return "Haken auf, Uhrzeit setzen, dann Speichern. Ohne Haken ist der Tag geschlossen.";
   }
   if (step.id === "mail") {
-    if (folded("mail-sign")) return "Klick auf E-Mail, um den Text aufzuklappen.";
-    if (!val("mail-sign") || document.activeElement === qs("mail-sign")) return "Schreib den Text, der am Ende jeder Mail steht.";
-    return "Speichern hängt den Text an jede Mail.";
+    if (at.startsWith("sum:")) return "Klick auf E-Mail, um den Text aufzuklappen.";
+    if (at === "mail-sign") return "Schreib den Text, der am Ende jeder Mail steht.";
+    if (at === "save-mail") return "Speichern hängt den Text an jede Mail.";
+    return step.text;
   }
   return step.text;
 }
@@ -238,6 +257,7 @@ export function Tour({ onClose }: { onClose: () => void }) {
   const [steps, setSteps] = useState<Step[] | null>(null);
   const [i, setI] = useState(0);
   const [shown, setShown] = useState(0);
+  const [at, setAt] = useState("");
   const [, setTick] = useState(0);
   const base = useRef<Base | null>(null);
   const cardRef = useRef<HTMLDivElement>(null);
@@ -249,17 +269,18 @@ export function Tour({ onClose }: { onClose: () => void }) {
   const nextRef = useRef<HTMLButtonElement>(null);
   const pos = useRef({ x: 0, y: 0, w: 0, h: 0, on: false });
   const fly = useRef({ p: 1, from: { x: 0, y: 0, w: 0, h: 0 } });
-  const phase = useRef<"out" | "wait" | "idle">("out");
+  const phase = useRef<"wait" | "idle">("wait");
   const since = useRef(0);
   const vis = useRef(false);
   const dimOn = useRef(false);
   const lit = useRef(false);
   const lastEl = useRef<HTMLElement | null>(null);
-  const hold = useRef(0);
   const cand = useRef<{ el: HTMLElement | null; at: number }>({ el: null, at: 0 });
   const cardAt = useRef({ x: 0, y: 0, set: false });
-  const started = useRef(false);
   const swapping = useRef(false);
+  const shownRef = useRef(0);
+  const atRef = useRef("");
+  const stepMark = useRef<number | null>(null);
   const unready = useRef(false);
   const jump = useRef(false);
   const entered = useRef(false);
@@ -267,8 +288,15 @@ export function Tour({ onClose }: { onClose: () => void }) {
   const step = steps?.[i];
   const view = steps?.[shown];
   const rows = list?.bookings ?? [];
-  const ctx = useRef({ step, boot, i, path: loc.pathname });
-  ctx.current = { step, boot, i, path: loc.pathname };
+  const readyNow = Boolean(step && boot && base.current && finished(step, boot, rows, base.current, loc.pathname));
+  const ctx = useRef({ step, boot, i, path: loc.pathname, ready: readyNow });
+  ctx.current = { step, boot, i, path: loc.pathname, ready: readyNow };
+  // New step waits at the old spot until its own target exists, then flies once.
+  if (steps && stepMark.current !== i) {
+    stepMark.current = i;
+    phase.current = "wait";
+    since.current = 0;
+  }
 
   useEffect(() => {
     if (steps || !boot || !list) return;
@@ -372,33 +400,55 @@ export function Tour({ onClose }: { onClose: () => void }) {
         vis.current = true;
         gsap.to(ring, { autoAlpha: 1, duration: quick ? 0 : 0.25, overwrite: "auto" });
       };
-
-      if (phase.current === "wait" && (t || free) && since.current && performance.now() - since.current > (quick ? 0 : 260)) {
-        phase.current = "idle";
-        lastEl.current = el;
-        el?.scrollIntoView({ block: "nearest", inline: "nearest" });
-        textsIn(0.3);
-        // Read first: the card explains what and why, then the ring points at the target.
-        if (t) {
-          if (vis.current) begin(t, quick ? 0 : 0.9, 0.7);
-          else hold.current = performance.now() + (quick ? 0 : 900);
+      // Text swaps in the same breath as the flight, after the target is on screen.
+      const commit = (node: HTMLElement | null) => {
+        lastEl.current = node;
+        const key = spotKey(node);
+        const stepI = c.i;
+        if (shownRef.current !== stepI) {
+          shownRef.current = stepI;
+          swapping.current = true;
+          setShown(stepI);
         }
+        if (atRef.current !== key) {
+          atRef.current = key;
+          setAt(key);
+        }
+      };
+      const aim = (node: HTMLElement) => {
+        node.scrollIntoView({ block: "nearest", inline: "nearest" });
+        return rectOf(node);
+      };
+
+      if (phase.current === "wait" && (t || free) && since.current && performance.now() - since.current > (quick ? 0 : 32)) {
+        phase.current = "idle";
+        const aimed = el ? aim(el) : null;
+        commit(el);
+        if (aimed) {
+          show();
+          begin(aimed, 0, 0.55);
+        } else textsIn(0);
       } else if (phase.current === "idle") {
         let to = t;
-        if (t) {
+        if (t && el) {
           if (!vis.current) {
-            if (performance.now() >= hold.current) {
-              show();
-              begin(t, 0, 0.45);
-            }
-            lastEl.current = el;
+            show();
+            const aimed = aim(el) ?? t;
+            begin(aimed, 0, 0.45);
+            to = aimed;
+            commit(el);
           } else if (el !== lastEl.current) {
-            // A new target must stay stable for a moment, so the ring never hops back and forth.
             const old = lastEl.current;
             if (cand.current.el !== el) cand.current = { el, at: performance.now() };
-            if (!old?.isConnected || performance.now() - cand.current.at > (quick ? 0 : 450)) {
-              begin(t, 0.08, 0.5);
-              lastEl.current = el;
+            // ponytail: 2s so a save refresh can advance the step before we accept the + button. Abbrechen still returns after that.
+            const rewind = rewindToEntry(old, el);
+            if (rewind && (c.ready || performance.now() - cand.current.at < (quick ? 0 : 2000))) {
+              to = { x: p.x, y: p.y, w: p.w, h: p.h };
+            } else if (rewind || !old?.isConnected || performance.now() - cand.current.at > (quick ? 0 : 450)) {
+              const aimed = aim(el) ?? t;
+              begin(aimed, 0, 0.5);
+              to = aimed;
+              commit(el);
             } else to = rectOf(old) ?? t;
           }
           if (f.p < 1 && to) {
@@ -444,7 +494,7 @@ export function Tour({ onClose }: { onClose: () => void }) {
         a.y = d.y;
         a.set = true;
       } else {
-        const k = 1 - Math.exp(-dt / 110);
+        const k = 1 - Math.exp(-dt / (f.p < 1 ? 45 : 110));
         a.x += (d.x - a.x) * k;
         a.y += (d.y - a.y) * k;
       }
@@ -479,27 +529,14 @@ export function Tour({ onClose }: { onClose: () => void }) {
     };
   }, []);
 
-  // Step change: fade out, short beat, wait for the target, fly in. The user changes pages.
-  useEffect(() => {
-    if (!steps) return;
-    const first = !started.current;
-    started.current = true;
-    const quick = reduced();
-    phase.current = "out";
-    if (!first && !quick) {
-      gsap.to(texts(), { autoAlpha: 0, y: -6, duration: 0.14, overwrite: true });
-      gsap.to(ringRef.current, { scale: 0.96, duration: 0.14, overwrite: "auto" });
+  const sawText = useRef(false);
+  useLayoutEffect(() => {
+    if (!sawText.current) {
+      sawText.current = true;
+      return;
     }
-    const call = gsap.delayedCall(first || quick ? 0 : 0.18, () => {
-      swapping.current = true;
-      setShown(i);
-      since.current = 0;
-      phase.current = "wait";
-    });
-    return () => {
-      call.kill();
-    };
-  }, [i, steps]);
+    textsIn(0);
+  }, [shown]);
 
   useLayoutEffect(() => {
     const card = cardRef.current;
@@ -516,7 +553,7 @@ export function Tour({ onClose }: { onClose: () => void }) {
     unready.current = false;
   }, [i]);
 
-  const ready = Boolean(step && boot && base.current && finished(step, boot, rows, base.current, loc.pathname));
+  const ready = readyNow;
   if (!ready) unready.current = true;
 
   // Done: a short green beat, then the tour moves on by itself.
@@ -541,7 +578,7 @@ export function Tour({ onClose }: { onClose: () => void }) {
     }
   }, [ready, step?.id]);
 
-  const hint = view ? cue(view, loc.pathname) : "";
+  const hint = view ? cue(view, loc.pathname, at) : "";
   useEffect(() => {
     if (swapping.current) {
       swapping.current = false;
@@ -554,7 +591,7 @@ export function Tour({ onClose }: { onClose: () => void }) {
   useEffect(() => {
     if (view?.id !== "dashboard") return;
     // The card fades in first. Hidden buttons cannot take focus.
-    const call = gsap.delayedCall(reduced() ? 0 : 0.9, () => nextRef.current?.focus());
+    const call = gsap.delayedCall(reduced() ? 0 : 0.45, () => nextRef.current?.focus());
     const key = (e: KeyboardEvent) => e.key === "Escape" && onClose();
     window.addEventListener("keydown", key);
     return () => {
