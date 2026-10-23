@@ -4,8 +4,12 @@ import { BookingModal, coverService, firstOpen, PageHead, Skel, staffColor, staf
 
 const START = 8;
 const END = 20;
-const ROW = 64;
 const DAYS = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"];
+
+function unit(rem: number) {
+  const root = typeof document === "undefined" ? 16 : parseFloat(getComputedStyle(document.documentElement).fontSize);
+  return (Number.isFinite(root) ? root : 16) * rem;
+}
 
 function ymd(d: Date) {
   const z = new Date(d.getTime() - d.getTimezoneOffset() * 60000);
@@ -101,14 +105,12 @@ function lanes<T extends { start: number; end: number }>(items: T[]) {
   return placed;
 }
 
-const CHIP = 32;
-
-function chipHeight(durationPx: number, room: number) {
-  return Math.max(durationPx, Math.min(CHIP, room));
+function chipHeight(durationPx: number, room: number, chip: number) {
+  return Math.max(durationPx, Math.min(chip, room));
 }
 
-function snapMins(topPx: number, firstHour: number, hours: number) {
-  const raw = firstHour * 60 + (topPx / ROW) * 60;
+function snapMins(topPx: number, firstHour: number, hours: number, row: number) {
+  const raw = firstHour * 60 + (topPx / row) * 60;
   const last = (firstHour + hours) * 60 - 15;
   const n = Math.round(raw / 15) * 15;
   return Math.min(last, Math.max(firstHour * 60, n));
@@ -186,8 +188,8 @@ function checkLanes() {
   const same = lanes([{ start: 0, end: 60 }, { start: 0, end: 30 }]);
   const touch = lanes([{ start: 0, end: 30 }, { start: 30, end: 60 }]);
   if (same[0].cols !== 2 || same[0].col === same[1].col || touch.some((e) => e.cols !== 1)) throw new Error("lanes");
-  if (chipHeight(16, 64) !== 32 || chipHeight(16, 16) !== 16 || chipHeight(48, 48) !== 48 || chipHeight(10, 40) !== 32) throw new Error("chip");
-  if (snapMins(0, 8, 12) !== 480 || snapMins(8, 8, 12) !== 495 || snapMins(64, 8, 12) !== 540) throw new Error("snap");
+  if (chipHeight(16, 64, 32) !== 32 || chipHeight(16, 16, 32) !== 16 || chipHeight(48, 48, 32) !== 48 || chipHeight(10, 40, 32) !== 32) throw new Error("chip");
+  if (snapMins(0, 8, 12, 64) !== 480 || snapMins(8, 8, 12, 64) !== 495 || snapMins(64, 8, 12, 64) !== 540) throw new Error("snap");
   const closed = shadeBlocks(480, 1200, (t) => !fits(t, 45, 0, [{ start: 540, end: 1080 }], []));
   const hit = shadeBlocks(600, 780, (t) => !fits(t, 45, 0, [{ start: 0, end: 1440 }], [{ start: 660, end: 705 }]));
   if (closed.length !== 2 || closed[0].end !== 540 || closed[1].start !== 1050 || hit.length !== 1 || hit[0].start !== 630 || hit[0].end !== 705) throw new Error("shade");
@@ -225,6 +227,14 @@ export function CalendarPage() {
   const [drag, setDrag] = useState<{ id: string; day: string; mins: number; dx: number; dy: number } | null>(null);
   const [dragErr, setDragErr] = useState("");
   const gridRef = useRef<HTMLDivElement>(null);
+  const [, setFit] = useState(0);
+  useEffect(() => {
+    const on = () => setFit((n) => n + 1);
+    window.addEventListener("resize", on);
+    return () => window.removeEventListener("resize", on);
+  }, []);
+  const row = unit(4);
+  const chip = unit(2);
   const skipClick = useRef(false);
   const [draft, setDraft] = useState<{ staffId?: string; serviceId?: string; date?: string; time?: string } | null>(null);
   const [focus, setFocus] = useState<{ day: string; hour: number } | null>(null);
@@ -340,8 +350,8 @@ export function CalendarPage() {
       }) ?? cols[0];
       if (!hit) return;
       const targetDay = hit.dataset.day ?? day;
-      const mins = snapMins(originTop + (ev.clientY - oy), first, rows.length);
-      const targetTop = ((mins - first * 60) / 60) * ROW;
+      const mins = snapMins(originTop + (ev.clientY - oy), first, rows.length, row);
+      const targetTop = ((mins - first * 60) / 60) * row;
       const originCol = cols.find((c) => c.dataset.day === day);
       const dx = originCol ? hit.getBoundingClientRect().left - originCol.getBoundingClientRect().left : 0;
       const next = { day: targetDay, mins, dx, dy: targetTop - originTop };
@@ -505,7 +515,7 @@ export function CalendarPage() {
                 return (
                   <div className="day-col" data-day={d} key={d}>
                     {shades.map((s) => (
-                      <div key={s.start} className="drag-shade" style={{ top: ((s.start - first * 60) / 60) * ROW, height: ((s.end - s.start) / 60) * ROW }} />
+                      <div key={s.start} className="drag-shade" style={{ top: ((s.start - first * 60) / 60) * row, height: ((s.end - s.start) / 60) * row }} />
                     ))}
                     {rows.map((h) => {
                       const time = `${String(h).padStart(2, "0")}:00`;
@@ -531,12 +541,12 @@ export function CalendarPage() {
                       const who = member?.name;
                       const name = shortName(b.guestName);
                       const ma = who ? shortName(who) : "";
-                      const top = ((start - first * 60) / 60) * ROW;
-                      const px = ((end - start) / 60) * ROW;
+                      const top = ((start - first * 60) / 60) * row;
+                      const px = ((end - start) / 60) * row;
                       const next = placed.find((o) => o.col === col && o.start >= end);
-                      const room = next ? ((next.start - start) / 60) * ROW : CHIP;
-                      const height = chipHeight(px, room);
-                      const tight = height < CHIP - 2;
+                      const room = next ? ((next.start - start) / 60) * row : chip;
+                      const height = chipHeight(px, room, chip);
+                      const tight = height < chip - unit(0.125);
                       const facts = [name, ma, svc].filter(Boolean).join(" · ");
                       const held = drag?.id === b.id && (drag.day !== d || drag.mins !== start);
                       const bad = held && drag ? blocked(b, drag.day)(drag.mins) : false;
@@ -553,8 +563,8 @@ export function CalendarPage() {
                             color: missed ? undefined : t.title,
                             top,
                             height,
-                            left: `calc(${(col / cols) * 100}% + 2px)`,
-                            width: `calc(${100 / cols}% - 4px)`,
+                            left: `calc(${(col / cols) * 100}% + 0.125rem)`,
+                            width: `calc(${100 / cols}% - 0.25rem)`,
                             transform: held ? `translate(${drag.dx}px, ${drag.dy}px)` : undefined,
                           }}
                           onPointerDown={(e) => grab(e, b, start, d)}

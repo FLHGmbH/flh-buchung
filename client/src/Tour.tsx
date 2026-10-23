@@ -461,12 +461,14 @@ export function Tour({ onClose }: { onClose: () => void }) {
           else if (a.x + w <= p.x + 2) side = "right";
         }
         arrow.dataset.side = side;
+        const half = arrow.offsetWidth / 2 || 7;
+        const inset = half * (22 / 7);
         if (side === "top" || side === "bottom") {
-          arrow.style.left = `${Math.min(Math.max(22, tcx - a.x), w - 22) - 7}px`;
-          arrow.style.top = side === "top" ? "-7px" : `${h - 7}px`;
+          arrow.style.left = `${Math.min(Math.max(inset, tcx - a.x), w - inset) - half}px`;
+          arrow.style.top = side === "top" ? `${-half}px` : `${h - half}px`;
         } else if (side) {
-          arrow.style.top = `${Math.min(Math.max(22, tcy - a.y), h - 22) - 7}px`;
-          arrow.style.left = side === "left" ? "-7px" : `${w - 7}px`;
+          arrow.style.top = `${Math.min(Math.max(inset, tcy - a.y), h - inset) - half}px`;
+          arrow.style.left = side === "left" ? `${-half}px` : `${w - half}px`;
         }
       }
     };
