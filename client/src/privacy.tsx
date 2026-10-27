@@ -131,8 +131,9 @@ export function GuestPrivacy({ tenantName }: { tenantName: string }) {
       <h2>Welche Daten</h2>
       <p>Wenn Sie einen Termin buchen, verarbeitet der Betrieb über dieses Fenster:</p>
       <ul>
-        <li>Name und E-Mail-Adresse, beides Pflicht, sonst kann die Bestätigung nicht zugestellt und der Termin nicht geführt werden</li>
-        <li>Telefon und Notiz, nur wenn Sie sie eintragen</li>
+        <li>Name und Telefonnummer, beides nötig, sonst kann der Termin nicht geführt und die Bestätigung nicht zugestellt werden</li>
+        <li>E-Mail, wenn Sie sie eintragen</li>
+        <li>Notiz, wenn Sie sie eintragen</li>
         <li>gewählte Leistung, gewünschte Person, Beginn und Ende</li>
         <li>eine Buchungsnummer und den Status (offen, bestätigt oder storniert)</li>
       </ul>
@@ -140,14 +141,15 @@ export function GuestPrivacy({ tenantName }: { tenantName: string }) {
         Namen und Fotos der auswählbaren Personen legt der Betrieb an. Das sind Angaben zu seinen Mitarbeitern, nicht zu Ihnen.
       </p>
       <p>
-        Zweck ist die Terminvereinbarung mit dem Betrieb, einschließlich der Bestätigungsmail und der Kalenderdatei.
-        Rechtsgrundlage ist Art. 6 Abs. 1 lit. b DSGVO, auch für Telefon und Notiz, soweit Sie sie zur Buchung mitgeben.
+        Zweck ist die Terminvereinbarung mit dem Betrieb, einschließlich Bestätigung, Erinnerung und, falls eine E-Mail angegeben ist, der Kalenderdatei.
+        Rechtsgrundlage ist Art. 6 Abs. 1 lit. b DSGVO, auch für E-Mail und Notiz, soweit Sie sie zur Buchung mitgeben.
       </p>
 
       <h2>E-Mail</h2>
       <p>
-        Mit dem Buchen ist der Termin bestätigt. Die Bestätigung geht sofort an Ihre E-Mail.
+        Mit dem Buchen ist der Termin bestätigt. Ist eine E-Mail angegeben, geht die Bestätigung sofort dorthin und zusätzlich als SMS.
         Sie enthält Ihren Namen, die Leistung, gegebenenfalls die Person, die Uhrzeit und den Namen des Betriebs, dazu eine Kalenderdatei (termin.ics) mit denselben Angaben.
+        24 Stunden vor dem Termin geht eine Erinnerung per E-Mail, wenn eine Adresse angegeben ist.
       </p>
       <p>
         Den Versand übernimmt im Live-Betrieb Mittwald CM Service GmbH &amp; Co. KG, Espelkamp, über den Mailserver der FLH GmbH.
@@ -156,8 +158,8 @@ export function GuestPrivacy({ tenantName }: { tenantName: string }) {
 
       <h2>SMS</h2>
       <p>
-        Liegt zur Buchung eine Telefonnummer vor, geht dieselbe Bestätigung zusätzlich als SMS an diese Nummer:
-        der Name des Betriebs, die Leistung, gegebenenfalls die Person, die Uhrzeit und der Link zum Verschieben oder Stornieren.
+        Die Telefonnummer ist für die Buchung nötig. Ohne E-Mail geht die Bestätigung nur als SMS an diese Nummer.
+        24 Stunden vor dem Termin geht immer eine Erinnerungs-SMS, auch wenn eine E-Mail angegeben ist: der Name des Betriebs, die Leistung, gegebenenfalls die Person, die Uhrzeit und der Link zum Verschieben oder Stornieren.
       </p>
       <p>
         Den Versand übernimmt im Live-Betrieb seven communications GmbH &amp; Co. KG, Kiel (seven.io).
@@ -167,7 +169,7 @@ export function GuestPrivacy({ tenantName }: { tenantName: string }) {
       <h2>Schutz vor Missbrauch</h2>
       <p>
         Für 15 Minuten zählt der Server im Arbeitsspeicher, wie oft eine IP-Adresse Buchungen anstößt.
-        Dieselbe Grenze gilt für wiederholte Buchungen derselben E-Mail-Adresse bei diesem Betrieb. Die IP-Adresse landet nicht in Ihrem Termineintrag.
+        Dieselbe Grenze gilt für wiederholte Buchungen derselben Telefonnummer oder E-Mail-Adresse bei diesem Betrieb. Die IP-Adresse landet nicht in Ihrem Termineintrag.
         Der Zähler endet nach 15 Minuten oder mit dem Neustart des Prozesses.
       </p>
       <p>

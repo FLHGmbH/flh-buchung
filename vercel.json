@@ -14,6 +14,9 @@
       "maxDuration": 30
     }
   },
+  "crons": [
+    { "path": "/api/cron/remind", "schedule": "0 * * * *" }
+  ],
   "rewrites": [
     { "source": "/health", "destination": "/api/health" },
     { "source": "/api/(.*)", "destination": "/api" },

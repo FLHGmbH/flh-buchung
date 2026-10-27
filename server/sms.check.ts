@@ -1,4 +1,4 @@
-import { confirmSms, smsFrom, smsTo } from "./sms.ts";
+import { confirmSms, smsFrom, smsTo, smsUnits } from "./sms.ts";
 
 function assert(cond: unknown, msg: string) {
   if (!cond) throw new Error(msg);
@@ -20,6 +20,16 @@ const text = confirmSms({
   cancelUrl: "https://buchungs-tool.flh-digital.de/b/salon/storno/abc",
   also: [{ serviceName: "Farbe", staffName: "", when: "20.10.2026 15:00–16:00", cancelUrl: "https://buchungs-tool.flh-digital.de/b/salon/storno/def" }],
 });
-assert(text.startsWith("Termin bestätigt bei Salon: Schnitt bei Anna, 20.10.2026 14:00–14:45. https://buchungs-tool.flh-digital.de/b/salon/storno/abc"), "sms text");
-assert(text.includes("Farbe, 20.10.2026 15:00–16:00. https://buchungs-tool.flh-digital.de/b/salon/storno/def"), "sms also");
+assert(text.startsWith("Termin bestätigt: Schnitt bei Anna, Farbe, 20.10.2026 14:00-14:45."), "sms text");
+assert(text.endsWith("https://buchungs-tool.flh-digital.de/b/salon/storno/abc"), "sms link");
+assert(!text.includes("storno/def") && !text.includes("–"), "one link, plain hyphen");
+assert(smsUnits(text) === 1, "one part");
+const long = confirmSms({
+  tenantName: "Salon",
+  serviceName: "Waschen Schneiden Fohnen mit Ansatzfarbe und Pflege",
+  staffName: "Anna-Lena",
+  when: "20.10.2026 14:00–14:45",
+  cancelUrl: "https://buchungs-tool.flh-digital.de/b/friseure-pluto/storno/abcdefghijABCDEFGHIJ1234",
+});
+assert(smsUnits(long) === 1 && long.endsWith("https://buchungs-tool.flh-digital.de/b/friseure-pluto/storno/abcdefghijABCDEFGHIJ1234"), "long still one part");
 console.log("sms.check ok");

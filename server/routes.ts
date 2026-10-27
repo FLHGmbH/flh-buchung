@@ -10,8 +10,9 @@ import { db } from "./db.ts";
 import { brandHex } from "./brand.ts";
 import { BOOK_MAX, LEN, LOGIN_MAX, PIN_MAX, WINDOW_MS, bookWindow, clip, clientIp, hoursWithin, inIntRange, limited, logoKind, passwordOk, priceQuote, readJson, sbConfigured, serviceMins, siteOrigin } from "./guard.ts";
 import { chooseCalendar, connectGoogle, disconnectGoogle, googleAuthUrl, googleCalendars, googleConfigured, googleStatus, pullGoogle, readState, syncBooking } from "./google.ts";
-import { blockedGuest, guestMail, guestPhone } from "./guest.ts";
+import { blockedGuest, guestMail, guestPhone, phoneKey } from "./guest.ts";
 import { newCancelToken, PIN_MS, sendConfirmMail, sendGuestInfo, sendWelcomeMail } from "./mail.ts";
+import { runReminders } from "./remind.ts";
 import { confirmSms, sendConfirmSms } from "./sms.ts";
 import {
   bookings,
@@ -1177,6 +1178,7 @@ api.post("/app/time-off", async (c) => {
       guestEmail: bookings.guestEmail,
       guestPhone: bookings.guestPhone,
       note: bookings.note,
+      remindedAt: bookings.remindedAt,
     })
     .from(bookings)
     .where(and(
@@ -1209,7 +1211,7 @@ api.post("/app/time-off", async (c) => {
     }
     plan.push({ id: hit.id, staffId, serviceId, startsAt, endsAt });
   }
-  const snaps = hits.map((h) => ({ id: h.id, staffId: body.staffId, serviceId: h.serviceId, startsAt: h.startsAt, endsAt: h.endsAt }));
+  const snaps = hits.map((h) => ({ id: h.id, staffId: body.staffId, serviceId: h.serviceId, startsAt: h.startsAt, endsAt: h.endsAt, remindedAt: h.remindedAt }));
   async function restore() {
     for (const row of snaps) {
       await db.update(bookings).set({
@@ -1217,15 +1219,18 @@ api.post("/app/time-off", async (c) => {
         serviceId: row.serviceId,
         startsAt: row.startsAt,
         endsAt: row.endsAt,
+        remindedAt: row.remindedAt,
       }).where(and(eq(bookings.id, row.id), eq(bookings.tenantId, tid)));
     }
   }
   for (const row of plan) {
+    const prev = hits.find((h) => h.id === row.id);
     await db.update(bookings).set({
       staffId: row.staffId,
       serviceId: row.serviceId,
       startsAt: row.startsAt,
       endsAt: row.endsAt,
+      ...(prev && prev.startsAt.getTime() !== row.startsAt.getTime() ? { remindedAt: null } : {}),
     }).where(and(eq(bookings.id, row.id), eq(bookings.tenantId, tid)));
     const deny = await denyIfTaken(tid, row, row.id);
     if (deny) {
@@ -1397,9 +1402,10 @@ api.patch("/app/bookings/:id", async (c) => {
   const deny = await denyIfTaken(tid, parsed.fields, cur.id);
   if (deny) return c.json({ error: deny }, 409);
   try {
+    const timeChanged = parsed.fields.startsAt.getTime() !== cur.startsAt.getTime();
     const [row] = await db
       .update(bookings)
-      .set(parsed.fields)
+      .set(timeChanged ? { ...parsed.fields, remindedAt: null } : parsed.fields)
       .where(and(eq(bookings.id, cur.id), eq(bookings.tenantId, tid)))
       .returning(bookingCols);
     const moved = cur.startsAt.getTime() !== new Date(row.startsAt).getTime() || cur.staffId !== row.staffId || cur.serviceId !== row.serviceId;
@@ -1656,14 +1662,24 @@ async function sealBookings(reqUrl: string, tenant: { id: string; name: string; 
   }));
   const [head, ...rest] = linked;
   if (!head) throw new Error("leer");
-  await sendConfirmMail({
-    to: ordered[0].guestEmail,
-    guestName: ordered[0].guestName,
-    tenantName: tenant.name,
-    ...head,
-    also: rest,
-    ...mailFootOf(tenant, reqUrl),
-  });
+  const guestEmail = ordered[0].guestEmail;
+  if (guestMail(guestEmail)) {
+    await sendConfirmMail({
+      to: guestEmail,
+      guestName: ordered[0].guestName,
+      tenantName: tenant.name,
+      ...head,
+      also: rest,
+      ...mailFootOf(tenant, reqUrl),
+    });
+  } else {
+    const sent = await sendConfirmSms({
+      to: ordered[0].guestPhone,
+      fromName: tenant.name,
+      text: confirmSms({ tenantName: tenant.name, ...head, also: rest }),
+    });
+    if (!sent) throw new Error("sms");
+  }
   const updated = [];
   for (let i = 0; i < ordered.length; i++) {
     const [saved] = await db
@@ -1674,11 +1690,13 @@ async function sealBookings(reqUrl: string, tenant: { id: string; name: string; 
     if (saved) updated.push(saved);
   }
   if (!updated.length) throw new Error("weg");
-  await sendConfirmSms({
-    to: ordered[0].guestPhone,
-    fromName: tenant.name,
-    text: confirmSms({ tenantName: tenant.name, ...head, also: rest }),
-  });
+  if (guestMail(ordered[0].guestEmail)) {
+    await sendConfirmSms({
+      to: ordered[0].guestPhone,
+      fromName: tenant.name,
+      text: confirmSms({ tenantName: tenant.name, ...head, also: rest }),
+    });
+  }
   if (googleConfigured()) {
     try {
       for (const made of updated) await syncBooking(made.id);
@@ -1729,15 +1747,15 @@ api.post("/public/:slug/book", async (c) => {
   const guestEmail = clip(body.guestEmail?.toLowerCase() ?? "", LEN.email);
   const guestName = clip(body.guestName ?? "", LEN.name);
   if (!service || !body.staffId || !body.start || !guestName) {
-    return c.json({ error: "Bitte alle Pflichtfelder ausfüllen (inkl. E-Mail)." }, 400);
+    return c.json({ error: "Bitte alle Pflichtfelder ausfüllen (inkl. Telefonnummer)." }, 400);
   }
-  if (!guestMail(guestEmail)) return c.json({ error: "Bitte eine gültige E-Mail angeben." }, 400);
+  if (guestEmail && !guestMail(guestEmail)) return c.json({ error: "Bitte eine gültige E-Mail angeben." }, 400);
   const phone = clip(body.guestPhone ?? "", LEN.phone);
-  if (!guestPhone(phone)) return c.json({ error: "Bitte eine gültige Telefonnummer angeben." }, 400);
+  if (!phone || !guestPhone(phone)) return c.json({ error: "Bitte eine gültige Telefonnummer angeben." }, 400);
   if (await guestBlocked(tenant.id, guestEmail, phone)) {
     return c.json(noshowBlock(tenant.phone), 403);
   }
-  if (limited(`bookmail:${tenant.id}:${guestEmail}`, BOOK_MAX, WINDOW_MS)) {
+  if ((guestEmail && limited(`bookmail:${tenant.id}:${guestEmail}`, BOOK_MAX, WINDOW_MS)) || limited(`booktel:${tenant.id}:${phoneKey(phone)}`, BOOK_MAX, WINDOW_MS)) {
     return c.json({ error: "Zu viele Buchungen. Bitte später erneut." }, 429);
   }
   const allowed = await bookableStaffIds(tenant.id, service.id, body.staffId);
@@ -1974,10 +1992,10 @@ api.post("/public/:slug/storno/:token/move", async (c) => {
   if (!slot) return c.json({ error: "Dieser Termin ist nicht mehr frei." }, 409);
   const endsAt = slot.end;
   const prev = { startsAt: hit.cur.startsAt, endsAt: hit.cur.endsAt, staffId: hit.cur.staffId };
-  await db.update(bookings).set({ startsAt: slot.start, endsAt, staffId: slot.staffId }).where(and(eq(bookings.id, hit.cur.id), eq(bookings.tenantId, hit.tenant.id), eq(bookings.status, "confirmed")));
+  await db.update(bookings).set({ startsAt: slot.start, endsAt, staffId: slot.staffId, remindedAt: null }).where(and(eq(bookings.id, hit.cur.id), eq(bookings.tenantId, hit.tenant.id), eq(bookings.status, "confirmed")));
   const deny = await denyIfTaken(hit.tenant.id, { staffId: slot.staffId, serviceId: hit.cur.serviceId, startsAt: slot.start, endsAt }, hit.cur.id);
   if (deny) {
-    await db.update(bookings).set({ startsAt: prev.startsAt, endsAt: prev.endsAt, staffId: prev.staffId }).where(eq(bookings.id, hit.cur.id));
+    await db.update(bookings).set({ startsAt: prev.startsAt, endsAt: prev.endsAt, staffId: prev.staffId, remindedAt: hit.cur.remindedAt }).where(eq(bookings.id, hit.cur.id));
     return c.json({ error: deny }, 409);
   }
   await tellGuest(c.req.url, hit.tenant.id, "move", { ...hit.cur, startsAt: slot.start, endsAt, staffId: slot.staffId }, { startsAt: prev.startsAt, endsAt: prev.endsAt });
@@ -2001,4 +2019,12 @@ api.post("/public/:slug/storno/:token", async (c) => {
   if (hit.cur.status !== "confirmed") return c.json(hit.view);
   const row = await dropBooking(c.req.url, hit.tenant.id, hit.cur.id);
   return c.json(row ? { ...hit.view, state: "gone" } : hit.view);
+});
+
+api.get("/cron/remind", async (c) => {
+  const secret = process.env.CRON_SECRET?.trim();
+  const auth = c.req.header("authorization") ?? "";
+  if (!secret || auth !== `Bearer ${secret}`) return c.json({ error: "Nicht erlaubt." }, 401);
+  const sent = await runReminders(c.req.url);
+  return c.json({ ok: true, sent });
 });

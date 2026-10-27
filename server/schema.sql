@@ -122,6 +122,7 @@ CREATE TABLE IF NOT EXISTS bookings (
   cancel_token text NOT NULL DEFAULT '',
   google_event_id text,
   google_dirty boolean NOT NULL DEFAULT false,
+  reminded_at timestamptz,
   created_at timestamptz NOT NULL DEFAULT now()
 );
 

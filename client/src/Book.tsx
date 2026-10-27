@@ -99,8 +99,8 @@ export function BookPage() {
   const host = useRef<HTMLDivElement>(null);
   const box = useRef<(HTMLElement & { reset?: () => void; verify?: () => void }) | null>(null);
   const nameOk = guest.guestName.trim() !== "";
-  const mailOk = guestMail(guest.guestEmail);
-  const phoneOk = guestPhone(guest.guestPhone);
+  const mailOk = guest.guestEmail.trim() === "" || guestMail(guest.guestEmail);
+  const phoneOk = guest.guestPhone.trim() !== "" && guestPhone(guest.guestPhone);
 
   useEffect(() => {
     const parent = host.current;
@@ -525,19 +525,6 @@ export function BookPage() {
             {asked && !nameOk ? <small className="err">Bitte einen Namen angeben.</small> : null}
           </label>
           <label className="field">
-            <span>E-Mail</span>
-            <input
-              type="email"
-              inputMode="email"
-              autoComplete="email"
-              aria-invalid={(asked || guest.guestEmail.trim() !== "") && !mailOk}
-              value={guest.guestEmail}
-              onChange={(e) => setGuest({ ...guest, guestEmail: e.target.value })}
-              placeholder="max@mustermann.de"
-            />
-            {(asked || guest.guestEmail.trim() !== "") && !mailOk ? <small className="err">Bitte eine gültige E-Mail, zum Beispiel max@mustermann.de.</small> : null}
-          </label>
-          <label className="field">
             <span>Telefon</span>
             <input
               type="tel"
@@ -550,12 +537,25 @@ export function BookPage() {
             />
             {(asked || guest.guestPhone.trim() !== "") && !phoneOk ? <small className="err">Bitte eine gültige Telefonnummer, zum Beispiel 0151 12345678.</small> : null}
           </label>
+          <label className="field">
+            <span>E-Mail</span>
+            <input
+              type="email"
+              inputMode="email"
+              autoComplete="email"
+              aria-invalid={guest.guestEmail.trim() !== "" && !mailOk}
+              value={guest.guestEmail}
+              onChange={(e) => setGuest({ ...guest, guestEmail: e.target.value })}
+              placeholder="max@mustermann.de"
+            />
+            {guest.guestEmail.trim() !== "" && !mailOk ? <small className="err">Bitte eine gültige E-Mail, zum Beispiel max@mustermann.de.</small> : null}
+          </label>
           <label className="field"><span>Notiz</span><textarea value={guest.note} onChange={(e) => setGuest({ ...guest, note: e.target.value })} /></label>
           <p className="legal-note">Unverbindlicher Termin. Genannte Preise können abweichen und dienen nur zur Orientierung.</p>
           <label className={"check agree" + (asked && !privacy ? " is-miss" : "")}>
             <input type="checkbox" checked={privacy} onChange={(e) => setPrivacy(e.target.checked)} />
             <span>
-              Ich habe die <a href={`/b/${slug}/datenschutz`} target="_blank" rel="noreferrer">Datenschutzerklärung</a> gelesen. {pub.tenant.name} darf Name und E-Mail für diesen Termin speichern.
+              Ich habe die <a href={`/b/${slug}/datenschutz`} target="_blank" rel="noreferrer">Datenschutzerklärung</a> gelesen. {pub.tenant.name} darf Name und Telefonnummer für diesen Termin speichern.
             </span>
           </label>
           {asked && !privacy ? <small className="err">Bitte die Datenschutzerklärung bestätigen.</small> : null}
@@ -574,7 +574,7 @@ export function BookPage() {
           </span>
           <h2>Gebucht</h2>
           <p>{new Date(done.startsAt).toLocaleString("de-DE", { weekday: "long", day: "numeric", month: "long", hour: "2-digit", minute: "2-digit" })}</p>
-          <p>Die Bestätigung mit der Kalenderdatei termin.ics ist unterwegs an deine E-Mail.</p>
+          <p>{guest.guestEmail.trim() ? "Die Bestätigung ist unterwegs an deine E-Mail und als SMS. Die Kalenderdatei termin.ics hängt an der E-Mail." : "Die Bestätigung ist unterwegs als SMS."}</p>
           <p className="book-code">{done.id.slice(0, 8).toUpperCase()}</p>
         </div>
       )}

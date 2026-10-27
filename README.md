@@ -23,4 +23,4 @@ npm run dev
 
 ## Vercel
 
-`PUBLIC_ORIGIN` auf die Vercel-URL setzen (iframe-Snippets). `DATABASE_URL` = Supabase Transaction-Pooler (IPv4, Port 6543). PIN-Mails: Mittwald SMTP (`SMTP_HOST`/`SMTP_PORT`/`SMTP_USER`/`SMTP_PASS`, `MAIL_FROM` = Postfachadresse). Terminbestätigung zusätzlich per SMS über Seven.io (`SEVEN_API_KEY`). Login: `SUPABASE_URL` + `SUPABASE_ANON_KEY`, Mandanten anlegen braucht `SUPABASE_SERVICE_ROLE_KEY`. FLH-Admin `AUTH_ADMIN_EMAIL`.
+`PUBLIC_ORIGIN` auf die Vercel-URL setzen (iframe-Snippets). `DATABASE_URL` = Supabase Transaction-Pooler (IPv4, Port 6543). PIN-Mails: Mittwald SMTP (`SMTP_HOST`/`SMTP_PORT`/`SMTP_USER`/`SMTP_PASS`, `MAIL_FROM` = Postfachadresse). Terminbestätigung per E-Mail und SMS, wenn eine Adresse da ist, sonst nur per SMS über Seven.io (`SEVEN_API_KEY`). Erinnerung 24 Stunden vorher immer per SMS, plus E-Mail wenn vorhanden. Dafür `CRON_SECRET` setzen; Vercel ruft stündlich `/api/cron/remind` auf. Login: `SUPABASE_URL` + `SUPABASE_ANON_KEY`, Mandanten anlegen braucht `SUPABASE_SERVICE_ROLE_KEY`. FLH-Admin `AUTH_ADMIN_EMAIL`.

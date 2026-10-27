@@ -135,6 +135,7 @@ export const bookings = pgTable("bookings", {
   cancelToken: text("cancel_token").notNull().default(""),
   googleEventId: text("google_event_id"),
   googleDirty: boolean("google_dirty").notNull().default(false),
+  remindedAt: timestamp("reminded_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 

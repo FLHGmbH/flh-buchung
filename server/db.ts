@@ -87,6 +87,7 @@ export async function migrate() {
   await execSql(`ALTER TABLE bookings ADD COLUMN IF NOT EXISTS cancel_token text NOT NULL DEFAULT ''`).catch(ignoreExists);
   await execSql(`ALTER TABLE bookings ADD COLUMN IF NOT EXISTS google_event_id text`).catch(ignoreExists);
   await execSql(`ALTER TABLE bookings ADD COLUMN IF NOT EXISTS google_dirty boolean NOT NULL DEFAULT false`).catch(ignoreExists);
+  await execSql(`ALTER TABLE bookings ADD COLUMN IF NOT EXISTS reminded_at timestamptz`).catch(ignoreExists);
   await execSql(`
     CREATE TABLE IF NOT EXISTS google_links (
       tenant_id uuid PRIMARY KEY REFERENCES tenants(id) ON DELETE CASCADE,

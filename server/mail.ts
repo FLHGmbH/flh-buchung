@@ -392,6 +392,54 @@ export function guestInfoMail(kind: "move" | "cancel", opts: {
   };
 }
 
+export function remindMail(opts: {
+  guestName: string;
+  tenantName: string;
+  serviceName: string;
+  staffName: string;
+  when: string;
+  cancelUrl?: string;
+  logoUrl?: string;
+  sign?: string;
+  imageUrl?: string;
+  site?: string;
+  brand?: string;
+}) {
+  const summary = opts.staffName ? `${opts.serviceName} bei ${opts.staffName}` : opts.serviceName;
+  const end = mailEnding(opts.sign ?? "", opts.imageUrl ?? "");
+  const home = siteLine(opts.site);
+  const link = opts.cancelUrl ? `\nTermin verschieben/stornieren: ${opts.cancelUrl}` : "";
+  return {
+    subject: `Erinnerung – ${opts.tenantName}`,
+    text: `Hallo ${opts.guestName},\n\nin 24 Stunden ist dein Termin.\n\n${summary}\n${opts.when}${link}\n\n${opts.tenantName}${home.text}${end.text}${flhCredit().text}`,
+    html: mailCard({
+      salon: opts.tenantName,
+      lead: `Hallo ${opts.guestName}, in 24 Stunden ist dein Termin.`,
+      rows: [
+        { label: "Leistung", value: summary },
+        { label: "Zeit", value: opts.when },
+      ],
+      links: opts.cancelUrl ? [{ href: opts.cancelUrl, label: "Termin verschieben/stornieren" }] : [],
+      site: opts.site,
+      brand: opts.brand,
+      logoUrl: opts.logoUrl,
+      sign: opts.sign,
+      imageUrl: opts.imageUrl,
+    }),
+  };
+}
+
+export async function sendRemindMail(opts: { to: string } & Parameters<typeof remindMail>[0]) {
+  const from = mailFromAddr(process.env.MAIL_FROM);
+  if (!from) throw new Error("MAIL_FROM muss eine eigene Domain sein.");
+  try {
+    await smtpSend({ from, to: opts.to, ...remindMail(opts) });
+  } catch (e) {
+    console.error("smtp failed", e instanceof Error ? e.message : e);
+    throw new Error("Mailversand fehlgeschlagen.");
+  }
+}
+
 export async function sendGuestInfo(kind: "move" | "cancel", opts: { to: string } & Parameters<typeof guestInfoMail>[1]) {
   const from = mailFromAddr(process.env.MAIL_FROM);
   if (!from) throw new Error("MAIL_FROM muss eine eigene Domain sein.");
