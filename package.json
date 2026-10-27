@@ -11,6 +11,7 @@
     "seed": "tsx server/seed.ts",
     "check:slots": "tsx server/slots.check.ts",
     "check:mail": "tsx server/mail.check.ts",
+    "check:sms": "tsx server/sms.check.ts",
     "check:guard": "tsx server/guard.check.ts",
     "check:google": "tsx server/google.check.ts",
     "check:altcha": "tsx server/altcha.check.ts"

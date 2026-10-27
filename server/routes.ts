@@ -12,6 +12,7 @@ import { BOOK_MAX, LEN, LOGIN_MAX, PIN_MAX, WINDOW_MS, bookWindow, clip, clientI
 import { chooseCalendar, connectGoogle, disconnectGoogle, googleAuthUrl, googleCalendars, googleConfigured, googleStatus, pullGoogle, readState, syncBooking } from "./google.ts";
 import { blockedGuest, guestMail, guestPhone } from "./guest.ts";
 import { newCancelToken, PIN_MS, sendConfirmMail, sendGuestInfo, sendWelcomeMail } from "./mail.ts";
+import { confirmSms, sendConfirmSms } from "./sms.ts";
 import {
   bookings,
   memberships,
@@ -1618,6 +1619,7 @@ type SealRow = {
   endsAt: Date;
   guestName: string;
   guestEmail: string;
+  guestPhone: string;
   serviceId: string | null;
   staffId: string | null;
 };
@@ -1672,6 +1674,11 @@ async function sealBookings(reqUrl: string, tenant: { id: string; name: string; 
     if (saved) updated.push(saved);
   }
   if (!updated.length) throw new Error("weg");
+  await sendConfirmSms({
+    to: ordered[0].guestPhone,
+    fromName: tenant.name,
+    text: confirmSms({ tenantName: tenant.name, ...head, also: rest }),
+  });
   if (googleConfigured()) {
     try {
       for (const made of updated) await syncBooking(made.id);

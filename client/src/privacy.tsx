@@ -51,7 +51,7 @@ export function MandantPrivacy() {
       <h2>Daten, die Sie für Ihren Betrieb eintragen</h2>
       <p>
         Namen und Fotos Ihrer Mitarbeiter, Ihr Logo, Sperrzeiten und die Termine Ihrer Gäste (Name, E-Mail, Telefon, Notiz, Leistung, Zeitpunkt, Status) speichern wir, weil Sie das im Kalender so anlegen oder weil ein Gast sie im Buchungsfenster einträgt.
-        Verantwortlich für diese Daten gegenüber Mitarbeitern und Gästen sind Sie. Wir verarbeiten sie nur in Ihrem Auftrag und nach Ihrer Weisung, um Kalender, Buchungsmaske und die dazugehörigen E-Mails bereitzustellen (Art. 28 DSGVO).
+        Verantwortlich für diese Daten gegenüber Mitarbeitern und Gästen sind Sie. Wir verarbeiten sie nur in Ihrem Auftrag und nach Ihrer Weisung, um Kalender, Buchungsmaske und die dazugehörigen E-Mails und SMS bereitzustellen (Art. 28 DSGVO).
         Fotos und Logo liegen in einem öffentlich abrufbaren Speicher, weil das Buchungsfenster sie anzeigt.
       </p>
       <p>
@@ -152,6 +152,16 @@ export function GuestPrivacy({ tenantName }: { tenantName: string }) {
       <p>
         Den Versand übernimmt im Live-Betrieb Mittwald CM Service GmbH &amp; Co. KG, Espelkamp, über den Mailserver der FLH GmbH.
         Ein Mailarchiv legt die Anwendung nicht an.
+      </p>
+
+      <h2>SMS</h2>
+      <p>
+        Liegt zur Buchung eine Telefonnummer vor, geht dieselbe Bestätigung zusätzlich als SMS an diese Nummer:
+        der Name des Betriebs, die Leistung, gegebenenfalls die Person, die Uhrzeit und der Link zum Verschieben oder Stornieren.
+      </p>
+      <p>
+        Den Versand übernimmt im Live-Betrieb seven communications GmbH &amp; Co. KG, Kiel (seven.io).
+        Ohne hinterlegten Versandschlüssel wird keine SMS verschickt. Ein SMS-Archiv legt die Anwendung nicht an.
       </p>
 
       <h2>Schutz vor Missbrauch</h2>
