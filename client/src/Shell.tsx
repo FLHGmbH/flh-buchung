@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { NavLink } from "react-router-dom";
+import { NavLink, useLocation } from "react-router-dom";
 import { api, type Actor } from "./api";
 import { gsap, PageMotion, reduced, useGSAP } from "./motion";
 import { Avatar } from "./ui";
@@ -94,15 +94,58 @@ function link(to: string, label: string, tour?: string) {
 export function Shell({ actor, onLogout }: { actor: Actor; onLogout: () => void }) {
   const kd = actor.role === "tenant_admin";
   const [tour, setTour] = useState(0);
+  const [nav, setNav] = useState(false);
+  const [narrow, setNarrow] = useState(false);
+  const loc = useLocation();
   const side = useRef<HTMLAsideElement>(null);
   useEffect(() => { api.prefetch(kd ? "/app" : "/admin"); }, [kd]);
+  useEffect(() => {
+    document.body.dataset.app = kd ? "tenant" : "admin";
+    return () => { delete document.body.dataset.app; };
+  }, [kd]);
+  useEffect(() => { setNav(false); }, [loc.pathname]);
+  useEffect(() => {
+    const q = window.matchMedia("(max-width: 52rem)");
+    const go = () => setNarrow(q.matches);
+    go();
+    q.addEventListener("change", go);
+    return () => q.removeEventListener("change", go);
+  }, []);
+  useEffect(() => {
+    if (!kd) return;
+    const root = document.querySelector(".main");
+    if (!root) return;
+    let raf = 0;
+    const label = () => {
+      raf = 0;
+      root.querySelectorAll<HTMLTableElement>("table.table").forEach((t) => {
+        const heads = Array.from(t.querySelectorAll("thead th"), (h) => h.textContent?.trim() || "");
+        t.querySelectorAll("tbody tr").forEach((tr) => {
+          Array.from(tr.children).forEach((td, i) => {
+            if (heads[i] && td.getAttribute("data-label") !== heads[i]) td.setAttribute("data-label", heads[i]);
+          });
+        });
+      });
+    };
+    const mo = new MutationObserver(() => { if (!raf) raf = requestAnimationFrame(label); });
+    mo.observe(root, { childList: true, subtree: true });
+    label();
+    return () => { mo.disconnect(); if (raf) cancelAnimationFrame(raf); };
+  }, [kd]);
+  useEffect(() => {
+    if (!nav) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setNav(false); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [nav]);
   useGSAP(() => {
     if (reduced() || !side.current) return;
     gsap.from("a, .who, .ghost", { x: -10, opacity: 0, duration: 0.4, stagger: 0.045, ease: "power3.out" });
   }, { scope: side });
   return (
-    <div className="app">
-      <aside className="sidebar" ref={side}>
+    <div className={kd ? "app tenant" : "app"}>
+      {kd && nav ? <button type="button" className="nav-scrim" aria-label="Menü schließen" onClick={() => setNav(false)} /> : null}
+      <aside className={nav ? "sidebar is-open" : "sidebar"} id="app-nav" ref={side} inert={narrow && !nav ? true : undefined}>
         <div className="brand">
           <Mark />
         </div>
@@ -159,6 +202,16 @@ export function Shell({ actor, onLogout }: { actor: Actor; onLogout: () => void 
         </button>
       </aside>
       <div className="main">
+        {kd ? (
+          <div className="topbar">
+            <button type="button" className="nav-toggle" aria-expanded={nav} aria-controls="app-nav" aria-label={nav ? "Menü schließen" : "Menü öffnen"} onClick={() => setNav((v) => !v)}>
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+                {nav ? <path d="M6 6l12 12M18 6L6 18" /> : <path d="M4 7h16M4 12h16M4 17h16" />}
+              </svg>
+            </button>
+            <strong>{actor.tenantName || "Menü"}</strong>
+          </div>
+        ) : null}
         <PageMotion />
       </div>
       {kd ? <LiveBookings /> : null}

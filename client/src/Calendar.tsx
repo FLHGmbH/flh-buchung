@@ -212,7 +212,7 @@ function warm(mon: string) {
 type CalView = "day" | "week" | "month";
 
 export function CalendarPage() {
-  const [view, setView] = useState<CalView>("week");
+  const [view, setView] = useState<CalView>(() => (window.matchMedia("(max-width: 52rem)").matches ? "day" : "week"));
   const [anchor, setAnchor] = useState(() => ymd(new Date()));
   const mon = mondayOf(anchor);
   const monthDays = useMemo(() => monthGrid(anchor), [anchor]);
@@ -338,7 +338,32 @@ export function CalendarPage() {
     const originTop = e.currentTarget.offsetTop;
     const spot = { day, mins: start, dx: 0, dy: 0 };
     let moved = false;
+    const touch = e.pointerType === "touch";
+    let armed = !touch;
+    let timer = 0;
+    const stop = () => {
+      window.clearTimeout(timer);
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+      window.removeEventListener("pointercancel", onCancel);
+      window.removeEventListener("touchmove", lock);
+    };
+    const lock = (ev: TouchEvent) => { if (armed && ev.cancelable) ev.preventDefault(); };
+    const onCancel = () => {
+      stop();
+      if (moved) setDrag(null);
+    };
+    if (touch) {
+      timer = window.setTimeout(() => {
+        armed = true;
+        navigator.vibrate?.(12);
+      }, 320);
+    }
     const onMove = (ev: PointerEvent) => {
+      if (!armed) {
+        if (Math.hypot(ev.clientX - ox, ev.clientY - oy) > 8) stop();
+        return;
+      }
       if (!moved && Math.hypot(ev.clientX - ox, ev.clientY - oy) < 6) return;
       if (!moved) setDragErr("");
       moved = true;
@@ -363,8 +388,7 @@ export function CalendarPage() {
       setDrag({ id: b.id, ...next });
     };
     const onUp = () => {
-      window.removeEventListener("pointermove", onMove);
-      window.removeEventListener("pointerup", onUp);
+      stop();
       if (!moved || (spot.day === day && spot.mins === start)) {
         setDrag(null);
         return;
@@ -384,6 +408,10 @@ export function CalendarPage() {
     };
     window.addEventListener("pointermove", onMove);
     window.addEventListener("pointerup", onUp);
+    if (touch) {
+      window.addEventListener("pointercancel", onCancel);
+      window.addEventListener("touchmove", lock, { passive: false });
+    }
   }
 
   return (
@@ -443,6 +471,11 @@ export function CalendarPage() {
                       key={d}
                       className={"month-cell" + (d.slice(0, 7) === monthKey ? "" : " off") + (d === today ? " today" : "")}
                       onClick={() => {
+                        if (window.matchMedia("(max-width: 52rem)").matches) {
+                          setAnchor(d);
+                          setView("day");
+                          return;
+                        }
                         const time = "09:00";
                         const hit = firstOpen(boot.staff, boot.services, d, time, books, week?.timeOff ?? [], boot.staffHours ?? []);
                         const svc = coverService(boot.services);
@@ -594,7 +627,11 @@ export function CalendarPage() {
           </div>
           </div>
           <aside className="hint">
-            <p>Zieh einen Termin auf eine freie Zeit. Beim Loslassen prüfst du die neuen Daten und speicherst erst dann.</p>
+            <p>
+              <span className="hint-mouse">Zieh einen Termin auf eine freie Zeit.</span>
+              <span className="hint-touch">Halte einen Termin gedrückt und zieh ihn auf eine freie Zeit.</span>{" "}
+              Beim Loslassen prüfst du die neuen Daten und speicherst erst dann.
+            </p>
           </aside>
         </div>
         </>

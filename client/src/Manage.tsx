@@ -661,6 +661,7 @@ export function StaffPage() {
                 {edit.custom ? (
                   <>
                     <p className="shift-hint">Tag oben anhaken. Zeiten im Balken per Doppelklick ändern. Grau: andere sind da.</p>
+                    <p className="shift-hint shift-touch">Tag anhaken und die Uhrzeiten einstellen.</p>
                     <div className="shift-week" role="group" aria-label="Arbeitszeiten" data-tour="staff-shifts">
                       <div className="shift-scale" aria-hidden="true">
                         <ol>

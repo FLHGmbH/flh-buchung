@@ -555,7 +555,7 @@ export function BookPage() {
           <label className={"check agree" + (asked && !privacy ? " is-miss" : "")}>
             <input type="checkbox" checked={privacy} onChange={(e) => setPrivacy(e.target.checked)} />
             <span>
-              Ich habe die <a href={`/b/${slug}/datenschutz`} target="_blank" rel="noreferrer">Datenschutzerklärung</a> gelesen. {pub.tenant.name} darf Name und Telefonnummer für diesen Termin speichern.
+              Ich habe die <a href={`/b/${slug}/datenschutz`} target="_blank" rel="noreferrer">Datenschutzerklärung</a> gelesen. {pub.tenant.name} darf die Angaben aus diesem Formular für den Termin speichern.
             </span>
           </label>
           {asked && !privacy ? <small className="err">Bitte die Datenschutzerklärung bestätigen.</small> : null}
